@@ -86,16 +86,18 @@ func TestSidebarGraphLines_ReviewIsAChild(t *testing.T) {
 	}
 }
 
-// The sidebar is a fixed 23 columns. A line that overflows would break the
-// frame, which the render-integrity tests pin globally — catch it here first.
+// The sidebar fits its content on a representative terminal. A line that
+// overflows would break the frame, which the render-integrity tests pin
+// globally — catch it here first.
 func TestSidebarGraphLines_FitsSidebarWidth(t *testing.T) {
-	const innerW = SidebarWidth - 3
+	testSW := sidebarWidth(120) // 34 — sidebar for a 120-column terminal
+	innerW := testSW - 3
 	for _, name := range []string{"run", "plan"} {
 		t.Run(name, func(t *testing.T) {
 			c := compileEmbedded(t, name)
 			for _, line := range sidebarGraphLines(c.Order, c.GraphEdges(), nil, innerW, testSidebarStyles()) {
-				if w := runewidth.StringWidth(ansi.Strip(line)); w > SidebarWidth {
-					t.Errorf("line %q is %d cells wide, sidebar is %d", ansi.Strip(line), w, SidebarWidth)
+				if w := runewidth.StringWidth(ansi.Strip(line)); w > testSW {
+					t.Errorf("line %q is %d cells wide, sidebar is %d", ansi.Strip(line), w, testSW)
 				}
 			}
 		})
@@ -117,7 +119,7 @@ func TestRenderSidebar_DrawsTheGraphUnderThePlanList(t *testing.T) {
 		{"Design", false}, {"Outline", false}, {"Plan", false}, {"Prompt", false},
 	}
 	in := SidebarRenderInput{
-		Width: SidebarWidth, Height: 44, Mode: "plan", PlanPhases: phases,
+		Width: sidebarWidth(120), Height: 50, Mode: "plan", PlanPhases: phases,
 		Graph: &SOPGraph{Order: c.Order, Edges: c.GraphEdges(), Status: planStageStatus(phases)},
 	}
 
@@ -150,7 +152,7 @@ func TestRenderSidebar_DropsTheGraphWhenItCannotFit(t *testing.T) {
 	c := compileEmbedded(t, "plan")
 	phases := []PlanPhase{{"Idea", true}, {"Requirements", false}}
 	in := SidebarRenderInput{
-		Width: SidebarWidth, Height: 20, Mode: "plan", PlanPhases: phases,
+		Width: sidebarWidth(120), Height: 20, Mode: "plan", PlanPhases: phases,
 		Graph: &SOPGraph{Order: c.Order, Edges: c.GraphEdges(), Status: planStageStatus(phases)},
 	}
 

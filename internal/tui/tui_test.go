@@ -1555,7 +1555,7 @@ func TestRenderStatusBar_WithProvider(t *testing.T) {
 	}
 	// Provider and model now live in the sidebar, not the status bar.
 	sidebar := ansi.Strip(RenderSidebar(SidebarRenderInput{
-		Width:        SidebarWidth,
+		Width:        sidebarWidth(120),
 		Height:       40,
 		ProviderName: m.cfg.ProviderName,
 		ModelName:    m.cfg.ModelName,
@@ -1651,7 +1651,7 @@ func TestRenderStatusBar_WithoutProvider(t *testing.T) {
 	}
 	// Model now lives in the sidebar, not the status bar or info line.
 	sidebar := ansi.Strip(RenderSidebar(SidebarRenderInput{
-		Width:     SidebarWidth,
+		Width:     sidebarWidth(120),
 		Height:    40,
 		ModelName: m.cfg.ModelName,
 	}))

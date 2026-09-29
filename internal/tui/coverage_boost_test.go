@@ -753,8 +753,9 @@ func TestResizeDraining_Zero(t *testing.T) {
 
 func TestMainWidth_Wide(t *testing.T) {
 	m := &model{width: 120}
-	if got := m.mainWidth(); got != 120-SidebarWidth {
-		t.Errorf("expected width minus sidebar, got %d", got)
+	want := 120 - sidebarWidth(120)
+	if got := m.mainWidth(); got != want {
+		t.Errorf("expected %d, got %d", want, got)
 	}
 }
 
@@ -762,6 +763,21 @@ func TestMainWidth_Narrow(t *testing.T) {
 	m := &model{width: 60}
 	if got := m.mainWidth(); got != 60 {
 		t.Errorf("expected 60, got %d", got)
+	}
+}
+
+func TestMainWidth_HidesSidebarBelowThreshold(t *testing.T) {
+	// At 85 columns: sidebar=26, chat=59 → below 60 threshold → sidebar hidden.
+	m := &model{width: 85}
+	if got := m.mainWidth(); got != 85 {
+		t.Errorf("expected full width 85 (sidebar hidden), got %d", got)
+	}
+
+	// At 86 columns: sidebar=26, chat=60 → threshold met → sidebar shown.
+	m2 := &model{width: 86}
+	chatW := 86 - sidebarWidth(86)
+	if got := m2.mainWidth(); got != chatW {
+		t.Errorf("expected %d (sidebar shown), got %d", chatW, got)
 	}
 }
 
