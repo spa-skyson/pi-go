@@ -735,6 +735,14 @@ type LLMOptions struct {
 	// enforced per account and not per client — see ratelimit.Shared. Left
 	// empty, NewLLM fills it in from the provider, model and base URL.
 	RateLimitScope string
+	// OpenAICompatBaseURL marks baseURL as already being the full
+	// OpenAI-compatible endpoint, opencode-style: the request paths
+	// (/chat/completions, /models) are appended to it as they are, and the
+	// /v1 segment is never added. Set only by the named-provider route in
+	// NewLLM (config.json "providers", protocol "openai-compatible"); the
+	// built-in providers and the --url path keep the /v1-normalizing
+	// behavior of normalizeOpenAIBaseURL.
+	OpenAICompatBaseURL bool
 }
 
 // NewLLM creates a model.LLM for the given provider info, API key, optional base URL, thinking level, and options.
@@ -794,9 +802,21 @@ func NewLLM(ctx context.Context, info Info, apiKey, baseURL, thinkingLevel strin
 		if info.Custom && info.Protocol != "" {
 			switch info.Protocol {
 			case "anthropic":
+				// The declared baseURL is handed to the Anthropic SDK as
+				// is; whether it needs a version segment is that SDK's
+				// business, not this route's.
 				return NewAnthropic(ctx, info.Model, apiKey, baseURL, thinkingLevel, opts)
-			default:
+			case "openai-compatible":
+				// opencode semantics: the declared baseURL is already the
+				// full endpoint, so /v1 must not be appended to it.
+				opts.OpenAICompatBaseURL = true
 				return NewOpenAI(ctx, info.Model, apiKey, baseURL, opts)
+			default:
+				// Loud rather than silently misrouted: a protocol name
+				// nothing routes is a config/bug drift, and the previous
+				// silent NewOpenAI fallback would drop the raw-base flag
+				// and send the request to a /v1 the endpoint may not have.
+				return nil, fmt.Errorf("provider %s: unsupported protocol %q", info.Provider, info.Protocol)
 			}
 		}
 		return nil, fmt.Errorf("unsupported provider: %s", info.Provider)

@@ -44,14 +44,19 @@ type ProviderConfig struct {
 }
 
 // Protocol maps the configured type onto the wire-protocol name the provider
-// package keys its clients on: "openai" or "anthropic". Validation guarantees
-// Type is one of "", "openai-compatible", "anthropic"; anything else reads as
-// openai-compatible, the same default an empty type gets.
+// package keys its clients on: "openai-compatible" or "anthropic". Validation
+// guarantees Type is one of "", "openai-compatible", "anthropic"; anything
+// else reads as openai-compatible, the same default an empty type gets.
+//
+// The name is opencode's, deliberately: a declared openai-compatible provider
+// carries opencode's base-URL semantics too — the baseURL is already the full
+// endpoint, /chat/completions and /models are appended to it and the /v1
+// segment is never added.
 func (p ProviderConfig) Protocol() string {
 	if p.Type == "anthropic" {
 		return "anthropic"
 	}
-	return "openai"
+	return "openai-compatible"
 }
 
 // builtinProviderNames are the providers pi-go knows without any declaration.

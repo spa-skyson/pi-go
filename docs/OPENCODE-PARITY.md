@@ -162,7 +162,25 @@ wire-тестами (применяется при заданном, отсут�
 дочернего процесса, и далее в `provider.LLMOptions`.
 
 ### 7. Перенос конфигурации пользователя
-**Статус:** не начато
+**Статус:** сделано
+
+- 14 агентов из `~/.config/opencode/agent/*.md` → `~/.pi-go/agents/` как есть
+  (неизвестные pi-go ключи — `mode:`, `permission:` — игнорируются парсером;
+  permission — предмет варианта Б).
+- 6 skills из `~/.config/opencode/skills/` → `~/.pi-go/skills/` (user-уровень
+  discovery; «skills: loaded 29»).
+- MCP-серверы были перенесены ранее.
+
+Попутный фикс: named-провайдер с baseURL без `/v1` (z.ai
+`.../coding/paas/v4`) получал `/v4/v1/models` — builtin-нормализация
+дописывала `/v1`. Протокол named-провайдера выделен в
+`openai-compatible` с raw-семантикой base (как в opencode): chat =
+`base + /chat/completions`, models = `base + /models`.
+
+Проверено живым прогоном: перенесённый агент `explore`
+(`model: zai-coding-plan/glm-5.3-flash`) ответил через
+`https://api.z.ai/api/coding/paas/v4`; лог: `provider: zai-coding-plan`,
+`backend: zai-coding-plan-custom`. `pi model list zai-coding-plan` — 11 моделей.
 
 - 15 агентов из `~/.config/opencode/agent/*.md` → `~/.pi-go/agents/`
   (механизм загрузки уже есть: `internal/subagent/agents.go:273`).
@@ -170,7 +188,17 @@ wire-тестами (применяется при заданном, отсут�
 - MCP-серверы — уже перенесены в `~/.pi-go/config.json`.
 
 ### 8. Провайдеры `zai-coding-plan` и `opencode-go`
-**Статус:** отложено пользователем (не в первую очередь)
+**Статус:** сделано (попутно с задачей 7)
+
+Объявлены как обычные записи `providers` в `~/.pi-go/config.json` (кодовой
+работы не потребовалось — реестр задачи 1 уже всё умеет):
+
+- `zai-coding-plan`: `https://api.z.ai/api/coding/paas/v4`, ключ из
+  `~/.local/share/opencode/auth.json`; модели glm-5.3/flash/highspeed/5.2 с
+  contextWindow из каталога models.opencode.ai.
+- `opencode-go`: `https://opencode.ai/zen/go/v1`, ключ из auth.json.
+- Заодно: `claude-proxy` (api.home.fwz.ru/v1) и `corp-codex`
+  (api-llm.tradedealer.xyz/v1) — endpoints/ключи из opencode.json.
 
 Их ключи лежат в `~/.local/share/opencode/auth.json`, а не в `opencode.json`.
 После задачи 1 они объявляются как обычные записи в `providers`.
@@ -204,6 +232,25 @@ wire-тестами (применяется при заданном, отсут�
 Поэтому на CI это не видно: у раннера на пути к корню нет `.pi-go`. Баг
 воспроизводится только на машине разработчика с checkout'ом под `~` и
 заполненным `~/.pi-go/.env`.
+
+## Попутная находка 2: модель галлюцинирует `<<ccr:…>>` вместо длинного read
+
+При живых проверках задач 5–6 субагент дважды «получал» вывод read как
+непрозрачную ссылку `<<ccr:ed59c6732bc9,html,10.8KB>>` и отказывался читать
+файл. Расследование (events.jsonl + trace-http):
+
+- в `events.jsonl` сессии субагента functionResponse содержит **полный текст**
+  файла;
+- в `http_request` к провайдеру — тоже полный текст, `ccr` в теле отсутствует;
+- строки `ccr` нет нигде в коде pi-go и adk;
+- «хэш» каждый раз новый, тип `html` для go.mod абсурден, частота ~50%
+  (2 из 4 прогонов; с трейсом и контрольные прогоны — чистые).
+
+Вывод: это нестабильная галлюцинация claude-opus-5 за корпоративным шлюзом
+(`corp-claude`), конструирующая правдоподобный формат из обучающих данных.
+Подмены на пути pi-go нет. Митигация: одна строка в системной инструкции
+агента — результаты инструментов приходят как есть, формата
+плейсхолдеров-ссылок не существует.
 
 ## Проверка
 

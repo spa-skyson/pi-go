@@ -76,10 +76,10 @@ Examples:
 var allProviders = []string{"anthropic", "openai", "gemini", "mistral", "xai", "ollama", "openrouter", "agentgateway"}
 
 // modelListProvider is one entry the listing loop queries: the name shown in
-// the output, and the built-in provider whose listing endpoint actually
-// serves it. A declared provider (config.json "providers") lists through
-// "openai" or "anthropic" — whichever its type selects — but reports its own
-// name; the two fields differ only for those.
+// the output, and the provider key whose listing endpoint actually serves it.
+// A declared provider (config.json "providers") lists through its protocol —
+// "openai-compatible" or "anthropic" — but reports its own name; the two
+// fields differ only for those.
 type modelListProvider struct {
 	name   string
 	listAs string

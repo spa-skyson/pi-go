@@ -256,6 +256,33 @@ func TestNormalizeOpenAIBaseURL(t *testing.T) {
 	}
 }
 
+func TestResolveOpenAIBaseURL(t *testing.T) {
+	tests := []struct {
+		name   string
+		in     string
+		compat bool
+		want   string
+	}{
+		// compat (named provider, opencode semantics): the base is the full
+		// endpoint, /v1 is never appended.
+		{name: "compat vendor path stays", in: "https://api.z.ai/api/coding/paas/v4", compat: true, want: "https://api.z.ai/api/coding/paas/v4"},
+		{name: "compat v1 stays single", in: "https://proxy.example/v1", compat: true, want: "https://proxy.example/v1"},
+		{name: "compat trailing slash trimmed", in: "https://proxy.example/v1/", compat: true, want: "https://proxy.example/v1"},
+		{name: "compat missing scheme fixed", in: "127.0.0.1:8080/api", compat: true, want: "http://127.0.0.1:8080/api"},
+		// Built-in behavior keeps the /v1 normalization.
+		{name: "builtin appends v1", in: "https://api.z.ai/api/coding/paas/v4", compat: false, want: "https://api.z.ai/api/coding/paas/v4/v1"},
+		{name: "builtin bare host", in: "http://127.0.0.1:2276", compat: false, want: "http://127.0.0.1:2276/v1"},
+		{name: "builtin already v1", in: "https://example.com/v1", compat: false, want: "https://example.com/v1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolveOpenAIBaseURL(tt.in, tt.compat); got != tt.want {
+				t.Errorf("resolveOpenAIBaseURL(%q, %v) = %q, want %q", tt.in, tt.compat, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNewOpenAIWithBaseURL(t *testing.T) {
 	llm, err := NewOpenAI(context.Background(), "gpt-4o", "sk-test", "https://custom-api.example.com/v1", nil)
 	if err != nil {

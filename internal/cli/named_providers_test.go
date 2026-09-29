@@ -55,7 +55,7 @@ func TestResolveRuntimeModelForRole_NamedProviderPrefix(t *testing.T) {
 		Provider: "corp-claude",
 		Model:    "claude-opus-5",
 		Custom:   true,
-		Protocol: "openai",
+		Protocol: "openai-compatible",
 		BaseURL:  "https://corp.example/v1",
 	}
 	if info != want {
@@ -80,7 +80,7 @@ func TestResolveRuntimeModelForRole_NamedRoleProvider(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveRuntimeModelForRole: %v", err)
 	}
-	if info.Provider != "corp-claude" || info.Model != "claude-opus-5" || !info.Custom || info.Protocol != "openai" {
+	if info.Provider != "corp-claude" || info.Model != "claude-opus-5" || !info.Custom || info.Protocol != "openai-compatible" {
 		t.Errorf("info = %+v", info)
 	}
 	if baseURL != "https://corp.example/v1" {
@@ -147,7 +147,7 @@ func TestResolveSwitchedModel_NamedProvider(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveSwitchedModel: %v", err)
 	}
-	if info.Provider != "corp-claude" || info.Model != "claude-opus-5" || info.Protocol != "openai" || !info.Custom {
+	if info.Provider != "corp-claude" || info.Model != "claude-opus-5" || info.Protocol != "openai-compatible" || !info.Custom {
 		t.Errorf("info = %+v", info)
 	}
 	if baseURL != "https://corp.example/v1" {
@@ -166,7 +166,7 @@ func TestSwitchedModelName_NamedProvider(t *testing.T) {
 		Provider: "corp-claude",
 		Model:    "claude-opus-5",
 		Custom:   true,
-		Protocol: "openai",
+		Protocol: "openai-compatible",
 		BaseURL:  "https://corp.example/v1",
 	}
 	// The bare name re-resolves onto built-in anthropic, so the persisted
@@ -185,7 +185,7 @@ func TestSwitchedModelName_NamedProvider(t *testing.T) {
 func TestSwitchContextWindowSize_NamedProvider(t *testing.T) {
 	resetResolveFlags(t)
 	cfg := namedProvidersCfg()
-	info := provider.Info{Provider: "corp-claude", Model: "claude-opus-5", Custom: true, Protocol: "openai"}
+	info := provider.Info{Provider: "corp-claude", Model: "claude-opus-5", Custom: true, Protocol: "openai-compatible"}
 
 	if got := switchContextWindowSize(context.Background(), cfg, info, ""); got != 200000 {
 		t.Errorf("window = %d, want the declared 200000", got)
@@ -215,7 +215,7 @@ func TestNamedListProviders(t *testing.T) {
 	}}
 	got := namedListProviders(cfg)
 	want := []modelListProvider{
-		{name: "alpha", listAs: "openai"},
+		{name: "alpha", listAs: "openai-compatible"},
 		{name: "zeta", listAs: "anthropic"},
 	}
 	if len(got) != len(want) {
@@ -236,7 +236,7 @@ func TestSelectModelListProviders_Named(t *testing.T) {
 
 	named := []modelListProvider{
 		{name: "corp-anthropic", listAs: "anthropic"},
-		{name: "corp-claude", listAs: "openai"},
+		{name: "corp-claude", listAs: "openai-compatible"},
 	}
 	keys := map[string]string{"corp-claude": "sk-corp"}
 	baseURLs := map[string]string{"corp-claude": "https://corp.example/v1", "corp-anthropic": "https://headroom.example"}
@@ -247,7 +247,7 @@ func TestSelectModelListProviders_Named(t *testing.T) {
 	if err != nil {
 		t.Fatalf("selectModelListProviders: %v", err)
 	}
-	if len(got) != 1 || got[0] != (modelListProvider{name: "corp-claude", listAs: "openai"}) {
+	if len(got) != 1 || got[0] != (modelListProvider{name: "corp-claude", listAs: "openai-compatible"}) {
 		t.Fatalf("got = %+v, want the single corp-claude entry", got)
 	}
 
