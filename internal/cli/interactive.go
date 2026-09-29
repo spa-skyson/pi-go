@@ -307,6 +307,12 @@ func deferredInit(
 		coreTools = append(coreTools, gTool)
 	}
 
+	// --tools allow list. Applied after every append above (subagent, LSP,
+	// memory, LLMS, grounding) so nothing in the flat list escapes it; MCP
+	// toolsets were filtered by server name where they were built
+	// (mcpToolsetsForRun).
+	coreTools = applyToolAllowlist(coreTools)
+
 	// Session logger. Created before the agent so it can capture the agent's
 	// non-fatal diagnostics (e.g. unresolved instruction placeholders) in the
 	// session log instead of leaking them to stderr and corrupting the TUI.
@@ -521,7 +527,7 @@ func runDeferredInitPhase2(ctx context.Context, cfg config.Config, cwd string, s
 			return
 		}
 		send("mcp", false)
-		ts, _ := extension.BuildMCPToolsets(buildMCPServerConfigs(cfg))
+		ts := mcpToolsetsForRun(cfg)
 		ps.mu.Lock()
 		ps.mcpToolsets = ts
 		ps.mu.Unlock()
