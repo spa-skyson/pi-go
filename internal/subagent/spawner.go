@@ -51,6 +51,10 @@ type SpawnOpts struct {
 	// seam that lets a navigation-heavy agent run with the full LSP set while
 	// the parent session pays for none of it.
 	LSP string
+	// Tools restricts the child to the named tools (passed as --tools). Empty
+	// leaves the flag off, so the child keeps its full tool set. This carries
+	// the agent's frontmatter `tools:` list to the process that owns the tools.
+	Tools []string
 }
 
 // Spawner creates and manages subagent pi processes.
@@ -126,6 +130,9 @@ func spawnArgs(opts SpawnOpts) []string {
 	}
 	if opts.LSP != "" {
 		args = append(args, "--lsp", opts.LSP)
+	}
+	if len(opts.Tools) > 0 {
+		args = append(args, "--tools", strings.Join(opts.Tools, ","))
 	}
 	// The prompt is positional and must stay last. The "--" terminator keeps
 	// cobra from reading it as a subcommand or as flags: a prompt whose first

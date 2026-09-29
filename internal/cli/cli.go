@@ -76,6 +76,7 @@ var (
 	flagMemoryOff    bool
 	flagWebSearch    bool
 	flagLSP          string
+	flagTools        string
 	flagSystem       string
 	flagPprof        string
 	flagPprofPort    string
@@ -237,6 +238,7 @@ Set a default in ~/.pi-go/config.json so --model is only needed to deviate;
 	cmd.Flags().BoolVar(&flagWebSearch, "web-search-enabled", false,
 		"Register the web_search tool (needs a running Ollama daemon, or OLLAMA_API_KEY). Off by default; PI_WEB_SEARCH=1 does the same, and propagates to subagents")
 	cmd.Flags().StringVar(&flagLSP, "lsp", "min", "Language-server tools: off, min (symbols+diagnostics), or full (all seven)")
+	cmd.Flags().StringVar(&flagTools, "tools", "", "Comma-separated tool names to keep (e.g. read,bash); MCP servers match by server name; default keeps all")
 	// Persistent, not local: `pi memory mine . --pprof true` and every other
 	// subcommand must accept these too. As local flags they were rejected with
 	// "unknown flag: --pprof" the moment a subcommand was used.
@@ -938,6 +940,12 @@ func runNonInteractive(
 		coreTools = append(coreTools, gTool)
 	}
 
+	// --tools allow list. Applied here, after the last core-tool append
+	// (memory, palace, LSP and grounding above), so the flat list the agent
+	// sees is exactly what --tools allows; MCP toolsets were already filtered
+	// by server name inside buildToolsets.
+	coreTools = applyToolAllowlist(coreTools)
+
 	// Session logger. Created before the agent so it can capture the agent's
 	// non-fatal diagnostics (e.g. unresolved instruction placeholders) in the
 	// session log instead of leaking them to stderr. SessionStart is recorded
@@ -1432,6 +1440,75 @@ func resolveLSPMode() tools.LSPMode {
 	return mode
 }
 
+// parseToolAllowlist splits the --tools value into a normalized allow list:
+// comma-separated entries, trimmed and lowercased, empties dropped. Empty or
+// absent input returns nil, which the filter treats as "keep everything".
+func parseToolAllowlist(s string) []string {
+	var out []string
+	for _, t := range strings.Split(s, ",") {
+		if t = strings.ToLower(strings.TrimSpace(t)); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// applyToolAllowlist narrows a tool list to the --tools allow list and warns
+// about names that matched nothing. With no --tools it is a no-op. Each run
+// path calls it once, after the last core-tool append (memory, LSP, LLMS and
+// grounding included), so the flat list the agent sees is exactly what
+// --tools allows; MCP toolsets are filtered separately, whole, by server
+// name — see mcpToolsetsForRun.
+func applyToolAllowlist(list []adktool.Tool) []adktool.Tool {
+	allow := parseToolAllowlist(flagTools)
+	if len(allow) == 0 {
+		return list
+	}
+	kept, unknown := tools.FilterToolsByName(list, allow)
+	if len(unknown) > 0 {
+		available := make([]string, len(list))
+		for i, t := range list {
+			available[i] = t.Name()
+		}
+		fmt.Fprintf(os.Stderr, "pi-go: warning: --tools %v matched nothing; available: %s\n",
+			unknown, strings.Join(available, ", "))
+	}
+	return kept
+}
+
+// mcpToolsetsForRun builds the MCP toolsets for this run. Under an active
+// --tools allow list a server is connected only when its name appears in the
+// list (case-insensitive). MCP tools sit behind the Toolset interface and
+// cannot be filtered one by one, so a server whose tools would all be
+// filtered away is not started at all; A2A and LLMS toolsets are not
+// affected by the allow list.
+func mcpToolsetsForRun(cfg config.Config) []adktool.Toolset {
+	servers := mcpServersForAllowlist(buildMCPServerConfigs(cfg), parseToolAllowlist(flagTools))
+	ts, _ := extension.BuildMCPToolsets(servers)
+	return ts
+}
+
+// mcpServersForAllowlist keeps only the servers whose name appears in allow,
+// which parseToolAllowlist has already normalized to lowercase; an empty
+// allow list keeps every server. Pure, so the server choice is testable
+// without constructing toolsets.
+func mcpServersForAllowlist(servers []extension.MCPServerConfig, allow []string) []extension.MCPServerConfig {
+	if len(allow) == 0 {
+		return servers
+	}
+	in := make(map[string]bool, len(allow))
+	for _, n := range allow {
+		in[n] = true
+	}
+	kept := make([]extension.MCPServerConfig, 0, len(servers))
+	for _, s := range servers {
+		if in[strings.ToLower(s.Name)] {
+			kept = append(kept, s)
+		}
+	}
+	return kept
+}
+
 // palaceHasContent reports whether the palace holds at least one drawer.
 // A count error is treated as "no content": the tools would fail anyway, and
 // the caller's job is to decide whether advertising them is worth the tokens.
@@ -1562,12 +1639,12 @@ func memoryObservationCallback(worker *memory.Worker, cfg config.Config, project
 }
 
 // buildToolsets assembles the external toolsets — MCP servers and A2A agents —
-// configured for this run.
+// configured for this run. MCP servers are filtered by an active --tools allow
+// list (see mcpToolsetsForRun); A2A and LLMS toolsets are not affected by it.
 func buildToolsets(cfg config.Config) []adktool.Toolset {
 	var toolsets []adktool.Toolset
-	if servers := buildMCPServerConfigs(cfg); len(servers) > 0 {
-		mcpToolsets, _ := extension.BuildMCPToolsets(servers)
-		toolsets = append(toolsets, mcpToolsets...)
+	if ts := mcpToolsetsForRun(cfg); len(ts) > 0 {
+		toolsets = append(toolsets, ts...)
 	}
 	if cfg.A2A != nil && len(cfg.A2A.Agents) > 0 {
 		toolsets = append(toolsets, tools.NewA2AToolset(cfg.A2A))

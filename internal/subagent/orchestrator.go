@@ -477,6 +477,7 @@ func (o *Orchestrator) Spawn(ctx context.Context, input SpawnInput) (<-chan Even
 		Insecure:    o.Insecure,
 		Headers:     o.Headers,
 		LSP:         agent.LSP,
+		Tools:       agent.Tools,
 	}
 
 	proc, err := o.dispatchSpawn(ctx, spawnOpts, agent.Name)
