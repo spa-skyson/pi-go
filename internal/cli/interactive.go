@@ -26,6 +26,7 @@ import (
 	"github.com/dimetron/pi-go/internal/lsp"
 	"github.com/dimetron/pi-go/internal/memory"
 	"github.com/dimetron/pi-go/internal/notice"
+	"github.com/dimetron/pi-go/internal/permission"
 	"github.com/dimetron/pi-go/internal/provider"
 	pisession "github.com/dimetron/pi-go/internal/session"
 	"github.com/dimetron/pi-go/internal/subagent"
@@ -155,10 +156,16 @@ func runInteractive(
 	// Create a child context so deferred init is canceled when the TUI exits.
 	initCtx, initCancel := context.WithCancel(ctx)
 
+	// Tool-approval bridge for the interactive session: the permission gate
+	// sends ask requests here and the TUI dialog answers them. The channel is
+	// created unconditionally, but the gate only consults it when the global
+	// config rules actually contain ask directives.
+	approvalCh := make(chan permission.ApprovalRequest)
+
 	go func() {
 		defer close(initDone)
 		defer close(initCh)
-		deferredInit(initCtx, cfg, llm, info.Provider, info.Model, info.BaseURL, tokenTracker, cwd, sandboxRoot, worktreeDir, headerSessionID, initCh, noticeCh, &res)
+		deferredInit(initCtx, cfg, llm, info.Provider, info.Model, info.BaseURL, tokenTracker, cwd, sandboxRoot, worktreeDir, headerSessionID, initCh, noticeCh, approvalCh, &res)
 	}()
 
 	tuiErr := tui.Run(ctx, tui.Config{
@@ -176,6 +183,7 @@ func runInteractive(
 		LifecycleHooks: convertHooks(cfg.Hooks),
 		DeferredInit:   initCh,
 		SystemNoticeCh: noticeCh,
+		ApprovalCh:     approvalCh,
 		ModelSwitcher: func(switchCtx context.Context, modelName string) (adkmodel.LLM, string, string, error) {
 			return buildSwitchedLLM(switchCtx, cfg, tokenTracker, modelName, headerSessionID)
 		},
@@ -195,7 +203,9 @@ func runInteractive(
 }
 
 // deferredInit performs all heavy initialization, sending progress via ch.
-// Resources that need cleanup are stored in res.
+// Resources that need cleanup are stored in res. approvalCh is the bridge the
+// permission gate sends ask requests over; nil keeps the non-interactive
+// denial.
 func deferredInit(
 	ctx context.Context,
 	cfg config.Config,
@@ -208,6 +218,7 @@ func deferredInit(
 	headerSessionID string,
 	ch chan<- tui.InitEvent,
 	noticeCh chan string,
+	approvalCh chan permission.ApprovalRequest,
 	res *initResources,
 ) {
 	initTotal := deferredInitTotal(cfg)
@@ -275,7 +286,7 @@ func deferredInit(
 	instructionParts := buildDeferredInstructionParts()
 	instruction := instructionParts.String()
 
-	cbs := buildDeferredCallbacks(cfg, providerName, sandbox, ps.lspMgr, memRecorder)
+	cbs := buildDeferredCallbacks(cfg, providerName, sandbox, ps.lspMgr, memRecorder, approvalCh)
 
 	// Session service.
 	sessionsPath, sessionSvc, err := openSessionService()
@@ -592,13 +603,15 @@ type deferredCallbacks struct {
 }
 
 // buildDeferredCallbacks assembles the tool and model callback chains in the
-// order they must run.
+// order they must run. approvalCh, when non-nil, upgrades the permission gate
+// from hard ask-denial to the TUI approval dialog.
 func buildDeferredCallbacks(
 	cfg config.Config,
 	providerName string,
 	sandbox *tools.Sandbox,
 	lspMgr *lsp.Manager,
 	memRecorder *deferredMemoryRecorder,
+	approvalCh chan permission.ApprovalRequest,
 ) deferredCallbacks {
 	compactorCfg := compactorConfigFrom(cfg)
 	compactMetrics := tools.NewCompactMetrics()
@@ -611,9 +624,14 @@ func buildDeferredCallbacks(
 	// Permission rules gate every tool call before execution. The primary
 	// interactive session has no frontmatter of its own — per-agent rules
 	// travel with each subagent's process — so only the global config rules
-	// apply here.
+	// apply here. With an approval bridge wired, ask shows the TUI dialog
+	// instead of denying; subagent processes keep the hard denial.
 	if rules := globalPermissionRules(cfg); !rules.Empty() {
-		beforeCBs = append(beforeCBs, agent.NewPermissionCallback(rules))
+		if approvalCh != nil {
+			beforeCBs = append(beforeCBs, agent.NewAskingPermissionCallback(rules, approvalAsker(approvalCh)))
+		} else {
+			beforeCBs = append(beforeCBs, agent.NewPermissionCallback(rules))
+		}
 	}
 	afterCBs := extension.BuildAfterToolCallbacks(hooks)
 
@@ -660,6 +678,39 @@ func buildDeferredCallbacks(
 		afterModel:     llmAfter,
 		deduper:        resultDeduper,
 		compactMetrics: compactMetrics,
+	}
+}
+
+// approvalAsker returns the blocking bridge the permission gate parks on for
+// each ask decision. It hands the request to the TUI dialog over ch and waits
+// for the user's answer. ctx is the agent turn's context: when the turn is
+// canceled (Ctrl+C, session exit) the wait must end in a denial rather than
+// leave the gate parked on a dialog nobody will answer. An already-canceled
+// context never reaches the dialog at all — a dead tool call must not open a
+// window. A late answer is harmless — Reply is buffered to one and simply
+// dropped.
+func approvalAsker(ch chan<- permission.ApprovalRequest) func(context.Context, permission.ApprovalRequest) permission.ApprovalResult {
+	return func(ctx context.Context, req permission.ApprovalRequest) permission.ApprovalResult {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		if ctx.Err() != nil {
+			// A pre-select check, not just a select arm: with both channels
+			// ready, select picks randomly, and a canceled turn must not
+			// enqueue a dialog for a call that is already dead.
+			return permission.ApprovalResult{}
+		}
+		select {
+		case ch <- req:
+		case <-ctx.Done():
+			return permission.ApprovalResult{}
+		}
+		select {
+		case res := <-req.Reply:
+			return res
+		case <-ctx.Done():
+			return permission.ApprovalResult{}
+		}
 	}
 }
 

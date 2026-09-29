@@ -383,3 +383,51 @@ func TestEmpty(t *testing.T) {
 		t.Error("bash rules are not empty")
 	}
 }
+
+func TestApplyOverride(t *testing.T) {
+	rules := Rules{
+		Tools: map[string]Directive{
+			"edit":  Ask,
+			"read":  Allow,
+			"bash":  Deny,
+			"grep*": Ask,
+		},
+		Bash: []BashRule{
+			{Pattern: "git *", Directive: Ask},
+			{Pattern: "rm *", Directive: Deny},
+			{Pattern: "git *", Directive: Ask}, // duplicate pattern: both must flip
+		},
+	}
+
+	got := ApplyOverride(rules, "edit", Allow)
+	if got.Tools["edit"] != Allow {
+		t.Errorf("Tools[edit] = %q, want allow", got.Tools["edit"])
+	}
+	if got.Tools["read"] != Allow || got.Tools["bash"] != Deny || got.Tools["grep*"] != Ask {
+		t.Errorf("untouched keys drifted: %+v", got.Tools)
+	}
+	if len(got.Bash) != 3 || got.Bash[0].Directive != Ask || got.Bash[1].Directive != Deny {
+		t.Errorf("bash rules drifted: %+v", got.Bash)
+	}
+
+	// Every bash rule with the pattern flips, order preserved.
+	got = ApplyOverride(rules, "git *", Allow)
+	if got.Bash[0].Directive != Allow || got.Bash[2].Directive != Allow {
+		t.Errorf("bash override missed duplicate pattern: %+v", got.Bash)
+	}
+	if got.Bash[1].Pattern != "rm *" || got.Bash[1].Directive != Deny {
+		t.Errorf("neighbouring bash rule drifted: %+v", got.Bash[1])
+	}
+	if rules.Bash[0].Directive != Ask {
+		t.Errorf("input mutated in place: %+v", rules.Bash[0])
+	}
+	if rules.Tools["edit"] != Ask {
+		t.Errorf("input map mutated in place: %+v", rules.Tools)
+	}
+
+	// A key matching nothing changes nothing.
+	unchanged := ApplyOverride(rules, "no-such-rule", Deny)
+	if !reflect.DeepEqual(unchanged, rules) {
+		t.Errorf("unknown key changed rules: %+v", unchanged)
+	}
+}

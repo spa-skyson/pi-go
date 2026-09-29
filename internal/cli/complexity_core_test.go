@@ -945,7 +945,7 @@ func TestBuildDeferredCallbacks(t *testing.T) {
 	mgr := lsp.NewManager(nil)
 	t.Cleanup(mgr.Shutdown)
 
-	base := buildDeferredCallbacks(config.Config{}, "anthropic", sandbox, nil, nil)
+	base := buildDeferredCallbacks(config.Config{}, "anthropic", sandbox, nil, nil, nil)
 	if base.deduper == nil {
 		t.Error("deduper is nil")
 	}
@@ -968,14 +968,14 @@ func TestBuildDeferredCallbacks(t *testing.T) {
 
 	// Adding LSP or a memory recorder must still yield a single composed
 	// callback, since they are folded into the same chain.
-	withLSP := buildDeferredCallbacks(config.Config{}, "anthropic", sandbox, mgr, nil)
+	withLSP := buildDeferredCallbacks(config.Config{}, "anthropic", sandbox, mgr, nil, nil)
 	if len(withLSP.afterTool) != 1 {
 		t.Errorf("after-tool callbacks with an LSP manager = %d, want 1 composed callback",
 			len(withLSP.afterTool))
 	}
 
 	rec := newDeferredMemoryRecorder(config.Config{}, t.TempDir())
-	withMem := buildDeferredCallbacks(config.Config{}, "anthropic", sandbox, nil, rec)
+	withMem := buildDeferredCallbacks(config.Config{}, "anthropic", sandbox, nil, rec, nil)
 	if len(withMem.afterTool) != 1 {
 		t.Errorf("after-tool callbacks with a memory recorder = %d, want 1 composed callback",
 			len(withMem.afterTool))

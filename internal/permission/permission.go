@@ -130,6 +130,69 @@ func (d Decision) Error(toolName string) error {
 	}
 }
 
+// ApprovalRequest is one interactive approval round-trip. The gate (the
+// before-tool callback) builds it when a decision is ask and hands it to the
+// session's approver — the TUI dialog — which answers exactly once by sending
+// to Reply. Reply is buffered to one and created by the sender, so the
+// answerer never blocks even when the wait was abandoned (turn canceled while
+// the dialog was up).
+type ApprovalRequest struct {
+	// Tool is the tool name the gate is ruling on.
+	Tool string
+	// Command is the bash command line being approved; empty for non-bash
+	// tools.
+	Command string
+	// Rule is the pattern that produced the ask ("git *", "edit"). The
+	// always-allow answer is scoped to it: an "always" on `git status` under
+	// rule "git *" approves every command that rule matches, for this session
+	// only, in memory only — persistence is a user decision made by editing
+	// config.json, never a side effect of pressing "a".
+	Rule string
+	// Reply carries the user's answer. Buffered to 1.
+	Reply chan ApprovalResult
+}
+
+// ApprovalResult is the answer to one ApprovalRequest.
+type ApprovalResult struct {
+	// Allowed grants this one call.
+	Allowed bool
+	// Always additionally records an allow override on the request's rule for
+	// the rest of the session. Meaningful only with Allowed.
+	Always bool
+}
+
+// ApplyOverride returns a copy of r in which every rule whose pattern is key
+// carries d. Tool keys and bash patterns are separate namespaces, so both are
+// rewritten when both exist: always-allowing pattern P means "stop asking
+// about the rule named P", wherever that rule sits. The input is never
+// mutated — Check is running against it concurrently from the gate.
+func ApplyOverride(r Rules, key string, d Directive) Rules {
+	if _, ok := r.Tools[key]; ok {
+		tools := make(map[string]Directive, len(r.Tools))
+		maps.Copy(tools, r.Tools)
+		tools[key] = d
+		r.Tools = tools
+	}
+	replaced := false
+	for _, b := range r.Bash {
+		if b.Pattern == key {
+			replaced = true
+			break
+		}
+	}
+	if replaced {
+		bash := make([]BashRule, len(r.Bash))
+		for i, b := range r.Bash {
+			if b.Pattern == key {
+				b.Directive = d
+			}
+			bash[i] = b
+		}
+		r.Bash = bash
+	}
+	return r
+}
+
 // commandArg extracts the bash tool's command string. An absent or non-string
 // field counts as the empty command, so a `"*": ask` pattern still gates a
 // malformed call rather than waving it through.

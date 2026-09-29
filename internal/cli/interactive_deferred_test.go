@@ -10,6 +10,7 @@ import (
 
 	"github.com/dimetron/pi-go/internal/config"
 	"github.com/dimetron/pi-go/internal/guardrail"
+	"github.com/dimetron/pi-go/internal/permission"
 	"github.com/dimetron/pi-go/internal/testenv"
 	"github.com/dimetron/pi-go/internal/tui"
 )
@@ -63,7 +64,7 @@ func TestDeferredInit_MemoryOffBasic(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		deferredInit(ctx, cfg, llm, "openai", "", "", tracker, cwd, cwd, "", "", ch, make(chan string, 8), &res)
+		deferredInit(ctx, cfg, llm, "openai", "", "", tracker, cwd, cwd, "", "", ch, make(chan string, 8), make(chan permission.ApprovalRequest), &res)
 		close(ch)
 	}()
 
@@ -125,7 +126,7 @@ func TestDeferredInit_WithMCP(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		deferredInit(ctx, cfg, llm, "openai", "", "", tracker, tmpHome, tmpHome, "", "", ch, make(chan string, 8), &res)
+		deferredInit(ctx, cfg, llm, "openai", "", "", tracker, tmpHome, tmpHome, "", "", ch, make(chan string, 8), make(chan permission.ApprovalRequest), &res)
 		close(ch)
 	}()
 
@@ -163,7 +164,7 @@ func TestDeferredInit_WithMemoryEnabled(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		deferredInit(ctx, cfg, llm, "openai", "", "", tracker, tmpHome, tmpHome, "", "", ch, make(chan string, 8), &res)
+		deferredInit(ctx, cfg, llm, "openai", "", "", tracker, tmpHome, tmpHome, "", "", ch, make(chan string, 8), make(chan permission.ApprovalRequest), &res)
 		close(ch)
 	}()
 
@@ -387,7 +388,7 @@ func TestDeferredInit_WithSkillDir(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		deferredInit(ctx, config.Config{}, llm, "openai", "", "", tracker, tmpHome, tmpHome, "", "", ch, make(chan string, 8), &res)
+		deferredInit(ctx, config.Config{}, llm, "openai", "", "", tracker, tmpHome, tmpHome, "", "", ch, make(chan string, 8), make(chan permission.ApprovalRequest), &res)
 		close(ch)
 	}()
 
@@ -424,7 +425,7 @@ func runDeferredInitForTest(t *testing.T, cfg config.Config) *tui.InitResult {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		deferredInit(ctx, cfg, llm, "openai", "", "", tracker, tmpHome, tmpHome, "", "", ch, make(chan string, 8), &res)
+		deferredInit(ctx, cfg, llm, "openai", "", "", tracker, tmpHome, tmpHome, "", "", ch, make(chan string, 8), make(chan permission.ApprovalRequest), &res)
 		close(ch)
 	}()
 	var result *tui.InitResult

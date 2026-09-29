@@ -7,6 +7,7 @@ import (
 	"github.com/dimetron/pi-go/internal/config"
 	"github.com/dimetron/pi-go/internal/extension"
 	"github.com/dimetron/pi-go/internal/logger"
+	"github.com/dimetron/pi-go/internal/permission"
 	pisession "github.com/dimetron/pi-go/internal/session"
 	"github.com/dimetron/pi-go/internal/subagent"
 
@@ -51,6 +52,11 @@ type Config struct {
 	// chat — auto-compaction outcomes, for instance. Compaction discards
 	// history, so it must never happen silently.
 	SystemNoticeCh <-chan string
+	// ApprovalCh receives tool-approval requests from the permission gate
+	// (permission ask rules). Each request blocks the agent loop until the
+	// dialog answers it via request.Reply. Nil disables the dialog: sessions
+	// without it fall back to the non-interactive denial of ask.
+	ApprovalCh <-chan permission.ApprovalRequest
 	// ContextBreakdown attributes fixed context overhead (system prompt, tool
 	// definitions, rules, skills, MCP tools, subagents) to its origins, so the
 	// gauge can show what is filling the window rather than only how much.

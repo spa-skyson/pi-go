@@ -20,6 +20,7 @@ import (
 	"github.com/dimetron/pi-go/internal/config"
 	"github.com/dimetron/pi-go/internal/extension"
 	"github.com/dimetron/pi-go/internal/palace"
+	"github.com/dimetron/pi-go/internal/permission"
 	"github.com/dimetron/pi-go/internal/sop"
 	"github.com/dimetron/pi-go/internal/subagent"
 )
@@ -149,6 +150,11 @@ type model struct {
 
 	// Commit flow state.
 	commit *commitState
+
+	// Tool-approval dialog state: the pending permission request, or nil.
+	// Set by the ApprovalCh listener, answered and cleared by the key handler;
+	// see approval.go.
+	approval *permission.ApprovalRequest
 
 	// Login flow state.
 	login *loginState
@@ -607,6 +613,9 @@ func (m *model) Init() tea.Cmd {
 		if m.cfg.SystemNoticeCh != nil {
 			cmds = append(cmds, waitForSystemNotice(m.cfg.SystemNoticeCh))
 		}
+		if m.cfg.ApprovalCh != nil {
+			cmds = append(cmds, waitForApproval(m.cfg.ApprovalCh))
+		}
 		return tea.Batch(cmds...)
 	}
 
@@ -618,6 +627,9 @@ func (m *model) Init() tea.Cmd {
 	}
 	if m.cfg.SystemNoticeCh != nil {
 		cmds = append(cmds, waitForSystemNotice(m.cfg.SystemNoticeCh))
+	}
+	if m.cfg.ApprovalCh != nil {
+		cmds = append(cmds, waitForApproval(m.cfg.ApprovalCh))
 	}
 	cmds = append(cmds, memoryTickCmd(m.cwd()), requestBg)
 	return tea.Batch(cmds...)
@@ -927,6 +939,9 @@ func (m *model) updateSession(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case modelPriceRefreshDoneMsg:
 		model, cmd := m.handleModelPriceRefreshDone(msg)
 		return model, cmd, true
+	case approvalRequestMsg:
+		model, cmd := m.handleApprovalRequest(msg)
+		return model, cmd, true
 	}
 	return nil, nil, false
 }
@@ -1122,8 +1137,12 @@ type keyHandler func(tea.Key) (_ tea.Model, _ tea.Cmd, handled bool)
 func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.Key()
 
-	// Overlays get first refusal, even while the agent runs.
+	// Overlays get first refusal, even while the agent runs. The approval
+	// dialog is checked first: it gates a live tool call, and its keys (y, n,
+	// a, Enter, Esc) must not leak into the other overlays — in particular Esc
+	// denies the request instead of canceling the turn.
 	for _, handle := range []keyHandler{
+		m.handleApprovalKey,
 		m.handleCommitKey,
 		m.handleLoginKey,
 		m.handleSkillCreateKey,
@@ -1611,6 +1630,14 @@ func (m *model) View() tea.View {
 	if m.branchPopup != nil {
 		popupView := m.renderBranchPopup()
 		b.WriteString(popupView)
+		b.WriteString("\n")
+	}
+
+	// Render the tool-approval dialog while a request is pending. It sits in
+	// the same slot as the branch popup: the last block of the chat panel,
+	// above the closing rule, where the user's eye already is.
+	if m.approval != nil {
+		b.WriteString(m.renderApprovalDialog(bodyWidth))
 		b.WriteString("\n")
 	}
 
