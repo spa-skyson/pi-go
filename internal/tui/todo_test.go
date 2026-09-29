@@ -20,7 +20,7 @@ func TestSidebarTodoIndicator(t *testing.T) {
 
 	t.Run("hidden without state", func(t *testing.T) {
 		t.Parallel()
-		if out := render(nil); strings.Contains(out, "☑") {
+		if out := render(nil); strings.Contains(out, "Plan —") {
 			t.Errorf("no todo state should render no indicator:\n%s", out)
 		}
 	})
@@ -28,7 +28,7 @@ func TestSidebarTodoIndicator(t *testing.T) {
 	t.Run("shows progress and the current item", func(t *testing.T) {
 		t.Parallel()
 		out := render(&tools.TodoState{Total: 3, Done: 1, InProgress: "write the tests"})
-		if !strings.Contains(out, "☑ 1/3") {
+		if !strings.Contains(out, "Plan — 1/3") {
 			t.Errorf("indicator missing from the sidebar:\n%s", out)
 		}
 		if !strings.Contains(out, "write the tests") {
@@ -36,10 +36,10 @@ func TestSidebarTodoIndicator(t *testing.T) {
 		}
 	})
 
-	t.Run("omits the separator with no current item", func(t *testing.T) {
+	t.Run("marks the all-done state", func(t *testing.T) {
 		t.Parallel()
 		out := render(&tools.TodoState{Total: 2, Done: 2})
-		if !strings.Contains(out, "☑ 2/2") {
+		if !strings.Contains(out, "Plan — 2/2 done") {
 			t.Errorf("all-done indicator missing:\n%s", out)
 		}
 		if strings.Contains(out, "·") {
@@ -51,10 +51,10 @@ func TestSidebarTodoIndicator(t *testing.T) {
 		t.Parallel()
 		first := render(&tools.TodoState{Total: 3, Done: 0, InProgress: "first"})
 		second := render(&tools.TodoState{Total: 3, Done: 1, InProgress: "second"})
-		if !strings.Contains(first, "☑ 0/3") || !strings.Contains(first, "first") {
+		if !strings.Contains(first, "Plan — 0/3") || !strings.Contains(first, "first") {
 			t.Errorf("stale render:\n%s", first)
 		}
-		if !strings.Contains(second, "☑ 1/3") || !strings.Contains(second, "second") {
+		if !strings.Contains(second, "Plan — 1/3") || !strings.Contains(second, "second") {
 			t.Errorf("update did not take effect:\n%s", second)
 		}
 	})
