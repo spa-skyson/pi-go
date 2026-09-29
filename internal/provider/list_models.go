@@ -85,6 +85,12 @@ func ListModels(ctx context.Context, providerName string, opts ListModelsOptions
 		return listOpenRouterModels(ctx, opts)
 	case "agentgateway":
 		return listAgentGatewayModels(ctx, opts)
+	case "openai-compatible":
+		// A declared provider (config.json "providers") with the
+		// openai-compatible protocol lists opencode-style: <base>/models
+		// with the base taken as is, /v1 never appended. The declared
+		// provider's own name labels the errors.
+		return listBearerModels(ctx, opts, "openai-compatible", providerName, true)
 	case "ollama":
 		// OllamaListModels already fills context window and capabilities
 		// from the daemon's /api/tags response — nothing to enrich.
@@ -97,7 +103,7 @@ func ListModels(ctx context.Context, providerName string, opts ListModelsOptions
 // listOpenAIModels fetches models from GET /v1/models.
 // Works for OpenAI platform and Azure-compatible endpoints.
 func listOpenAIModels(ctx context.Context, opts ListModelsOptions) ([]ModelInfo, error) {
-	return listBearerModels(ctx, opts, "openai", "OpenAI")
+	return listBearerModels(ctx, opts, "openai", "OpenAI", false)
 }
 
 // listMistralModels fetches models from GET <base>/v1/models and parses the
@@ -175,12 +181,12 @@ func listMistralModels(ctx context.Context, opts ListModelsOptions) ([]ModelInfo
 
 // listXAIModels fetches models from GET /v1/models.
 func listXAIModels(ctx context.Context, opts ListModelsOptions) ([]ModelInfo, error) {
-	return listBearerModels(ctx, opts, "xai", "xAI")
+	return listBearerModels(ctx, opts, "xai", "xAI", false)
 }
 
 // listOpenRouterModels fetches models from GET /v1/models.
 func listOpenRouterModels(ctx context.Context, opts ListModelsOptions) ([]ModelInfo, error) {
-	return listBearerModels(ctx, opts, "openrouter", "OpenRouter")
+	return listBearerModels(ctx, opts, "openrouter", "OpenRouter", false)
 }
 
 // listAgentGatewayModels fetches models from GET /v1/models on the local
@@ -192,7 +198,7 @@ func listOpenRouterModels(ctx context.Context, opts ListModelsOptions) ([]ModelI
 // makes `pi model list agentgateway -o json` show a real context_window for
 // the virtual models (e.g. ollama-deepseek → 1M) instead of omitting the field.
 func listAgentGatewayModels(ctx context.Context, opts ListModelsOptions) ([]ModelInfo, error) {
-	models, err := listBearerModels(ctx, opts, "agentgateway", "agentgateway")
+	models, err := listBearerModels(ctx, opts, "agentgateway", "agentgateway", false)
 	if err != nil {
 		return nil, err
 	}
@@ -202,22 +208,30 @@ func listAgentGatewayModels(ctx context.Context, opts ListModelsOptions) ([]Mode
 	return models, nil
 }
 
-// listBearerModels fetches models from GET <base>/v1/models with bearer auth
-// and OpenAI's {"data":[{"id","owned_by"}]} envelope — the shape every
-// OpenAI-compatible vendor endpoint shares. displayName only labels the error.
+// listBearerModels fetches models with bearer auth and OpenAI's
+// {"data":[{"id","owned_by"}]} envelope — the shape every OpenAI-compatible
+// vendor endpoint shares. providerName selects the default endpoint and the
+// auth style; displayName only labels the error.
 //
-// A base URL that already ends in /v1 is not extended again: the LLM-side
-// default for these vendors carries the version segment (api.x.ai/v1), so a
-// user who exports the same value as XAI_BASE_URL would otherwise be sent to
-// /v1/v1/models.
-func listBearerModels(ctx context.Context, opts ListModelsOptions, providerName, displayName string) ([]ModelInfo, error) {
+// compatBase=false appends the OpenAI /v1 segment, skipping it when the base
+// already ends in /v1: the LLM-side defaults for these vendors carry the
+// version segment (api.x.ai/v1), so a user who exports the same value as
+// XAI_BASE_URL would otherwise be sent to /v1/v1/models.
+//
+// compatBase=true is the declared-provider (opencode) semantics: the base is
+// the full endpoint already, the endpoint is exactly <base>/models, and /v1
+// is never added.
+func listBearerModels(ctx context.Context, opts ListModelsOptions, providerName, displayName string, compatBase bool) ([]ModelInfo, error) {
 	baseURL := opts.BaseURL
 	if baseURL == "" {
 		baseURL = providerDefaultBaseURL(providerName)
 	}
 	trimmed := strings.TrimRight(baseURL, "/")
+	if trimmed == "" {
+		return nil, fmt.Errorf("listing %s models: no base URL configured", displayName)
+	}
 	endpoint := trimmed + "/v1/models"
-	if strings.HasSuffix(trimmed, "/v1") {
+	if compatBase || strings.HasSuffix(trimmed, "/v1") {
 		endpoint = trimmed + "/models"
 	}
 
@@ -329,7 +343,7 @@ func fetchJSON(ctx context.Context, method, url string, opts ListModelsOptions, 
 			req.Header.Set("x-api-key", opts.APIKey)
 		}
 		req.Header.Set("anthropic-version", "2023-06-01")
-	case "openai", "mistral", "xai", "openrouter", "agentgateway":
+	case "openai", "mistral", "xai", "openrouter", "agentgateway", "openai-compatible":
 		if opts.APIKey != "" {
 			req.Header.Set("Authorization", "Bearer "+opts.APIKey)
 		}

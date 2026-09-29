@@ -122,7 +122,7 @@ func NewOpenAI(_ context.Context, modelName, apiKey, baseURL string, llmOpts *LL
 			option.WithHeader("OpenAI-Beta", "responses=experimental"),
 		)
 	} else if baseURL != "" {
-		baseURL = normalizeOpenAIBaseURL(baseURL)
+		baseURL = resolveOpenAIBaseURL(baseURL, llmOpts != nil && llmOpts.OpenAICompatBaseURL)
 		opts = append(opts, option.WithBaseURL(baseURL))
 	}
 	// Install a transport that captures 4xx/5xx response bodies from the
@@ -207,6 +207,20 @@ func normalizeOpenAIBaseURL(baseURL string) string {
 		return baseURL
 	}
 	return baseURL + "/v1"
+}
+
+// resolveOpenAIBaseURL picks the effective base for the OpenAI client.
+//
+// compat=false is the built-in behavior: /v1 is appended unless the URL
+// already carries it. compat=true is the named-provider (opencode) semantics:
+// the base is already the full endpoint — "…/paas/v4", a proxy path, "/v1" —
+// and the /v1 segment is never added, because the caller's endpoint decides
+// its own versioning. Only trimming and scheme-fixing still apply.
+func resolveOpenAIBaseURL(baseURL string, compat bool) string {
+	if compat {
+		return strings.TrimRight(normalizeBaseURL(baseURL), "/")
+	}
+	return normalizeOpenAIBaseURL(baseURL)
 }
 
 // endpointMode returns whether to use Responses or Chat Completions for this model.

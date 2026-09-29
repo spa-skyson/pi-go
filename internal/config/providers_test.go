@@ -62,8 +62,8 @@ func TestLoadProviders(t *testing.T) {
 	if got := cc.Models["claude-opus-5"].ContextWindow; got != 200000 {
 		t.Errorf("corp-claude claude-opus-5 contextWindow = %d, want 200000", got)
 	}
-	if cc.Protocol() != "openai" {
-		t.Errorf("corp-claude protocol = %q, want openai", cc.Protocol())
+	if cc.Protocol() != "openai-compatible" {
+		t.Errorf("corp-claude protocol = %q, want openai-compatible", cc.Protocol())
 	}
 
 	cp := cfg.Providers["corp-proxy"]

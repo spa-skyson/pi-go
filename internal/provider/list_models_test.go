@@ -117,6 +117,66 @@ func TestListOpenAIModels_V1BaseURL(t *testing.T) {
 	}
 }
 
+// The openai-compatible protocol (declared providers) lists opencode-style:
+// the request path is exactly <base>/models, with /v1 never appended — a base
+// of …/paas/v4 must not become /v4/v1/models, and a base of …/v1 must not
+// become /v1/v1/models.
+func TestListModels_OpenAICompatRawBase(t *testing.T) {
+	tests := []struct {
+		name     string
+		basePath string
+		wantPath string
+	}{
+		{name: "vendor versioned base", basePath: "/paas/v4", wantPath: "/paas/v4/models"},
+		{name: "v1 base stays single", basePath: "/v1", wantPath: "/v1/models"},
+		{name: "bare base", basePath: "", wantPath: "/models"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotAuth string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != tt.wantPath {
+					t.Errorf("path = %q, want %q", r.URL.Path, tt.wantPath)
+				}
+				gotAuth = r.Header.Get("Authorization")
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": []map[string]any{{"id": "glm-5", "owned_by": "zai"}},
+				})
+			}))
+			defer srv.Close()
+
+			models, err := ListModels(context.Background(), "openai-compatible", ListModelsOptions{
+				APIKey:  "sk-test",
+				BaseURL: srv.URL + tt.basePath,
+			})
+			if err != nil {
+				t.Fatalf("ListModels: %v", err)
+			}
+			if len(models) != 1 || models[0].ID != "glm-5" {
+				t.Errorf("models = %+v, want one glm-5", models)
+			}
+			if gotAuth != "Bearer sk-test" {
+				t.Errorf("Authorization = %q, want the bearer key", gotAuth)
+			}
+		})
+	}
+}
+
+// Listing errors carry the provider name ListModels was called with — the
+// protocol key here; the CLI prefixes its own output with the declared
+// provider's name, so nothing is lost.
+func TestListModels_OpenAICompatErrorNamesProvider(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	_, err := ListModels(context.Background(), "openai-compatible", ListModelsOptions{BaseURL: srv.URL})
+	if err == nil || !strings.Contains(err.Error(), "listing openai-compatible models") {
+		t.Fatalf("err = %v, want the called-with name in the message", err)
+	}
+}
+
 func TestListMistralModels(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer mkey" {
