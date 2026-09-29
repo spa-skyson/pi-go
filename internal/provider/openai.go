@@ -55,6 +55,10 @@ type openaiModel struct {
 	// clamps it to the tiers the model accepts — the accepted set is not
 	// uniform across the gpt-5/gpt-6/o-series.
 	thinkingLevel string
+	// temperature is the caller's sampling temperature; nil leaves the field
+	// off the wire entirely so the provider default stands. Applied on both
+	// the Chat Completions and Responses paths (see the two request builders).
+	temperature *float64
 	// mu protects responseState for Responses mode multi-turn.
 	mu            sync.Mutex
 	responseState *responsesState // nil when using Chat Completions
@@ -153,6 +157,7 @@ func NewOpenAI(_ context.Context, modelName, apiKey, baseURL string, llmOpts *LL
 		useLegacyMaxTokens: llmOpts != nil && llmOpts.UseLegacyMaxTokens,
 		enableWebSearch:    openaiWebSearchEnabled(llmOpts != nil && llmOpts.EnableOpenAIWebSearch),
 		thinkingLevel:      openaiThinkingLevel(modelName, llmOpts),
+		temperature:        openaiTemperature(llmOpts),
 		responseState:      nil, // determined per-call based on model
 	}, nil
 }
@@ -179,6 +184,15 @@ func openaiThinkingLevel(modelName string, llmOpts *LLMOptions) string {
 		return level
 	}
 	return defaultOpenAIThinkingLevel
+}
+
+// openaiTemperature copies the caller's sampling temperature off the options,
+// tolerating a nil options the same way the sibling getters do.
+func openaiTemperature(llmOpts *LLMOptions) *float64 {
+	if llmOpts == nil {
+		return nil
+	}
+	return llmOpts.Temperature
 }
 
 func (m *openaiModel) Name() string { return m.modelName }

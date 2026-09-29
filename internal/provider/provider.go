@@ -712,6 +712,14 @@ type LLMOptions struct {
 	// NewLLM fills this in from its thinkingLevel argument, so the CLI, the
 	// config file and pimodels all set it through the one path.
 	ThinkingLevel string
+	// Temperature is the sampling temperature for OpenAI- and
+	// Anthropic-compatible paths — which includes the named providers from
+	// the config `providers` section, since they route through NewOpenAI and
+	// NewAnthropic. Nil means unset and the provider's own default stands;
+	// the pointer is what separates "caller asked for 0.3" from "caller did
+	// not ask". Providers with their own sampling surfaces (Mistral,
+	// OpenRouter, xAI, Ollama, Gemini, Azure) ignore it today.
+	Temperature *float64
 	// UseLegacyMaxTokens sends max_tokens instead of max_completion_tokens on
 	// the Chat Completions wire. Ollama only understands the legacy field; the
 	// newer max_completion_tokens is silently ignored, leaving the model

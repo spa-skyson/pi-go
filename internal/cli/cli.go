@@ -77,6 +77,9 @@ var (
 	flagWebSearch    bool
 	flagLSP          string
 	flagTools        string
+	flagTemperature  float64
+	flagThinking     string
+	flagSteps        int
 	flagSystem       string
 	flagPprof        string
 	flagPprofPort    string
@@ -239,6 +242,9 @@ Set a default in ~/.pi-go/config.json so --model is only needed to deviate;
 		"Register the web_search tool (needs a running Ollama daemon, or OLLAMA_API_KEY). Off by default; PI_WEB_SEARCH=1 does the same, and propagates to subagents")
 	cmd.Flags().StringVar(&flagLSP, "lsp", "min", "Language-server tools: off, min (symbols+diagnostics), or full (all seven)")
 	cmd.Flags().StringVar(&flagTools, "tools", "", "Comma-separated tool names to keep (e.g. read,bash); MCP servers match by server name; default keeps all")
+	cmd.Flags().Float64Var(&flagTemperature, "temperature", 0, "LLM sampling temperature (0 keeps the provider default)")
+	cmd.Flags().StringVar(&flagThinking, "thinking", "", "Reasoning effort: none, low, medium, high, or max (overrides config thinking level)")
+	cmd.Flags().IntVar(&flagSteps, "steps", 0, "Max tool-call iterations per run (0 = no limit)")
 	// Persistent, not local: `pi memory mine . --pprof true` and every other
 	// subcommand must accept these too. As local flags they were rejected with
 	// "unknown flag: --pprof" the moment a subcommand was used.
@@ -541,9 +547,10 @@ func buildRootRuntime(ctx context.Context, args []string) (rootRuntime, error) {
 		AdvisorModel:   advisorModel,
 		AdvisorMaxUses: advisorMaxUses,
 		AdvisorCaching: advisorCaching,
+		Temperature:    temperatureFlagOpt(),
 	}
 	applyTransportOptions(llmOpts, cfg, info)
-	llm, err := provider.NewLLM(ctx, info, apiKey, baseURL, cfg.ThinkingLevel, llmOpts)
+	llm, err := provider.NewLLM(ctx, info, apiKey, baseURL, effectiveThinkingLevel(cfg), llmOpts)
 	if err != nil {
 		return rootRuntime{}, fmt.Errorf("creating LLM provider: %w", err)
 	}
@@ -692,6 +699,10 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	// whether the caller asked for it. Record explicit use here so
 	// dispatchMode can honor the pre-rename `--mode rpc --socket` spelling.
 	flagSocketChanged = cmd.Flags().Changed("socket")
+	// Same for --temperature: its zero value means "provider default", so
+	// only Changed distinguishes a passed 0 from an absent flag. Captured
+	// here because buildRootRuntime below reads the result.
+	flagTemperatureChanged = cmd.Flags().Changed("temperature")
 
 	// Load API keys from ~/.pi-go/.env (set by /login command).
 	loadDotEnv()
@@ -898,6 +909,13 @@ func runNonInteractive(
 	// the point the session is created below.
 	if memWorker != nil {
 		afterCBs = append(afterCBs, memoryObservationCallback(memWorker, cfg, cwd, &memSessionID))
+	}
+
+	// --steps caps the tool-call iterations (the subagent budget a parent
+	// passes down). Appended before the fold so it rides the composed chain:
+	// handed to ADK as a separate slice entry it would never run.
+	if flagSteps > 0 {
+		afterCBs = append(afterCBs, agent.NewStepLimitCallback(flagSteps))
 	}
 
 	// Fold the whole after-tool chain into the single callback ADK runs.
@@ -2162,6 +2180,36 @@ func mergeExtraHeaders(cfgHeaders map[string]string, cliHeaders []string) map[st
 		return nil
 	}
 	return merged
+}
+
+// flagTemperatureChanged records whether --temperature was passed. The flag's
+// zero value doubles as "unset" (0 keeps the provider default), so only
+// cobra's Changed can tell a passed 0 from an absent flag; runRoot captures it
+// the same way flagSocketChanged is.
+var flagTemperatureChanged bool
+
+// temperatureFlagOpt returns the --temperature value as *float64, nil when the
+// flag was not passed or holds a negative value (a provider would reject it;
+// warn and keep the default rather than failing every request).
+func temperatureFlagOpt() *float64 {
+	if !flagTemperatureChanged {
+		return nil
+	}
+	if flagTemperature < 0 {
+		slog.Warn("ignoring negative --temperature", "value", flagTemperature)
+		return nil
+	}
+	t := flagTemperature
+	return &t
+}
+
+// effectiveThinkingLevel resolves the run's reasoning effort: the --thinking
+// flag wins over config.json's thinking level when both name one.
+func effectiveThinkingLevel(cfg config.Config) string {
+	if v := strings.TrimSpace(flagThinking); v != "" {
+		return strings.ToLower(v)
+	}
+	return cfg.ThinkingLevel
 }
 
 // applyTransportOptions layers the --insecure/--ca-cert/--trace-http flags over
