@@ -187,6 +187,11 @@ type model struct {
 	// Unified search popup for slash commands and history.
 	searchPopup *searchPopupState
 
+	// subagentViewer is the fullscreen stream viewer opened from the
+	// subagent monitor (Enter on an agent). It renders the selected card's
+	// full agentEvents; nil when closed. See subagent_monitor.go.
+	subagentViewer *subagentViewerState
+
 	// Legacy selection index for slash commands (used in tests).
 	slashCommandSelected int
 
@@ -324,12 +329,21 @@ const (
 	searchModeHistory  searchMode = "history"
 	searchModeModels   searchMode = "models"
 	searchModeAgents   searchMode = "agents"
+	// searchModeSubagents is the /subagents monitor. It lists the session's
+	// subagents (orchestrator statuses stitched to transcript cards) and
+	// opens the fullscreen stream viewer on Enter. Deliberately not
+	// searchModeAgents — that popup selects the session's primary agent.
+	searchModeSubagents searchMode = "subagents"
 )
 
 // SearchItem represents an item in the search popup (command or history entry).
 type SearchItem struct {
 	Text        string // the command or history text
 	Description string // for commands: the description
+	// ID, when set, is the action target behind the row rather than text to
+	// insert: the subagent monitor carries the agentID so Enter can open that
+	// agent's stream viewer. Empty for every other mode.
+	ID string
 }
 
 // searchPopupChrome is the number of rows the search popup reserves for chrome
@@ -419,6 +433,12 @@ func (m *model) newSearchPopup(mode searchMode) {
 
 	case searchModeAgents:
 		items = m.agentSearchItems()
+
+	case searchModeSubagents:
+		items = m.subagentSearchItems()
+		// The monitor always opens, even with nothing to show: the user
+		// asked for it explicitly, and the empty state says why it is empty
+		// better than a silent refusal would.
 	}
 
 	availableRows := m.messageViewportHeight()
@@ -1188,13 +1208,16 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Overlays get first refusal, even while the agent runs. The approval
 	// dialog is checked first: it gates a live tool call, and its keys (y, n,
 	// a, Enter, Esc) must not leak into the other overlays — in particular Esc
-	// denies the request instead of canceling the turn.
+	// denies the request instead of canceling the turn. The stream viewer sits
+	// before handleInterruptKey for the same reason: with it open, Esc steps
+	// back to the monitor instead of canceling the running turn.
 	for _, handle := range []keyHandler{
 		m.handleApprovalKey,
 		m.handleCommitKey,
 		m.handleLoginKey,
 		m.handleSkillCreateKey,
 		m.handleBranchPopupKey,
+		m.handleSubagentViewerKey,
 		m.handleInterruptKey,
 	} {
 		if model, cmd, handled := handle(key); handled {
@@ -1406,6 +1429,16 @@ func (m *model) handleToggleKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 		m.newSearchPopup(searchModeHistory)
 		return m, nil, true
 	}
+
+	// Ctrl+T toggles the subagent monitor — the popup /subagents opens.
+	// Reachable while a response runs, like the other popups: watching a
+	// subagent is exactly what you do mid-turn. Gated on an empty prompt
+	// because Ctrl+T is a readline editing chord (transpose) with text in
+	// the buffer, and the viewer takes the key first when it is open.
+	if key.Code == 't' && key.Mod == tea.ModCtrl && m.subagentViewer == nil && m.inputModel.Text == "" {
+		m.toggleSubagentsPopup()
+		return m, nil, true
+	}
 	return nil, nil, false
 }
 
@@ -1605,6 +1638,14 @@ func (m *model) acceptSearchPopupSelection() tea.Cmd {
 		m.searchPopup = nil
 		_, cmd := m.handleAgentCommand([]string{item.Text})
 		return cmd
+	case searchModeSubagents:
+		// Enter opens the fullscreen stream viewer for the selected agent.
+		// The monitor stays open behind it — Esc in the viewer comes back
+		// here. A status-only row has no transcript card, so no stream to
+		// show: the key is consumed but nothing opens.
+		if item.ID != "" && m.agentCardByID(item.ID) != nil {
+			m.subagentViewer = &subagentViewerState{agentID: item.ID}
+		}
 	}
 	return nil
 }
@@ -1649,6 +1690,10 @@ func (m *model) View() tea.View {
 	visibleMessages, startLine, endLine := clipMessagesToViewport(
 		messagesView, availableHeight, m.chatModel.Scroll)
 	visibleMessages = m.overlaySearchPopup(visibleMessages, bodyWidth)
+	// The stream viewer covers the whole message viewport, so it paints after
+	// the search popup: the monitor stays open underneath it and the viewer
+	// simply covers it up.
+	visibleMessages = m.overlaySubagentViewer(visibleMessages, bodyWidth)
 
 	// Note: width constraint is handled by glamour's WithWordWrap(contentWidth) in chatModel.UpdateRenderer.
 	// lipgloss.Width() counts raw bytes including invisible ANSI codes, causing wrapping issues.
@@ -2719,6 +2764,10 @@ func (m *model) searchPopupStyles(mode searchMode, width int) searchPopupStyleSe
 		accent = m.palette.Green                                // green for agents
 		st.itemStyle = st.itemStyle.Foreground(m.palette.Green) // green
 		st.header = "Agents"
+	case searchModeSubagents:
+		accent = m.palette.Blue // blue for the subagent monitor
+		st.itemStyle = st.itemStyle.Foreground(m.palette.Text)
+		st.header = "Subagents"
 	default:
 		return st
 	}

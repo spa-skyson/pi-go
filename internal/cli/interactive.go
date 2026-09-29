@@ -206,6 +206,17 @@ func runInteractive(
 		ModelCandidatesRefresh: func(refreshCtx context.Context) []tui.SearchItem {
 			return refreshModelCandidates(refreshCtx, cfg)
 		},
+		// SubagentStatuses backs the /subagents monitor: the orchestrator is
+		// built during deferred init and only exists from then on, so the
+		// closure reads it through res at call time — the same InitEvent
+		// happens-before edge the AgentSwitcher below relies on. A user can
+		// only open the monitor long after init has delivered.
+		SubagentStatuses: func() []subagent.AgentStatus {
+			if res.orch == nil {
+				return nil
+			}
+			return res.orch.List()
+		},
 		// AgentSwitcher fires only after deferred init has filled res (the
 		// InitEvent send is the happens-before edge): it rebuilds the
 		// session's callback chains from the shared inputs and builds the

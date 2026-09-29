@@ -39,18 +39,21 @@ func (m *model) handleSlashCommand(input string) (tea.Model, tea.Cmd) {
 	}
 
 	if spec, ok := slashCommandByName[cmd]; ok {
-		// /model and /agent with no argument open their picker popups instead
-		// of printing a listing into the chat. Routed here rather than from
-		// inside the handlers: they are referenced from the slashCommandSpecs
-		// package variable, and a static reference back into newSearchPopup —
-		// which reaches that variable through the derived command tables —
-		// would close an initialization cycle.
+		// /model, /agent and /subagents with no argument open their picker
+		// popups instead of printing a listing into the chat. Routed here
+		// rather than from inside the handlers: they are referenced from the
+		// slashCommandSpecs package variable, and a static reference back
+		// into newSearchPopup — which reaches that variable through the
+		// derived command tables — would close an initialization cycle.
 		if len(parts) == 1 {
 			switch cmd {
 			case "/model":
 				return m, m.openModelsPopup()
 			case "/agent":
 				m.newSearchPopup(searchModeAgents)
+				return m, nil
+			case "/subagents":
+				m.newSearchPopup(searchModeSubagents)
 				return m, nil
 			}
 		}
@@ -119,7 +122,7 @@ var slashCommandSpecs = []slashCommandSpec{
 	{name: "/context", desc: "Show context usage", run: slashCmdVoid((*model).showContextMessage)},
 	{name: "/branch", desc: "Manage branches", run: slashCmdArgs((*model).handleBranchCommand)},
 	{name: "/compact", desc: "Compact context", run: slashCmdVoid((*model).handleCompactCommand)},
-	{name: "/subagents", desc: "Show subagents", run: slashCmdVoid((*model).handleAgentsCommand)},
+	{name: "/subagents", desc: "Monitor subagents", run: slashCmdVoid((*model).handleAgentsCommand)},
 	{name: "/history", desc: "Command history", run: slashCmdArgs((*model).handleHistoryCommand)},
 	{name: "/login", desc: "Configure API keys (codex, openai, anthropic, gemini)", run: (*model).handleLoginCommand},
 	{name: "/commit", desc: "Create commit from staged changes", run: slashCmdBare((*model).handleCommitCommand)},
@@ -978,7 +981,7 @@ func (m *model) formatHelp() string {
 	b.WriteString("\n**System:**\n\n")
 	b.WriteString("| Command | Description |\n")
 	b.WriteString("|---------|-------------|\n")
-	b.WriteString("| `/subagents` | Show running subagents |\n")
+	b.WriteString("| `/subagents` | Monitor running subagents |\n")
 	b.WriteString("| `/rtk` | Output compaction stats |\n")
 	b.WriteString("| `/mcp` | List MCP servers and tool status |\n")
 	b.WriteString("| `/login <provider>` | Configure API keys |\n")
