@@ -1977,6 +1977,14 @@ func (m *model) handleAgentDone(msg agentDoneMsg) (tea.Model, tea.Cmd) {
 	m.matrix.clear()
 	m.statusModel.ActiveTool = ""
 	m.statusModel.ActiveTools = nil
+	if m.approval != nil {
+		// The turn ended with a dialog still up — the blocked tool call died
+		// with the loop (cancelation reaches the bridge, which answers deny
+		// on ctx). Drop the dialog: an answer typed now would land in the
+		// buffered Reply of a call nobody is waiting on.
+		m.approval = nil
+		m.chatModel.AppendNotice("approval canceled: turn ended before an answer")
+	}
 	if msg.err == nil && m.mode == "plan" && m.planWorktree != nil {
 		if err := m.finishPlanWorktree(); err != nil {
 			msg.err = fmt.Errorf("finalize PDD worktree: %w", err)
