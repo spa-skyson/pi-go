@@ -1,0 +1,119 @@
+// pi-go configuration example — copy what you need into ~/.pi-go/config.json
+// (global) or .pi-go/config.json (project-local). Line comments (//) are
+// allowed in the real config files as well; block comments are not.
+//
+// Note: pi-go itself saves config.json as plain JSON without comments (e.g.
+// after choosing a model with /model), so a save drops every comment in the
+// file. Comments are safest in the sections the program never rewrites on its
+// own — providers, permission — but keep a commented copy if you edit often.
+// "$schema" below enables editor autocompletion and validation.
+{
+  "$schema": "https://raw.githubusercontent.com/spa-skyson/pi-go/main/schemas/config.schema.json",
+
+  // Which agent (.pi-go/agents/*.md, frontmatter mode: primary) the
+  // interactive session starts in. Unknown names fall back to the built-in.
+  "defaultAgent": "build",
+
+  // Model roles, selectable with --role/-r flags. "default" is the fallback.
+  // A model prefixed with a declared provider's name ("corp-claude/…") routes
+  // to that provider automatically.
+  "roles": {
+    "default": {
+      "model": "gpt-5.6-sol",
+      "thinkingLevel": "high"
+    },
+    "smol":   { "model": "ollama/gemma-4-e4b:latest" },
+    "slow":   { "model": "corp-claude/claude-opus-5" },
+    "commit": { "model": "gpt-5.6-sol", "advisorModel": "claude-opus-4-7", "advisorMaxUses": 3 }
+  },
+
+  // Reasoning effort: none | low | medium | high | max.
+  "thinkingLevel": "high",
+
+  // TUI theme (see `pi theme list` for the registered names).
+  "theme": "default",
+
+  // User-declared providers. The key becomes a model-name prefix:
+  // "corp-claude" serves "corp-claude/claude-opus-5". Names must not shadow
+  // built-in providers (anthropic, openai, ollama, ...) and may contain only
+  // letters, digits, ".", "_", "-".
+  "providers": {
+    "corp-claude": {
+      // Wire protocol: "anthropic" or "openai-compatible" (the default).
+      "type": "anthropic",
+      // Endpoint. ${VAR} expands at load from .pi-go/.env or the environment,
+      // so the URL can stay out of a committed config.
+      "baseURL": "${CORP_LLM_URL}",
+      // Read the key from this environment variable when "apiKey" is empty.
+      "apiKeyEnv": "CORP_API_KEY",
+      // Static headers sent with every request. ${VAR} expands at load;
+      // ${SESSION_ID} survives load and is replaced with the running session's
+      // id when the LLM client is built (conversation-scoped routing/caching).
+      "headers": {
+        "x-opencode-session": "${SESSION_ID}"
+      },
+      // Per-model metadata. contextWindow enables auto-compaction for models
+      // the embedded catalog does not know.
+      "models": {
+        "claude-opus-5": { "contextWindow": 200000 }
+      }
+    },
+    "proxy-gpt": {
+      "type": "openai-compatible",
+      // Already the full endpoint: /chat/completions is appended, /v1 is not.
+      "baseURL": "https://llm-proxy.internal.example.com",
+      // Literal key — ${VAR} expansion applies here too, so this can be
+      // "${PROXY_API_KEY}" instead.
+      "apiKey": "${PROXY_API_KEY}"
+    }
+  },
+
+  // Tool permission gates, checked before a tool call executes.
+  // Any key is a tool-name glob with a directive: "allow" passes, "deny"
+  // blocks with an error the model sees, "ask" asks interactively in the TUI
+  // and is a hard denial in headless runs. The reserved "bash" key holds
+  // command-line rules; in the array form the later rule wins a specificity
+  // tie, so put broad rules first and narrow ones after them.
+  "permission": {
+    "edit": "ask",
+    "web-fetch": "allow",
+    "bash": [
+      { "pattern": "git status", "directive": "allow" },
+      { "pattern": "git push*", "directive": "deny" },
+      { "pattern": "rm -rf *", "directive": "deny" },
+      { "pattern": "*", "directive": "ask" }
+    ]
+  },
+
+  // MCP servers. stdio servers spawn a command; HTTP servers use "url".
+  // ${VAR} in url/headers expands from .pi-go/.env or the environment.
+  "mcp": {
+    "servers": [
+      { "name": "context7", "command": "npx", "args": ["-y", "@upstash/context7-mcp"] },
+      {
+        "name": "docs",
+        "url": "https://mcp.example.com/mcp",
+        "headers": { "Authorization": "Bearer ${DOCS_TOKEN}" },
+        "oauth": false
+      }
+    ]
+  },
+
+  // Persistent memory. "compressor" selects how a recorded tool call becomes
+  // an observation: "none" records raw events (default, no model calls),
+  // "subagent" spawns a compressor per tool call (costs a process and a
+  // provider round trip per call).
+  "memory": {
+    "enabled": true,
+    "token_budget": 8000,
+    "compressor": "none",
+    "context_lookback_hours": 72,
+    "excluded_tools": ["read", "ls"]
+  },
+
+  // Budgets and guards.
+  "maxDailyTokens": 50000000,
+  "insecureSkipTLS": false,
+  // "caCertPath": "/etc/ssl/company-proxy.pem",
+  "traceHTTP": false
+}

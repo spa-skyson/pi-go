@@ -520,6 +520,19 @@ Pi reads configuration from `~/.pi-go/config.json` (global) and `.pi-go/config.j
 - **Themes** — Terminal color schemes via `theme` config field
 - **Base URLs** — Per-provider endpoints via the `baseURLs` field
 
+Config files accept `//` line comments — anything from `//` to the end of a line
+is ignored, except inside string values (so `"https://…"` is safe). Note that pi-go
+itself rewrites config files as plain JSON when saving, so comments in sections it
+edits (e.g. `roles`, via `/model`) do not survive a save. A commented,
+copy-paste-ready example lives in [`config.example.jsonc`](config.example.jsonc).
+For editor autocompletion and validation, add:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/spa-skyson/pi-go/main/schemas/config.schema.json"
+}
+```
+
 ### Provider base URLs
 
 Self-hosted or LAN endpoints can be declared in config instead of exported in every shell:

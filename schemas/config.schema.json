@@ -1,0 +1,312 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/spa-skyson/pi-go/main/schemas/config.schema.json",
+  "title": "pi-go configuration",
+  "description": "Schema for ~/.pi-go/config.json and project .pi-go/config.json. Line comments (//) are allowed in the file. See config.example.jsonc in the repository for a commented example.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Point at this schema for editor autocompletion and validation."
+    },
+    "roles": {
+      "type": "object",
+      "description": "Named model configurations (default, smol, slow, plan, commit), selectable via CLI flags.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["model"],
+        "properties": {
+          "model": { "type": "string", "description": "Model name; a declared-provider prefix (\"corp/...\") routes to that provider." },
+          "provider": { "type": "string", "description": "Provider override; empty auto-detects from the model name prefix." },
+          "advisorModel": { "type": "string", "description": "Advisor model for the advisor tool (e.g. \"claude-opus-4-7\")." },
+          "advisorMaxUses": { "type": "integer", "minimum": 0, "description": "Max advisor calls per request (0 = unlimited)." },
+          "advisorCaching": { "type": "boolean", "description": "Enable advisor prompt caching." }
+        }
+      }
+    },
+    "defaultModel": {
+      "type": "string",
+      "description": "Deprecated: use roles.default.model. Migrated at load."
+    },
+    "defaultProvider": {
+      "type": "string",
+      "description": "Provider used when a role names no provider and the model prefix is unknown (e.g. \"anthropic\")."
+    },
+    "defaultAgent": {
+      "type": "string",
+      "description": "Primary agent (frontmatter mode: primary or all in ~/.pi-go/agents/*.md) the interactive session starts in. Unknown names fall back to the built-in agent."
+    },
+    "thinkingLevel": {
+      "enum": ["none", "low", "medium", "high", "max"],
+      "description": "Reasoning effort for models that support it."
+    },
+    "theme": {
+      "type": "string",
+      "description": "TUI color theme (e.g. \"default\", \"dark-one\"). Custom themes are registered from ~/.pi-go/themes."
+    },
+    "baseURLs": {
+      "type": "object",
+      "description": "Provider base URLs, keyed by provider name (\"ollama\", \"anthropic\", ...). Environment variables override these.",
+      "additionalProperties": { "type": "string" }
+    },
+    "extraHeaders": {
+      "type": "object",
+      "description": "Static HTTP headers sent with every LLM request. ${VAR} expands from ~/.pi-go/.env or the environment; ${SESSION_ID} is replaced per session.",
+      "additionalProperties": { "type": "string" }
+    },
+    "insecureSkipTLS": {
+      "type": "boolean",
+      "description": "Turn off TLS verification for every endpoint. Prefer caCertPath."
+    },
+    "maxOutputTokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Output cap in tokens on OpenAI-compatible paths. Zero uses the provider default (64000). This is an output cap, not a context window."
+    },
+    "caCertPath": {
+      "type": "string",
+      "description": "PEM bundle trusted in addition to the system roots, for TLS-intercepting corporate proxies."
+    },
+    "disableSystemCAs": {
+      "type": "boolean",
+      "description": "Narrow trust to caCertPath alone."
+    },
+    "traceHTTP": {
+      "type": "boolean",
+      "description": "Log every LLM request and response in full to the session log and OTel spans. The log contains the entire conversation in cleartext."
+    },
+    "planAutoFix": {
+      "type": "boolean",
+      "description": "Run the automatic plan-repair loop after /plan. Default: on. Set false to disable."
+    },
+    "tools": {
+      "type": "object",
+      "description": "Per-tool settings; keys and values are tool-specific."
+    },
+    "mcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "MCP (Model Context Protocol) servers declared in config.json. Project .pi-go/mcp.json servers are merged in separately.",
+      "properties": {
+        "servers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "command": { "type": "string", "description": "stdio transport: executable to spawn." },
+              "args": { "type": "array", "items": { "type": "string" } },
+              "url": { "type": "string", "description": "Streamable HTTP transport endpoint. ${VAR} expands from .pi-go/.env or the environment." },
+              "headers": {
+                "type": "object",
+                "description": "Custom HTTP headers for the URL transport.",
+                "additionalProperties": { "type": "string" }
+              },
+              "oauth": { "type": "boolean", "description": "Run the OAuth authorization-code flow on first connect." }
+            }
+          }
+        }
+      }
+    },
+    "hooks": {
+      "type": "array",
+      "description": "Shell commands triggered on tool events (e.g. post-write formatting).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["event", "command"],
+        "properties": {
+          "event": { "type": "string", "description": "Tool event, e.g. post-write." },
+          "command": { "type": "string" },
+          "tools": { "type": "array", "items": { "type": "string" }, "description": "Restrict the hook to these tools." },
+          "timeout": { "type": "integer", "minimum": 0, "description": "Timeout in seconds." }
+        }
+      }
+    },
+    "permission": {
+      "type": "object",
+      "description": "Tool permission gates (opencode-compatible flat shape): each key is a tool-name glob with an allow/deny/ask directive; \"bash\" holds command-line rules. ask is a hard denial in non-interactive sessions.",
+      "properties": {
+        "bash": {
+          "description": "Bash command patterns. The array form preserves declaration order; on a specificity tie the later rule wins. An object of pattern → directive is also accepted (read in sorted pattern order).",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["pattern", "directive"],
+                "properties": {
+                  "pattern": { "type": "string", "description": "Glob over the whole command line, e.g. \"git *\"." },
+                  "directive": { "$ref": "#/definitions/directive" }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": { "$ref": "#/definitions/directive" }
+            }
+          ]
+        }
+      },
+      "additionalProperties": { "$ref": "#/definitions/directive" }
+    },
+    "maxDailyTokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Daily token budget; 0 = unlimited."
+    },
+    "contextWindow": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Global context-window override in tokens, for models absent from the embedded catalog. A per-model providers.<name>.models.<model>.contextWindow wins over this."
+    },
+    "rateLimits": {
+      "type": "object",
+      "description": "Outbound request pacing, keyed by provider name (\"gemini\", \"agentgateway\", ...); \"*\" is the fallback. Fields are pointers: missing inherits the built-in default, explicit 0 turns the budget off.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requestsPerMinute": { "type": "integer", "minimum": 0 },
+          "inputTokensPerMinute": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "providers": {
+      "type": "object",
+      "description": "User-declared providers. The key becomes a model-name prefix: \"corp-claude\" serves \"corp-claude/claude-opus-5\". Names must not shadow built-in providers and may contain only [A-Za-z0-9._-].",
+      "propertyNames": { "pattern": "^[A-Za-z0-9._-]+$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["baseURL"],
+        "properties": {
+          "type": {
+            "enum": ["openai-compatible", "anthropic"],
+            "description": "Wire protocol. Empty means openai-compatible."
+          },
+          "baseURL": { "type": "string", "description": "Endpoint every request goes to. Already the full endpoint: /chat/completions and /models are appended, /v1 is never added. ${VAR} expands at load." },
+          "apiKey": { "type": "string", "description": "Credential sent with requests. ${VAR} expands at load, so the secret can live in .pi-go/.env. A literal apiKey wins over apiKeyEnv." },
+          "apiKeyEnv": { "type": "string", "description": "Environment variable to read the key from when apiKey is empty." },
+          "headers": {
+            "type": "object",
+            "description": "Static HTTP headers sent with every request to this provider. ${VAR} expands from .pi-go/.env or the environment; ${SESSION_ID} survives load and is replaced per session.",
+            "additionalProperties": { "type": "string" }
+          },
+          "models": {
+            "type": "object",
+            "description": "Per-model metadata, keyed by the model name as sent to the endpoint (after the \"name/\" prefix).",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "contextWindow": { "type": "integer", "minimum": 0, "description": "Context window in tokens; declared here so auto-compaction works for models absent from the embedded catalog." }
+              }
+            }
+          }
+        }
+      }
+    },
+    "compactor": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Tool-output compaction settings. Nil section means the tools-package defaults apply.",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "source_code_filtering": { "enum": ["none", "minimal", "aggressive"] },
+        "max_chars": { "type": "integer", "minimum": 0 },
+        "max_lines": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "autoCompact": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Auto-compaction thresholds as a percentage of the context window. Defaults: shed at 60%, summarize at 88%.",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "shed_percent": { "type": "integer", "minimum": 0, "maximum": 100, "description": "Share at which superseded tool results are dropped (no LLM call)." },
+        "summarize_percent": { "type": "integer", "minimum": 0, "maximum": 95, "description": "Share at which a summarizing rebuild runs. Clamped to 95." },
+        "keep_user_message_tokens": { "type": "integer", "minimum": 0 },
+        "keep_recent_events": { "type": "integer", "minimum": 0, "description": "Conversation tail compaction never touches." }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Persistent memory system.",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "db_path": { "type": "string" },
+        "token_budget": { "type": "integer", "minimum": 0 },
+        "compression_model_role": { "type": "string", "description": "Role used to summarize memory; default \"smol\"." },
+        "compressor": { "enum": ["none", "subagent"], "description": "How a recorded tool call becomes an observation: \"none\" records raw events, \"subagent\" spawns a child process per tool call." },
+        "max_pending_observations": { "type": "integer", "minimum": 0 },
+        "context_lookback_hours": { "type": "integer", "minimum": 0 },
+        "excluded_tools": { "type": "array", "items": { "type": "string" } },
+        "excluded_projects": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "palace": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "MemPalace memory system.",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "db_path": { "type": "string" },
+        "model_path": { "type": "string" },
+        "ollama_url": { "type": "string", "description": "Embedding daemon address; default http://localhost:11434." },
+        "ollama_model": { "type": "string", "description": "Embedding model. Changing it invalidates every stored vector — re-run `pi memory mine`." },
+        "local_embedder": { "type": "boolean", "description": "Force the slower in-process model instead of Ollama." }
+      }
+    },
+    "a2a": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A2A agent connections.",
+      "properties": {
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "url"],
+            "properties": {
+              "name": { "type": "string" },
+              "url": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "llms": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "llms.txt documentation sources served to the fetch_docs tool.",
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "url"],
+            "properties": {
+              "name": { "type": "string" },
+              "url": { "type": "string", "description": "https URL of an llms.txt index; grants the whole host." }
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "directive": {
+      "enum": ["allow", "deny", "ask"],
+      "description": "allow passes the call through; deny blocks with an error the model sees; ask blocks in non-interactive sessions and opens the TUI approval dialog otherwise."
+    }
+  }
+}

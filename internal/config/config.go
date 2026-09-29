@@ -569,8 +569,12 @@ func loadMCPServersFromFile(path string) []MCPServer {
 		}
 		return nil
 	}
+	clean, err := stripJSONC(data)
+	if err != nil {
+		return nil
+	}
 	var f mcpServerFile
-	if err := json.Unmarshal(data, &f); err != nil {
+	if err := json.Unmarshal(clean, &f); err != nil {
 		return nil
 	}
 	return parseMCPServers(f.MCPServers)
@@ -750,6 +754,10 @@ func toStringMap(v map[string]any) map[string]string {
 
 func loadFile(path string, cfg *Config) error {
 	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	data, err = stripJSONC(data)
 	if err != nil {
 		return err
 	}
