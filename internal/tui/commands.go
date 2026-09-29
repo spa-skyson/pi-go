@@ -493,15 +493,19 @@ func (m *model) formatModelInfo() string {
 		sort.Strings(names)
 		for _, name := range names {
 			rc := m.cfg.Roles[name]
-			marker := " "
+			// The active role is marked after the name, not before it: a "*"
+			// right after the "- " bullet opens emphasis as far as the
+			// markdown renderer is concerned, and the role name ends up on a
+			// line of its own under an empty bullet.
+			active := ""
 			if name == m.cfg.ActiveRole || (m.cfg.ActiveRole == "" && name == "default") {
-				marker = "*"
+				active = " ←"
 			}
 			provInfo := ""
 			if rc.Provider != "" {
 				provInfo = fmt.Sprintf(" [%s]", rc.Provider)
 			}
-			fmt.Fprintf(&b, "- %s **%s**: `%s`%s\n", marker, name, rc.Model, provInfo)
+			fmt.Fprintf(&b, "- **%s**: `%s`%s%s\n", name, rc.Model, provInfo, active)
 		}
 	}
 	return b.String()
@@ -583,7 +587,13 @@ func (m *model) handleModelCommand(args []string) (tea.Model, tea.Cmd) {
 	} else {
 		m.cfg.ActiveRole = "default"
 		// Persist the new model as the default role so it survives restart.
-		saveModelToConfig(newName, newProvider)
+		//
+		// The provider is deliberately not persisted: newName carries its
+		// provider prefix whenever the bare name would not resolve to the same
+		// backend (switchedModelName), and a provider written into the role
+		// then outranks the prefix on every later switch — so one `/model` to
+		// another provider used to pin the role to it and break the next one.
+		saveModelToConfig(newName)
 	}
 
 	var sb strings.Builder
@@ -598,10 +608,10 @@ func (m *model) handleModelCommand(args []string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// saveModelToConfig persists the model and provider as the default role in
+// saveModelToConfig persists the model as the default role in
 // ~/.pi-go/config.json. Silently ignores errors (best-effort persistence).
-func saveModelToConfig(modelName, provider string) {
-	_ = config.SaveDefaultRole(modelName, provider)
+func saveModelToConfig(modelName string) {
+	_ = config.SaveDefaultRole(modelName, "")
 }
 
 // formatContextUsage builds a context usage display similar to Claude Code's /context.
