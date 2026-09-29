@@ -147,6 +147,13 @@ Reviewing a committed change (single mode, base):
 		if err != nil {
 			continue
 		}
+		// `mode: primary` agents are reserved for the main session
+		// (Shift+Tab / /agent); they are not advertised as spawnable.
+		// Spawning one directly still works — this is a listing filter,
+		// not a gate.
+		if ac.PrimaryOnly() {
+			continue
+		}
 		marker := ""
 		if ac.Worktree {
 			marker = " [worktree]"

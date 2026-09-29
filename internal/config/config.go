@@ -122,11 +122,17 @@ type Config struct {
 	Roles           map[string]RoleConfig `json:"roles,omitempty"`
 	DefaultModel    string                `json:"defaultModel,omitempty"` // deprecated: use roles
 	DefaultProvider string                `json:"defaultProvider"`
-	ThinkingLevel   string                `json:"thinkingLevel"`
-	Theme           string                `json:"theme"`
-	BaseURLs        map[string]string     `json:"baseURLs,omitempty"` // provider → base URL; overridden by env
-	ExtraHeaders    map[string]string     `json:"extraHeaders,omitempty"`
-	InsecureSkipTLS bool                  `json:"insecureSkipTLS,omitempty"`
+	// DefaultAgent names the primary agent (frontmatter `mode: primary` or
+	// `all` in ~/.pi-go/agents/*.md) that the interactive session starts in.
+	// Unknown or non-primary names fall back to the built-in agent with a
+	// notice. An explicit --model keeps the flag's model and takes only the
+	// agent's prompt.
+	DefaultAgent    string            `json:"defaultAgent,omitempty"`
+	ThinkingLevel   string            `json:"thinkingLevel"`
+	Theme           string            `json:"theme"`
+	BaseURLs        map[string]string `json:"baseURLs,omitempty"` // provider → base URL; overridden by env
+	ExtraHeaders    map[string]string `json:"extraHeaders,omitempty"`
+	InsecureSkipTLS bool              `json:"insecureSkipTLS,omitempty"`
 	// MaxOutputTokens caps a reply on the OpenAI-compatible provider paths,
 	// in tokens. Zero uses the provider default (64000), which is the output
 	// ceiling of the current Claude and GPT models. Lower it for a backend

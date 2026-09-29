@@ -99,6 +99,7 @@ var slashCommandSpecs = []slashCommandSpec{
 	{name: "/clear", desc: "Clear conversation", run: slashCmdVoid((*model).clearConversation)},
 	{name: "/copy", desc: "Copy conversation to clipboard", run: slashCmdBare((*model).handleCopyCommand)},
 	{name: "/model", desc: "Show or switch model", run: (*model).handleModelCommand},
+	{name: "/agent", desc: "Show or switch the session agent", run: (*model).handleAgentCommand},
 	{name: "/session", desc: "Show session info", run: slashCmdVoid((*model).showSessionMessage)},
 	{name: "/context", desc: "Show context usage", run: slashCmdVoid((*model).showContextMessage)},
 	{name: "/branch", desc: "Manage branches", run: slashCmdArgs((*model).handleBranchCommand)},
@@ -924,6 +925,7 @@ func (m *model) formatHelp() string {
 	b.WriteString("| `/clear` | Clear conversation |\n")
 	b.WriteString("| `/copy` | Copy conversation to clipboard |\n")
 	b.WriteString("| `/model [name]` | Show or switch current model |\n")
+	b.WriteString("| `/agent [name]` | Show or switch the session agent |\n")
 	b.WriteString("| `/session` | Show session info |\n")
 	b.WriteString("| `/context` | Show context usage |\n")
 	b.WriteString("| `/compact` | Compact session context |\n")

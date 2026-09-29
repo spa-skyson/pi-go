@@ -12,8 +12,10 @@ import (
 	"testing"
 	"time"
 
+	adkagent "google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/session"
+	"google.golang.org/adk/v2/tool"
 	"google.golang.org/genai"
 
 	"github.com/dimetron/pi-go/internal/extension"
@@ -1372,6 +1374,109 @@ func TestRebuildWithModelNilLLM(t *testing.T) {
 	// Verify the model was set (even if nil).
 	if a.config.Model != nil {
 		t.Errorf("config.Model should be nil, got %T", a.config.Model)
+	}
+}
+
+func TestRebuildWithSession(t *testing.T) {
+	originalLLM := &mockLLM{name: "original-model", response: "Hello!"}
+	agentLLM := &mockLLM{name: "agent-model", response: "Hi!"}
+
+	flag := false
+	a, err := New(Config{
+		Model:       originalLLM,
+		Instruction: "Built-in instruction.",
+		BeforeToolCallbacks: []BeforeToolCallback{
+			func(_ adkagent.Context, _ tool.Tool, _ map[string]any) (map[string]any, error) {
+				return nil, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	newBefore := []BeforeToolCallback{
+		func(_ adkagent.Context, _ tool.Tool, _ map[string]any) (map[string]any, error) {
+			flag = true
+			return nil, nil
+		},
+	}
+	newAfter := []AfterToolCallback{
+		func(_ adkagent.Context, _ tool.Tool, _, _ map[string]any, _ error) (map[string]any, error) {
+			return nil, nil
+		},
+	}
+
+	// Full switch: prompt, LLM and callback chains all move at once.
+	if err := a.RebuildWithSession("Agent instruction.", agentLLM, newBefore, newAfter); err != nil {
+		t.Fatalf("RebuildWithSession() error: %v", err)
+	}
+	if a.config.Instruction != "Agent instruction." {
+		t.Errorf("config.Instruction = %q, want %q", a.config.Instruction, "Agent instruction.")
+	}
+	if a.config.Model != agentLLM {
+		t.Error("config.Model was not updated to the agent LLM")
+	}
+	if len(a.config.BeforeToolCallbacks) != 1 || len(a.config.AfterToolCallbacks) != 1 {
+		t.Fatalf("callback chains not replaced: before=%d after=%d",
+			len(a.config.BeforeToolCallbacks), len(a.config.AfterToolCallbacks))
+	}
+	// The replacement before-callback is the one that runs.
+	before := a.config.BeforeToolCallbacks[0]
+	if _, err := before(nil, nil, nil); err != nil {
+		t.Fatalf("before callback: %v", err)
+	}
+	if !flag {
+		t.Error("the old permission callback still runs; chains were not replaced")
+	}
+	// The session service survives the rebuild.
+	if a.sessionService == nil {
+		t.Error("session service was dropped by the rebuild")
+	}
+
+	// A nil LLM keeps the current model (agent with no model: frontmatter).
+	if err := a.RebuildWithSession("Second instruction.", nil, nil, nil); err != nil {
+		t.Fatalf("RebuildWithSession(nil LLM) error: %v", err)
+	}
+	if a.config.Model != agentLLM {
+		t.Error("nil LLM should keep the current model")
+	}
+	if a.config.Instruction != "Second instruction." {
+		t.Errorf("config.Instruction = %q, want %q", a.config.Instruction, "Second instruction.")
+	}
+
+	// An empty prompt is a programming error, not a silent no-op.
+	if err := a.RebuildWithSession("", nil, nil, nil); err == nil {
+		t.Error("RebuildWithSession() should reject an empty instruction")
+	}
+}
+
+// TestRebuildWithSessionRunnerUsesInstruction verifies the prompt swap
+// reaches the runner, not only the stored config: what the model receives is
+// the agent instruction captured by the InstructionProvider.
+func TestRebuildWithSessionRunnerUsesInstruction(t *testing.T) {
+	a, err := New(Config{Model: &mockLLM{name: "m", response: "ok"}, Instruction: "Built-in."})
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	capturing := &capturingLLM{name: "agent-model", response: "ok"}
+	if err := a.RebuildWithSession("Primary agent prompt.", capturing, nil, nil); err != nil {
+		t.Fatalf("RebuildWithSession() error: %v", err)
+	}
+
+	ctx := context.Background()
+	sessionID, _, err := a.CreateSession(ctx)
+	if err != nil {
+		t.Fatalf("CreateSession() error: %v", err)
+	}
+	for _, err := range a.Run(ctx, sessionID, "hello") {
+		if err != nil {
+			t.Fatalf("Run() yielded error: %v", err)
+		}
+	}
+	if got := capturing.capturedSystemInstruction(); !strings.Contains(got, "Primary agent prompt.") {
+		t.Errorf("runner did not receive the agent prompt; got %q", got)
 	}
 }
 

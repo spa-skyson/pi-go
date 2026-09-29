@@ -67,8 +67,8 @@ func TestNormalizeReasoningEffort(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
-			if got := normalizeReasoningEffort(tt.in); got != tt.want {
-				t.Fatalf("normalizeReasoningEffort(%q) = %q, want %q", tt.in, got, tt.want)
+			if got := NormalizeReasoningEffort(tt.in); got != tt.want {
+				t.Fatalf("NormalizeReasoningEffort(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
 	}

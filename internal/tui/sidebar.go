@@ -48,24 +48,27 @@ type SidebarRenderInput struct {
 	// which is a worse trade than a row that occasionally describes an unheeded
 	// request.
 	ThinkingLevel string
-	GitBranch     string
-	DiffAdded     int
-	DiffRemoved   int
-	Running       bool
-	TokenTracker  TokenTracker
-	AppVersion    string
-	HostName      string
-	FolderName    string
-	Messages      []message
-	ActiveTool    string
-	LoadingItems  map[string]bool
-	RunChecklist  []ChecklistStep // steps from plan.md during /run
-	RunPhase      string          // current /run phase (empty if not running)
-	RunSpec       string          // spec name during /run
-	RunCycle      int             // current retry cycle
-	RunMaxCycle   int             // max retries
-	PlanPhases    []PlanPhase     // PDD phase checklist shown in plan mode; nil/empty = hidden
-	Graph         *SOPGraph       // compiled SOP drawn under the stage list; nil = hidden
+	// AgentName is the primary agent the main session runs on, shown under
+	// the model name. Empty hides the row (the built-in default agent).
+	AgentName    string
+	GitBranch    string
+	DiffAdded    int
+	DiffRemoved  int
+	Running      bool
+	TokenTracker TokenTracker
+	AppVersion   string
+	HostName     string
+	FolderName   string
+	Messages     []message
+	ActiveTool   string
+	LoadingItems map[string]bool
+	RunChecklist []ChecklistStep // steps from plan.md during /run
+	RunPhase     string          // current /run phase (empty if not running)
+	RunSpec      string          // spec name during /run
+	RunCycle     int             // current retry cycle
+	RunMaxCycle  int             // max retries
+	PlanPhases   []PlanPhase     // PDD phase checklist shown in plan mode; nil/empty = hidden
+	Graph        *SOPGraph       // compiled SOP drawn under the stage list; nil = hidden
 	// mergePlanGraph draws the plan section as the graph alone rather than as a
 	// checklist plus a graph saying the same thing twice. Set by RenderSidebar
 	// once it knows the graph will fit.
@@ -372,6 +375,10 @@ func sidebarModelLines(in SidebarRenderInput, innerW int, st sidebarStyles) []st
 	if level := in.ThinkingLevel; level != "" {
 		lines = append(lines, st.subtext.
 			Render("  "+truncateLabel("◆ "+level, innerW)))
+	}
+	if in.AgentName != "" {
+		lines = append(lines, st.text.
+			Render("  "+truncateLabel("⚡ "+in.AgentName, innerW)))
 	}
 	return append(lines, "")
 }
