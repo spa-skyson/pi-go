@@ -11,7 +11,6 @@ import (
 	"google.golang.org/genai"
 
 	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/config"
 	"github.com/dimetron/pi-go/internal/extension"
 	pisession "github.com/dimetron/pi-go/internal/session"
 )
@@ -880,36 +879,6 @@ func TestCommandShowCommandList_WithLoadedSkills(t *testing.T) {
 	}
 	if !strings.Contains(content, "deploy") {
 		t.Error("expected deploy skill")
-	}
-}
-
-// --- formatModelInfo additional ---
-
-func TestFormatModelInfo_DefaultRole(t *testing.T) {
-	m := &model{
-		chatModel: ChatModel{Messages: make([]message, 0)},
-		cfg: Config{
-			ModelName:  "test-model",
-			ActiveRole: "default",
-			Roles: map[string]config.RoleConfig{
-				"default": {Model: "test-model"},
-			},
-		},
-	}
-
-	result := m.formatModelInfo()
-	// "default" role should not show "(role: default)".
-	if strings.Contains(result, "(role: default)") {
-		t.Error("should not show '(role: default)' for default role")
-	}
-	// The active role is marked, and the marker follows the entry rather than
-	// preceding the name: a "*" straight after the "- " bullet is emphasis to
-	// a markdown renderer, which drops the name onto its own line.
-	if !strings.Contains(result, "- **default**") {
-		t.Errorf("expected the role name on the bullet, got %q", result)
-	}
-	if !strings.Contains(result, "←") {
-		t.Errorf("expected active marker on default role, got %q", result)
 	}
 }
 

@@ -322,6 +322,8 @@ type searchMode string
 const (
 	searchModeCommands searchMode = "commands"
 	searchModeHistory  searchMode = "history"
+	searchModeModels   searchMode = "models"
+	searchModeAgents   searchMode = "agents"
 )
 
 // SearchItem represents an item in the search popup (command or history entry).
@@ -401,6 +403,22 @@ func (m *model) newSearchPopup(mode searchMode) {
 		for i, e := range entries {
 			items[len(entries)-1-i] = SearchItem{Text: e.Text}
 		}
+
+	case searchModeModels:
+		// Copy before marking: cfg.ModelCandidates is shared with the cli
+		// that built it, and an in-place append here would compound into
+		// "— active — active" on the next open.
+		items = make([]SearchItem, len(m.cfg.ModelCandidates))
+		copy(items, m.cfg.ModelCandidates)
+		markActiveRole(items, m.cfg.ActiveRole)
+		// Nothing declared and no background source: the popup could never
+		// show anything, so do not open it.
+		if len(items) == 0 && m.cfg.ModelCandidatesRefresh == nil {
+			return
+		}
+
+	case searchModeAgents:
+		items = m.agentSearchItems()
 	}
 
 	availableRows := m.messageViewportHeight()
@@ -476,6 +494,21 @@ func (m *model) allSearchCandidates() []CompletionCandidate {
 		skills = m.cfg.Skills
 	}
 	return allSlashCommandCandidates(skills)
+}
+
+// markActiveRole appends the active marker to the role candidate the session
+// currently runs on — the same way the /agent popup marks the active agent.
+// An empty ActiveRole means the default role.
+func markActiveRole(items []SearchItem, activeRole string) {
+	if activeRole == "" {
+		activeRole = "default"
+	}
+	for i, it := range items {
+		if it.Text == activeRole {
+			items[i].Description += " — active"
+			return
+		}
+	}
 }
 
 // filterSearch filters items by search query (case-insensitive substring on Text).
@@ -951,6 +984,9 @@ func (m *model) updateSession(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case modelPriceRefreshDoneMsg:
 		model, cmd := m.handleModelPriceRefreshDone(msg)
 		return model, cmd, true
+	case modelCandidatesMsg:
+		model, cmd := m.handleModelCandidates(msg)
+		return model, cmd, true
 	case approvalRequestMsg:
 		model, cmd := m.handleApprovalRequest(msg)
 		return model, cmd, true
@@ -1347,8 +1383,8 @@ func (m *model) handleToggleKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 	}
 
 	// Unified search popup keys (slash commands or history).
-	if m.handleSearchPopupKey(key) {
-		return m, nil, true
+	if cmd, handled := m.handleSearchPopupKey(key); handled {
+		return m, cmd, true
 	}
 
 	// Shift+Tab cycles the main session's agent: default → primary agents
@@ -1431,8 +1467,8 @@ func (m *model) handleInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Immediately handle Tab/Up/Down to navigate the popup.
 		switch key.Code {
 		case tea.KeyTab, tea.KeyUp, tea.KeyDown:
-			if m.handleSearchPopupKey(key) {
-				return m, nil
+			if cmd, handled := m.handleSearchPopupKey(key); handled {
+				return m, cmd
 			}
 		}
 	}
@@ -1453,9 +1489,9 @@ func (m *model) handleInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *model) handleSearchPopupKey(key tea.Key) bool {
+func (m *model) handleSearchPopupKey(key tea.Key) (tea.Cmd, bool) {
 	if m.searchPopup == nil {
-		return false
+		return nil, false
 	}
 
 	sp := m.searchPopup
@@ -1463,36 +1499,35 @@ func (m *model) handleSearchPopupKey(key tea.Key) bool {
 	switch key.Code {
 	case tea.KeyUp:
 		sp.selectPrev()
-		return true
+		return nil, true
 	case tea.KeyDown:
 		sp.selectNext()
-		return true
+		return nil, true
 	case tea.KeyTab:
 		sp.selectByTab(key.Mod == tea.ModShift)
-		return true
+		return nil, true
 	case tea.KeyEnter:
-		m.acceptSearchPopupSelection()
-		return true
+		return m.acceptSearchPopupSelection(), true
 	case tea.KeyEsc:
 		m.searchPopup = nil
-		return true
+		return nil, true
 	case tea.KeyBackspace:
 		if len(sp.search) == 0 {
 			// If search is empty, close popup on backspace
 			m.searchPopup = nil
-			return true
+			return nil, true
 		}
 		sp.search = sp.search[:len(sp.search)-1]
 		sp.filterSearch()
-		return true
+		return nil, true
 	default:
 		// Type to search (only for printable single characters).
 		if key.Text != "" && len(key.Text) == 1 && key.Mod == 0 {
 			sp.search += key.Text
 			sp.filterSearch()
-			return true
+			return nil, true
 		}
-		return false
+		return nil, false
 	}
 }
 
@@ -1544,11 +1579,15 @@ func (sp *searchPopupState) selectByTab(backwards bool) {
 
 // acceptSearchPopupSelection puts the selected item into the prompt and closes
 // the popup. A command gets a trailing space so its arguments can be typed
-// straight on; a history entry is inserted verbatim.
-func (m *model) acceptSearchPopupSelection() {
+// straight on; a history entry is inserted verbatim. In the models and agents
+// modes the item IS the action: it is executed through the same handlers as
+// `/model <text>` and `/agent <name>` — including their refusals while a
+// response is running — and the returned command (a flash-expiry tick, for
+// instance) is handed back to the caller.
+func (m *model) acceptSearchPopupSelection() tea.Cmd {
 	sp := m.searchPopup
 	if len(sp.filtered) == 0 || sp.selected >= len(sp.filtered) {
-		return
+		return nil
 	}
 	item := sp.filtered[sp.selected]
 	switch sp.mode {
@@ -1558,7 +1597,16 @@ func (m *model) acceptSearchPopupSelection() {
 	case searchModeHistory:
 		m.inputModel.SetText(item.Text)
 		m.searchPopup = nil
+	case searchModeModels:
+		m.searchPopup = nil
+		_, cmd := m.handleModelCommand([]string{item.Text})
+		return cmd
+	case searchModeAgents:
+		m.searchPopup = nil
+		_, cmd := m.handleAgentCommand([]string{item.Text})
+		return cmd
 	}
+	return nil
 }
 
 func (m *model) View() tea.View {
@@ -2618,11 +2666,8 @@ func (m *model) renderSearchPopup(width int) string {
 
 	if len(sp.filtered) == 0 {
 		b.WriteString("\n")
-		if sp.mode == searchModeCommands {
-			b.WriteString(st.searchStyle.Width(width).Render("  No matching commands"))
-		} else {
-			b.WriteString(st.searchStyle.Width(width).Render("  No matching history"))
-		}
+		msg := "  No matching " + string(sp.mode) // "commands", "history", "models", "agents"
+		b.WriteString(st.searchStyle.Width(width).Render(msg))
 		return st.popupStyle.Render(b.String())
 	}
 
@@ -2666,6 +2711,14 @@ func (m *model) searchPopupStyles(mode searchMode, width int) searchPopupStyleSe
 		accent = m.palette.Peach                                // orange for history
 		st.itemStyle = st.itemStyle.Foreground(m.palette.Peach) // orange
 		st.header = "History"
+	case searchModeModels:
+		accent = m.palette.Mauve // mauve for models
+		st.itemStyle = st.itemStyle.Foreground(m.palette.Lavender)
+		st.header = "Models"
+	case searchModeAgents:
+		accent = m.palette.Green                                // green for agents
+		st.itemStyle = st.itemStyle.Foreground(m.palette.Green) // green
+		st.header = "Agents"
 	default:
 		return st
 	}
@@ -2702,8 +2755,8 @@ func writeSearchPopupItems(b *strings.Builder, sp *searchPopupState, st searchPo
 		}
 
 		line := prefix + item.Text
-		// Add description for commands.
-		if item.Description != "" && sp.mode == searchModeCommands {
+		// Add description for commands, models and agents (history has none).
+		if item.Description != "" && sp.mode != searchModeHistory {
 			desc := clipRunes(item.Description, width*50/100)
 			if desc != "" {
 				line += "  " + desc

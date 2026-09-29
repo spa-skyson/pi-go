@@ -97,6 +97,18 @@ type Config struct {
 	// If nil, model switching via /model is disabled.
 	ModelSwitcher func(ctx context.Context, modelName string) (llmmodel.LLM, string, string, error)
 
+	// ModelCandidates seeds the /model picker popup: models declared under
+	// config.json providers ("<provider>/<model>") plus the configured roles,
+	// each entry an executable /model argument. Built by cli at startup.
+	ModelCandidates []SearchItem
+	// ModelCandidatesRefresh, when non-nil, produces the fuller candidate
+	// list in the background when the models popup opens: each configured
+	// named provider's catalog, from its cache or a live fetch. The result
+	// replaces the open popup's entries; an empty result leaves the list as
+	// it is (errors are the implementation's to swallow). Nil disables the
+	// background refresh.
+	ModelCandidatesRefresh func(ctx context.Context) []SearchItem
+
 	// PrimaryAgents lists the agents the main session can switch into
 	// (frontmatter `mode: primary` or `all`), sorted by name. Filled by
 	// deferred init; empty until then and when no agent declares a mode.

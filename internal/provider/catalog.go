@@ -110,6 +110,47 @@ func RefreshCatalog(ctx context.Context, providerName string, opts ListModelsOpt
 	if err != nil {
 		return nil, err
 	}
+	return writeCatalogCache(providerName, models)
+}
+
+// NamedCatalog returns the model catalog for a user-declared provider
+// (config.json "providers"): the XDG cache when one exists, otherwise a live
+// fetch through listAs — the provider's wire protocol, since a declared
+// provider lists via ListModels under that name — cached under the provider's
+// own name for the next call. RefreshCatalog cannot serve this case: its
+// argument is both the listing endpoint and the cache key, and a protocol
+// name is not a cache key ("openai-compatible.json" would be shared by every
+// declared OpenAI-compatible provider).
+func NamedCatalog(ctx context.Context, name, listAs string, opts ListModelsOptions) ([]ModelInfo, error) {
+	if models, ok := cachedCatalog(name); ok {
+		return models, nil
+	}
+	models, err := ListModels(ctx, listAs, opts)
+	if err != nil {
+		return nil, err
+	}
+	return writeCatalogCache(name, models)
+}
+
+// cachedCatalog reads a per-provider XDG cache file. ok is false when the
+// file is missing or unreadable — an unreadable cache is treated as absent,
+// so the caller falls through to a live fetch.
+func cachedCatalog(name string) ([]ModelInfo, bool) {
+	b, err := os.ReadFile(cachePath(name))
+	if err != nil {
+		return nil, false
+	}
+	var cf catalogFile
+	if err := json.Unmarshal(b, &cf); err != nil {
+		return nil, false
+	}
+	return cf.Models, true
+}
+
+// writeCatalogCache persists models as name's catalog in the XDG cache.
+// Writes atomically (temp file + rename). Returns the models unchanged, so a
+// caching failure degrades to "not cached" rather than losing the fetch.
+func writeCatalogCache(name string, models []ModelInfo) ([]ModelInfo, error) {
 	dir := modelsCacheDir()
 	if dir == "" {
 		return models, nil // caching disabled; still return the fetched list
@@ -118,7 +159,7 @@ func RefreshCatalog(ctx context.Context, providerName string, opts ListModelsOpt
 		return models, fmt.Errorf("creating models cache dir: %w", err)
 	}
 	cf := catalogFile{
-		Provider:  providerName,
+		Provider:  name,
 		FetchedAt: time.Now().UTC().Format(time.RFC3339),
 		Models:    models,
 	}
@@ -130,8 +171,8 @@ func RefreshCatalog(ctx context.Context, providerName string, opts ListModelsOpt
 	// two validation misses for the same provider can refresh concurrently,
 	// and a shared name lets one install the other's bytes or leaves the temp
 	// behind when a rename fails.
-	path := cachePath(providerName)
-	tmp, err := os.CreateTemp(dir, providerName+".*.json.tmp")
+	path := cachePath(name)
+	tmp, err := os.CreateTemp(dir, name+".*.json.tmp")
 	if err != nil {
 		return models, fmt.Errorf("creating catalog temp file: %w", err)
 	}
