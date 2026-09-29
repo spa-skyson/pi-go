@@ -621,14 +621,24 @@ type versionRecorder interface {
 // window/tab title from it so users see a sensible label before the first user
 // prompt arrives.
 func (a *Agent) CreateSession(ctx context.Context) (sessionID, defaultTitle string, err error) {
+	return a.CreateSessionWithID(ctx, "")
+}
+
+// CreateSessionWithID creates a session under the given ID; an empty sessionID
+// generates one, matching CreateSession. It exists because a ${SESSION_ID}
+// header freezes into the LLM client at build time — the session created
+// afterwards must carry the same ID, or the header names a conversation the
+// logs have never heard of.
+func (a *Agent) CreateSessionWithID(ctx context.Context, sessionID string) (sid, defaultTitle string, err error) {
 	resp, err := a.sessionService.Create(ctx, &session.CreateRequest{
-		AppName: AppName,
-		UserID:  DefaultUserID,
+		AppName:   AppName,
+		UserID:    DefaultUserID,
+		SessionID: sessionID,
 	})
 	if err != nil {
 		return "", "", fmt.Errorf("creating session: %w", err)
 	}
-	sid := resp.Session.ID()
+	sid = resp.Session.ID()
 	return sid, a.recordNewSessionMeta(sid), nil
 }
 

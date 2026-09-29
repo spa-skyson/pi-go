@@ -20,7 +20,7 @@ func TestResolveSessionID(t *testing.T) {
 		flagSession = "explicit-session-id"
 
 		// The agent and service are never touched on this path; nil proves it.
-		got, err := resolveSessionID(t.Context(), nil, nil)
+		got, err := resolveSessionID(t.Context(), nil, nil, "")
 		if err != nil {
 			t.Fatalf("resolveSessionID: %v", err)
 		}
@@ -38,7 +38,7 @@ func TestResolveSessionID(t *testing.T) {
 			t.Fatalf("NewFileService: %v", err)
 		}
 
-		got, err := resolveSessionID(t.Context(), nil, svc)
+		got, err := resolveSessionID(t.Context(), nil, svc, "")
 		if err == nil {
 			t.Fatalf("resolveSessionID returned %q, want an error", got)
 		}
@@ -62,7 +62,7 @@ func TestResolveSessionID(t *testing.T) {
 
 		// An empty store means --continue fails; if --session were checked
 		// first this would succeed instead, which is the regression to catch.
-		if _, err := resolveSessionID(t.Context(), nil, svc); err == nil {
+		if _, err := resolveSessionID(t.Context(), nil, svc, ""); err == nil {
 			t.Fatal("--session shadowed --continue; want the --continue error")
 		}
 	})

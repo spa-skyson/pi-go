@@ -35,7 +35,7 @@ func TestBuildSwitchedLLM_OllamaRoutesByTag(t *testing.T) {
 	// A cloud-tagged model must reach the cloud endpoint without a health
 	// check against a local daemon that need not be running.
 	llm, modelName, providerName, err := buildSwitchedLLM(
-		context.Background(), cfg, guardrail.New(0), "deepseek-v4-flash:0731-cloud")
+		context.Background(), cfg, guardrail.New(0), "deepseek-v4-flash:0731-cloud", "")
 	if err != nil {
 		t.Fatalf("buildSwitchedLLM: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestBuildSwitchedLLM_OllamaPrefixSurvivesRoundTrip(t *testing.T) {
 	}
 
 	const requested = "ollama/deepseek-v4-flash:0731-cloud"
-	_, modelName, _, err := buildSwitchedLLM(context.Background(), cfg, guardrail.New(0), requested)
+	_, modelName, _, err := buildSwitchedLLM(context.Background(), cfg, guardrail.New(0), requested, "")
 	if err != nil {
 		t.Fatalf("buildSwitchedLLM: %v", err)
 	}

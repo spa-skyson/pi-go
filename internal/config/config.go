@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/dimetron/pi-go/internal/notice"
+	"github.com/dimetron/pi-go/internal/permission"
 )
 
 // HookConfig defines a shell command hook for tool call events.
@@ -152,11 +153,15 @@ type Config struct {
 	//
 	// A pointer so "unset" is distinguishable from an explicit false: the
 	// default is on, and a plain bool would make it impossible to turn off.
-	PlanAutoFix    *bool          `json:"planAutoFix,omitempty"`
-	Tools          map[string]any `json:"tools,omitempty"`
-	MCP            *MCPConfig     `json:"mcp,omitempty"`
-	Hooks          []HookConfig   `json:"hooks,omitempty"`
-	MaxDailyTokens int64          `json:"maxDailyTokens,omitempty"` // 0 = unlimited
+	PlanAutoFix *bool          `json:"planAutoFix,omitempty"`
+	Tools       map[string]any `json:"tools,omitempty"`
+	MCP         *MCPConfig     `json:"mcp,omitempty"`
+	Hooks       []HookConfig   `json:"hooks,omitempty"`
+	// Permission gates tool calls before execution — the opencode-compatible
+	// `permission` block: {"edit": "deny", "bash": {"git *": "allow"}}.
+	// Spawned subagents layer their agent's frontmatter rules on top of these.
+	Permission     *permission.Rules `json:"permission,omitempty"`
+	MaxDailyTokens int64             `json:"maxDailyTokens,omitempty"` // 0 = unlimited
 	// ContextWindow overrides the model's context window in tokens. Needed for
 	// models absent from the embedded catalog (notably the opencode ones):
 	// auto-compaction measures a percentage of the window, so it stays off

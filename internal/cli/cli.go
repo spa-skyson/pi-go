@@ -37,6 +37,7 @@ import (
 	"github.com/dimetron/pi-go/internal/memory"
 	"github.com/dimetron/pi-go/internal/otel"
 	"github.com/dimetron/pi-go/internal/palace"
+	"github.com/dimetron/pi-go/internal/permission"
 	"github.com/dimetron/pi-go/internal/pirpc"
 	"github.com/dimetron/pi-go/internal/provider"
 	"github.com/dimetron/pi-go/internal/ratelimit"
@@ -311,6 +312,11 @@ type rootRuntime struct {
 	cwd          string
 	sandboxRoot  string
 	worktreeDir  string
+	// headerSessionID is the session ID already baked into the LLM client's
+	// ${SESSION_ID} headers (empty when no header needed one). A fresh
+	// session must be created under it so the header names the conversation
+	// the logs do.
+	headerSessionID string
 }
 
 func resolveActiveRole() string {
@@ -542,8 +548,18 @@ func buildRootRuntime(ctx context.Context, args []string) (rootRuntime, error) {
 		return rootRuntime{}, err
 	}
 
+	// A ${SESSION_ID} header needs the session ID before the LLM client is
+	// built — headers freeze into it. A resumed session already has its final
+	// ID (resolveResumeSession resolved --continue into flagSession); a fresh
+	// one gets a pre-generated ID that the session is then created under, so
+	// the header and the logs name the same conversation.
+	headerSessionID := flagSession
+	if headerSessionID == "" && headersNeedSessionID(cfg, info.Provider) {
+		headerSessionID = pisession.GenerateSessionID()
+	}
+
 	llmOpts := &provider.LLMOptions{
-		ExtraHeaders:   mergeExtraHeaders(cfg.ExtraHeaders, flagHeaders),
+		ExtraHeaders:   providerExtraHeaders(cfg, info.Provider, headerSessionID, flagHeaders),
 		AdvisorModel:   advisorModel,
 		AdvisorMaxUses: advisorMaxUses,
 		AdvisorCaching: advisorCaching,
@@ -573,16 +589,17 @@ func buildRootRuntime(ctx context.Context, args []string) (rootRuntime, error) {
 	_ = writeLastSession(cwd, info.Provider, llm.Name())
 
 	return rootRuntime{
-		cfg:          cfg,
-		llm:          llm,
-		info:         info,
-		tokenTracker: tokenTracker,
-		activeRole:   activeRole,
-		mode:         mode,
-		prompt:       strings.Join(args, " "),
-		cwd:          cwd,
-		sandboxRoot:  sandboxRoot,
-		worktreeDir:  worktreeDir,
+		cfg:             cfg,
+		llm:             llm,
+		info:            info,
+		tokenTracker:    tokenTracker,
+		activeRole:      activeRole,
+		mode:            mode,
+		prompt:          strings.Join(args, " "),
+		cwd:             cwd,
+		sandboxRoot:     sandboxRoot,
+		worktreeDir:     worktreeDir,
+		headerSessionID: headerSessionID,
 	}, nil
 }
 
@@ -735,6 +752,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 			runtime.cwd,
 			runtime.sandboxRoot,
 			runtime.worktreeDir,
+			runtime.headerSessionID,
 		)
 	}
 
@@ -753,6 +771,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		runtime.worktreeDir,
 		runtime.mode,
 		runtime.prompt,
+		runtime.headerSessionID,
 	)
 }
 
@@ -855,6 +874,7 @@ func runNonInteractive(
 	info provider.Info,
 	tokenTracker *guardrail.Tracker,
 	cwd, sandboxRoot, worktreeDir, mode, prompt string,
+	headerSessionID string,
 ) error {
 	runtime, err := initNonInteractiveRuntime(parentCtx, &cfg, cwd, sandboxRoot, worktreeDir)
 	if err != nil {
@@ -883,6 +903,19 @@ func runNonInteractive(
 
 	hooks := convertHooks(cfg.Hooks)
 	beforeCBs := extension.BuildBeforeToolCallbacks(hooks)
+
+	// Permission rules gate every tool call before execution: the global
+	// config rules, plus the spawning agent's own rules when this process IS
+	// a subagent (handed over in PI_AGENT_PERMISSION by the orchestrator).
+	permRules := globalPermissionRules(cfg)
+	if envRules, err := permission.FromEnv(); err != nil {
+		return fmt.Errorf("reading %s: %w", permission.EnvVar, err)
+	} else if !envRules.Empty() {
+		permRules = permission.Merge(permRules, envRules)
+	}
+	if !permRules.Empty() {
+		beforeCBs = append(beforeCBs, agent.NewPermissionCallback(permRules))
+	}
 	afterCBs := extension.BuildAfterToolCallbacks(hooks)
 
 	tracingBefore, tracingAfter := extension.BuildTracingCallbacks()
@@ -1001,7 +1034,7 @@ func runNonInteractive(
 	ctx, stop := signal.NotifyContext(parentCtx, os.Interrupt)
 	defer stop()
 
-	sessionID, err := resolveSessionID(ctx, ag, sessionSvc)
+	sessionID, err := resolveSessionID(ctx, ag, sessionSvc, headerSessionID)
 	if err != nil {
 		return err
 	}
@@ -1219,9 +1252,11 @@ func applyResumedModel(cfg *config.Config, activeRole string) {
 	cfg.Roles["default"] = rc
 }
 
-// resolveSessionID picks the session to run in: an explicit --session, the most
-// recent one under --continue, or a freshly created session.
-func resolveSessionID(ctx context.Context, ag *agent.Agent, sessionSvc *pisession.FileService) (string, error) {
+// resolveSessionID picks the session to run in: an explicit --session, the
+// most recent one under --continue, or a freshly created session. headerID is
+// the ID already baked into the LLM client's ${SESSION_ID} headers — a fresh
+// session is created under it, so header and logs name the same conversation.
+func resolveSessionID(ctx context.Context, ag *agent.Agent, sessionSvc *pisession.FileService, headerID string) (string, error) {
 	// buildRootRuntime already resolved --continue into flagSession, but this
 	// branch stays authoritative: --continue with nothing to continue is an
 	// error, and must never fall through to opening a brand-new session.
@@ -1237,7 +1272,7 @@ func resolveSessionID(ctx context.Context, ag *agent.Agent, sessionSvc *pisessio
 		return flagSession, nil
 	}
 
-	sessionID, _, err := ag.CreateSession(ctx)
+	sessionID, _, err := ag.CreateSessionWithID(ctx, headerID)
 	if err != nil {
 		return "", fmt.Errorf("creating session: %w", err)
 	}
@@ -1290,7 +1325,7 @@ func dispatchMode(ctx context.Context, mode, prompt string, ag *agent.Agent, ses
 				rc := switchCfg.Roles["default"]
 				rc.Provider = providerHint
 				switchCfg.Roles["default"] = rc
-				return buildSwitchedLLM(switchCtx, switchCfg, tokenTracker, name)
+				return buildSwitchedLLM(switchCtx, switchCfg, tokenTracker, name, sessionID)
 			},
 		}).Run(ctx)
 	}
@@ -1677,6 +1712,15 @@ func buildToolsets(cfg config.Config) []adktool.Toolset {
 // pimodels package cannot drift on where a key comes from.
 func providerEnvVar(p string) string {
 	return provider.APIKeyEnvVar(p)
+}
+
+// globalPermissionRules returns the config.json `permission` rules, or the
+// zero rules when none are configured.
+func globalPermissionRules(cfg config.Config) permission.Rules {
+	if cfg.Permission == nil {
+		return permission.Rules{}
+	}
+	return *cfg.Permission
 }
 
 // detectMode returns the default output mode based on terminal state.
@@ -2180,6 +2224,66 @@ func mergeExtraHeaders(cfgHeaders map[string]string, cliHeaders []string) map[st
 		return nil
 	}
 	return merged
+}
+
+// providerExtraHeaders assembles the ExtraHeaders an LLM client is built
+// with. Precedence, weakest to strongest: the config's global extraHeaders,
+// the active named provider's headers (more specific than the globals — they
+// override shared keys), an explicit --header flag (the user's direct
+// instruction beats everything). ${SESSION_ID} inside a provider header is
+// replaced with sessionID; a value still holding the placeholder when no
+// session ID is known is dropped — an empty conversation header is worse
+// than no header.
+func providerExtraHeaders(cfg config.Config, providerName, sessionID string, cliHeaders []string) map[string]string {
+	providerHeaders := map[string]string{}
+	if p, ok := cfg.Providers[providerName]; ok {
+		for k, v := range p.Headers {
+			if resolved, ok := resolveSessionIDHeader(v, sessionID); ok {
+				providerHeaders[k] = resolved
+			}
+		}
+	}
+
+	// mergeExtraHeaders copies its first argument then overlays the second;
+	// the same two steps here give the precedence order documented above.
+	merged := mergeExtraHeaders(cfg.ExtraHeaders, nil)
+	if merged == nil {
+		merged = map[string]string{}
+	}
+	maps.Copy(merged, providerHeaders)
+	maps.Copy(merged, mergeExtraHeaders(nil, cliHeaders))
+	if len(merged) == 0 {
+		return nil
+	}
+	return merged
+}
+
+// resolveSessionIDHeader substitutes the ${SESSION_ID} placeholder, reporting
+// false when the placeholder is present but no session ID is known yet.
+func resolveSessionIDHeader(value, sessionID string) (string, bool) {
+	if !strings.Contains(value, config.SessionIDPlaceholder) {
+		return value, true
+	}
+	if sessionID == "" {
+		return "", false
+	}
+	return strings.ReplaceAll(value, config.SessionIDPlaceholder, sessionID), true
+}
+
+// headersNeedSessionID reports whether any header destined for the named
+// provider's LLM client carries ${SESSION_ID} — the signal to fix the session
+// ID before the client is built, because headers freeze into it.
+func headersNeedSessionID(cfg config.Config, providerName string) bool {
+	p, ok := cfg.Providers[providerName]
+	if !ok {
+		return false
+	}
+	for _, v := range p.Headers {
+		if strings.Contains(v, config.SessionIDPlaceholder) {
+			return true
+		}
+	}
+	return false
 }
 
 // flagTemperatureChanged records whether --temperature was passed. The flag's

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -162,7 +163,7 @@ func (t *namedTool) Name() string        { return t.nameVal }
 func (t *namedTool) Description() string { return "test tool" }
 func (t *namedTool) IsLongRunning() bool { return false }
 
-func TestResilientToolset_ToolsKeepOriginalNames(t *testing.T) {
+func TestResilientToolset_ToolNamesPrefixedWithServer(t *testing.T) {
 	inner := &successToolset{tools: []tool.Tool{
 		&namedTool{nameVal: "search"},
 		&namedTool{nameVal: "fetch"},
@@ -177,12 +178,44 @@ func TestResilientToolset_ToolsKeepOriginalNames(t *testing.T) {
 		t.Fatalf("expected 2 tools, got %d", len(tools))
 	}
 
-	// Verify tool names are NOT prefixed (keep original names)
-	if tools[0].Name() != "search" {
-		t.Errorf("expected original name 'search', got %q", tools[0].Name())
+	// Every tool is namespaced under the server: a permission rule like
+	// "docs-agent*" can match the server's whole surface, and two servers
+	// exposing the same tool no longer collide.
+	if got, want := tools[0].Name(), "docs-agent-client-protocol_search"; got != want {
+		t.Errorf("tools[0].Name() = %q, want %q", got, want)
 	}
-	if tools[1].Name() != "fetch" {
-		t.Errorf("expected original name 'fetch', got %q", tools[1].Name())
+	if got, want := tools[1].Name(), "docs-agent-client-protocol_fetch"; got != want {
+		t.Errorf("tools[1].Name() = %q, want %q", got, want)
+	}
+}
+
+func TestPrefixToolNames(t *testing.T) {
+	tools := []tool.Tool{
+		&namedTool{nameVal: "find"},
+		nil,
+		&namedTool{nameVal: "run"},
+	}
+	got := prefixToolNames("Serena", tools)
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2 (nil tools skipped)", len(got))
+	}
+	if got[0].Name() != "serena_find" || got[1].Name() != "serena_run" {
+		t.Errorf("names = [%q %q], want [serena_find serena_run]", got[0].Name(), got[1].Name())
+	}
+
+	// Weird server names sanitize; empty ones fall back to "mcp".
+	if p := sanitizeMCPPrefix("My Server #1"); p != "my_server_1" {
+		t.Errorf("sanitizeMCPPrefix = %q", p)
+	}
+	if p := sanitizeMCPPrefix("***"); p != "mcp" {
+		t.Errorf("empty prefix = %q, want mcp", p)
+	}
+
+	// The tool's own name survives truncation to the 64-char API limit: the
+	// cut comes off the front of the prefix, never the tool name.
+	long := prefixToolNames(strings.Repeat("s", 70), []tool.Tool{&namedTool{nameVal: "find"}})
+	if n := long[0].Name(); len(n) != 64 || !strings.HasSuffix(n, "_find") {
+		t.Errorf("truncated name %q (len %d) lost the tool name", n, len(n))
 	}
 }
 

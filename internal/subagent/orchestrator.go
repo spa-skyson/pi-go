@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"sort"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/dimetron/pi-go/internal/config"
+	"github.com/dimetron/pi-go/internal/permission"
 	"github.com/dimetron/pi-go/internal/session"
 )
 
@@ -484,6 +486,21 @@ func (o *Orchestrator) Spawn(ctx context.Context, input SpawnInput) (<-chan Even
 		Temperature:   agent.Temperature,
 		ThinkingLevel: normalizeReasoningEffort(agent.ReasoningEffort),
 		Steps:         agent.Steps,
+	}
+
+	// The child gates its own tool calls with this agent's permission rules.
+	// They ride the environment because the child is a separate pi process:
+	// opts.Env lands after the filtered parent env in cmd.Env, so a nested
+	// spawn's rules correctly replace the ones this process inherited rather
+	// than stacking on them. Marshal cannot fail for this shape; the warn
+	// keeps an unexpected failure from turning into silent ungating.
+	if !agent.Permission.Empty() {
+		if blob, err := json.Marshal(agent.Permission); err == nil {
+			spawnOpts.Env = append(spawnOpts.Env, permission.EnvVar+"="+string(blob))
+		} else {
+			slog.Warn("subagent: could not serialize permission rules; child runs without them",
+				"agent", agent.Name, "error", err)
+		}
 	}
 
 	proc, err := o.dispatchSpawn(ctx, spawnOpts, agent.Name)
