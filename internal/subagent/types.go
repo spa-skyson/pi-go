@@ -34,7 +34,9 @@ type SpawnInput struct {
 
 // AgentInput is the legacy input to spawn a subagent (deprecated, use SpawnInput).
 // It is kept for backward compatibility with existing callers.
-// Convert to SpawnInput using ToSpawnInput() which looks up the bundled agent.
+// Orchestrator.SpawnWithInput converts it against the full agent registry
+// (project > user > bundled); the standalone ToSpawnInput sees bundled
+// agents only.
 type AgentInput struct {
 	Type         string `json:"type"`                    // Agent type name
 	Prompt       string `json:"prompt"`                  // Task prompt for the agent
@@ -53,7 +55,9 @@ type AgentInput struct {
 }
 
 // ToSpawnInput converts a legacy AgentInput to the new SpawnInput format.
-// It looks up the agent config from bundled agents.
+// It looks up the agent config from bundled agents ONLY — user and project
+// agents are invisible here. For the full registry use
+// Orchestrator.SpawnWithInput, which resolves through LookupAgent.
 func (a AgentInput) ToSpawnInput() (SpawnInput, error) {
 	// Look up the agent from bundled agents
 	bundled, err := LoadBundledAgents()

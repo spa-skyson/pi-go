@@ -433,10 +433,11 @@ func (o *Orchestrator) Spawn(ctx context.Context, input SpawnInput) (<-chan Even
 		return nil, "", fmt.Errorf("agent config must have a name")
 	}
 
-	// Resolve model for this agent's role.
-	model, _, _, _, _, err := o.cfg.ResolveRole(agent.Role)
+	// Resolve the model this agent runs on: a frontmatter `model:` wins
+	// outright, otherwise the agent's role is resolved.
+	model, err := agentSpawnModel(o.cfg, agent)
 	if err != nil {
-		return nil, "", fmt.Errorf("resolving role %q for agent %q: %w", agent.Role, agent.Name, err)
+		return nil, "", err
 	}
 
 	// Acquire a pool slot.
@@ -472,7 +473,7 @@ func (o *Orchestrator) Spawn(ctx context.Context, input SpawnInput) (<-chan Even
 		Instruction: agent.Instruction,
 		Timeout:     timeout,
 		Env:         o.spawnEnv(input.Env, workDir, attributionFor(input, agentID, workDir)),
-		BaseURL:     o.BaseURL,
+		BaseURL:     agentSpawnBaseURL(o.cfg, o.BaseURL, model),
 		Insecure:    o.Insecure,
 		Headers:     o.Headers,
 		LSP:         agent.LSP,
@@ -511,6 +512,38 @@ func (o *Orchestrator) Spawn(ctx context.Context, input SpawnInput) (<-chan Even
 	go o.forwardAgentEvents(events, proc, state, logACP)
 
 	return events, agentID, nil
+}
+
+// agentSpawnModel resolves the model a subagent runs on. A frontmatter
+// `model:` on the agent wins outright — the name is forwarded as is and the
+// child validates it. Otherwise the agent's role is resolved; when that
+// yields a bare model name (no "/") on a declared provider, the provider's
+// name is prefixed so the child can route the request from the model name
+// alone, without knowing the parent's roles.
+func agentSpawnModel(cfg *config.Config, agent AgentConfig) (string, error) {
+	if agent.Model != "" {
+		return agent.Model, nil
+	}
+	model, prov, _, _, _, err := cfg.ResolveRole(agent.Role)
+	if err != nil {
+		return "", fmt.Errorf("resolving role %q for agent %q: %w", agent.Role, agent.Name, err)
+	}
+	if _, declared := cfg.Providers[prov]; declared && !strings.Contains(model, "/") {
+		return prov + "/" + model, nil
+	}
+	return model, nil
+}
+
+// agentSpawnBaseURL decides which --url the child gets. A named-provider
+// model carries its endpoint and key in config.json, which the child reads
+// itself; the parent's explicit --url describes the parent model's endpoint,
+// and passing it through would override the provider's own (in the child the
+// flag beats the provider's baseURL). Non-named models keep the parent URL.
+func agentSpawnBaseURL(cfg *config.Config, parentURL, model string) string {
+	if _, _, named := cfg.NamedProviderPrefix(model); named {
+		return ""
+	}
+	return parentURL
 }
 
 // resolveWorkDir picks the directory the subagent runs in, creating its
@@ -894,14 +927,39 @@ func (o *Orchestrator) ShutdownWithTimeout(timeout time.Duration) {
 }
 
 // SpawnWithInput is the legacy method that accepts AgentInput for backward compatibility.
-// It converts the input to SpawnInput and calls Spawn.
+// It resolves the agent through the orchestrator's registry (project > user >
+// bundled) and calls Spawn.
 // Deprecated: Use Spawn with SpawnInput directly.
 func (o *Orchestrator) SpawnWithInput(ctx context.Context, input AgentInput) (<-chan Event, string, error) {
-	spawnInput, err := input.ToSpawnInput()
+	spawnInput, err := o.resolveAgentInput(input)
 	if err != nil {
 		return nil, "", err
 	}
 	return o.Spawn(ctx, spawnInput)
+}
+
+// resolveAgentInput converts a legacy AgentInput to a SpawnInput, looking the
+// agent up in the orchestrator's registry rather than in the bundled set
+// alone: user and project agents are visible to the subagent tool's
+// validation and to a bundled-only lookup is what made them pass validation
+// and then fail to spawn.
+func (o *Orchestrator) resolveAgentInput(input AgentInput) (SpawnInput, error) {
+	agent, err := o.LookupAgent(input.Type)
+	if err != nil {
+		return SpawnInput{}, err
+	}
+	return SpawnInput{
+		Agent:        agent,
+		Prompt:       input.Prompt,
+		Worktree:     input.Worktree,
+		WorktreeName: input.WorktreeName,
+		WorktreeBase: input.WorktreeBase,
+		WorkDir:      input.WorkDir,
+		Background:   input.Background,
+		SkipCleanup:  input.SkipCleanup,
+		Timeout:      input.Timeout,
+		Attribution:  input.Attribution,
+	}, nil
 }
 
 // lastAgentNano is the timestamp the previous agent ID was minted from.

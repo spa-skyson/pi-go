@@ -63,7 +63,9 @@ func TestOrchestrator_SpawnInvalidType(t *testing.T) {
 func TestOrchestrator_SpawnRoleResolution(t *testing.T) {
 	// Config with no roles at all — should fail on role resolution.
 	cfg := config.Config{} // empty, no roles
-	orch := NewOrchestrator(&cfg, "", nil)
+	// SpawnWithInput resolves the agent through the orchestrator's registry,
+	// so the agent must be registered for the role error to be reachable.
+	orch := NewOrchestrator(&cfg, "", []AgentConfig{{Name: "explore", Role: "plan"}})
 
 	_, _, err := orch.SpawnWithInput(context.Background(), AgentInput{
 		Type:   "explore",

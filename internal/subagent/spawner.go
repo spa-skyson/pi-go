@@ -127,8 +127,11 @@ func spawnArgs(opts SpawnOpts) []string {
 	if opts.LSP != "" {
 		args = append(args, "--lsp", opts.LSP)
 	}
-	// The prompt is positional and must stay last.
-	return append(args, opts.Prompt)
+	// The prompt is positional and must stay last. The "--" terminator keeps
+	// cobra from reading it as a subcommand or as flags: a prompt whose first
+	// word matches a root subcommand ("ping", "model", "memory", ...) made the
+	// child run "pi ping", which has no --mode flag, and die on arg parsing.
+	return append(args, "--", opts.Prompt)
 }
 
 // buildCommand assembles the child pi command: arguments, environment, kill

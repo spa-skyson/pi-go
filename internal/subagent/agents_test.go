@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/dimetron/pi-go/internal/testenv"
 )
 
 func TestParseAgentFile(t *testing.T) {
@@ -193,6 +195,10 @@ func TestLoadAgentsFromDir_NonExistent(t *testing.T) {
 }
 
 func TestDiscoverAgents_ProjectDir(t *testing.T) {
+	// DiscoverAgents reads ~/.pi-go/agents via os.UserHomeDir; point HOME at
+	// a tempdir so the developer's real user agents cannot leak into All.
+	testenv.SetHome(t, t.TempDir())
+
 	// Create a proper project structure: .pi-go/agents inside a project dir
 	tmpDir := t.TempDir()
 	projectRoot := filepath.Join(tmpDir, "myproject")
@@ -300,6 +306,10 @@ func TestLoadBundledAgents(t *testing.T) {
 }
 
 func TestDiscoverAgents_Bundled(t *testing.T) {
+	// User agents are loaded on every DiscoverAgents call — a malformed file
+	// in the real home would fail the whole call, so isolate HOME.
+	testenv.SetHome(t, t.TempDir())
+
 	result, err := DiscoverAgents(".", ScopeBundled)
 	if err != nil {
 		t.Fatalf("DiscoverAgents failed: %v", err)
@@ -319,6 +329,10 @@ func TestDiscoverAgents_Bundled(t *testing.T) {
 }
 
 func TestDiscoverAgents_Both(t *testing.T) {
+	// ScopeBoth merges real-home user agents into All; isolate HOME so the
+	// assertion space depends only on what this test controls.
+	testenv.SetHome(t, t.TempDir())
+
 	result, err := DiscoverAgents(".", ScopeBoth)
 	if err != nil {
 		t.Fatalf("DiscoverAgents failed: %v", err)

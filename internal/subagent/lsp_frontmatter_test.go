@@ -91,3 +91,31 @@ func TestSpawnOptsLSPReachesArgs(t *testing.T) {
 		})
 	}
 }
+
+// TestSpawnArgsPromptAfterTerminator pins the "--" that precedes the
+// positional prompt. Without it cobra read a prompt whose first word matched
+// a root subcommand ("ping") as `pi ping` — a command with no --mode flag —
+// and the child died on argument parsing within milliseconds.
+func TestSpawnArgsPromptAfterTerminator(t *testing.T) {
+	tests := []struct{ name, prompt string }{
+		{"subcommand-shaped prompt", "ping"},
+		{"plain prompt", "fix the nil pointer in main.go"},
+		{"flag-shaped prompt", "--model gpt-5 do the thing"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := spawnArgs(SpawnOpts{Prompt: tt.prompt})
+
+			n := len(args)
+			if n < 2 || args[n-2] != "--" || args[n-1] != tt.prompt {
+				t.Fatalf("args = %v, want it to end with [--, %q]", args, tt.prompt)
+			}
+			// Exactly one terminator, at the second-to-last position.
+			for i, a := range args {
+				if a == "--" && i != n-2 {
+					t.Fatalf("unexpected extra %q at position %d: %v", "--", i, args)
+				}
+			}
+		})
+	}
+}
