@@ -190,9 +190,17 @@ func TestSwitchContextWindowSize_NamedProvider(t *testing.T) {
 	if got := switchContextWindowSize(context.Background(), cfg, info, ""); got != 200000 {
 		t.Errorf("window = %d, want the declared 200000", got)
 	}
-	// The global override stays on top of the per-model declaration.
+	// The per-model declaration is the most specific answer and beats the
+	// global contextWindow — otherwise no switch could ever move the window
+	// off the global value.
 	cfg.ContextWindow = 128000
-	if got := switchContextWindowSize(context.Background(), cfg, info, ""); got != 128000 {
+	if got := switchContextWindowSize(context.Background(), cfg, info, ""); got != 200000 {
+		t.Errorf("window = %d, want the declared 200000 over the global 128000", got)
+	}
+	// The global still tops the (zero) catalog answer for a model nobody
+	// declared.
+	undeclared := provider.Info{Provider: "unheard-of", Model: "unheard-of-model"}
+	if got := switchContextWindowSize(context.Background(), cfg, undeclared, ""); got != 128000 {
 		t.Errorf("window = %d, want the global override 128000", got)
 	}
 }

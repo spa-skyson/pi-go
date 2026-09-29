@@ -102,13 +102,15 @@ type Config struct {
 	// deferred init; empty until then and when no agent declares a mode.
 	PrimaryAgents []subagent.AgentConfig
 	// AgentSwitcher applies a primary agent ("" = the built-in default) to
-	// the main session: it builds the target's LLM — nil when the target
-	// names no model, meaning "keep the current one" — and returns the
-	// system prompt and the rebuilt tool-callback chains (the agent's
-	// permission rules merged over the global ones, a step limiter for its
-	// budget). Used by /agent and Shift+Tab. If nil, agent switching is
-	// disabled.
-	AgentSwitcher func(ctx context.Context, agentName string) (AgentSwitch, error)
+	// the main session: it builds the target's LLM — nil when no model
+	// resolves, meaning "keep the current one" — and returns the system
+	// prompt and the rebuilt tool-callback chains (the agent's permission
+	// rules merged over the global ones, a step limiter for its budget).
+	// modelOverride, when non-empty, is a session /model recorded for this
+	// agent and beats its `model:`/`role:`; "" lets the agent's own
+	// specification stand. Used by /agent and Shift+Tab. If nil, agent
+	// switching is disabled.
+	AgentSwitcher func(ctx context.Context, agentName string, modelOverride string) (AgentSwitch, error)
 }
 
 // AgentSwitch is the payload AgentSwitcher returns for one switch target.

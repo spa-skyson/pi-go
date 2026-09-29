@@ -16,15 +16,24 @@ import (
 )
 
 // Resolve reports the context window the running model actually
-// has, in tokens. It starts from the embedded catalog and lets the two
-// providers that can be asked at runtime — Ollama and OpenRouter — correct it.
+// has, in tokens. The most specific answer wins: a per-model declaration on a
+// declared provider (config.json "providers".models.<model>.contextWindow)
+// first, then the embedded catalog corrected by the two providers that can be
+// asked at runtime — Ollama and OpenRouter — and finally the global
+// context_window for everything still unknown.
 //
 // A zero result means the window is unknown, and compaction then never fires:
 // AutoCompactConfig.Decide treats an unknown window as CompactionNone rather
 // than guessing a percentage of nothing. Setting context_window in config.json
-// is the escape hatch, and it wins over every other source, because the
-// embedded catalog does not cover every provider's models.
+// is the escape hatch for models absent from both the catalog and the
+// provider declarations; a per-model declaration outranks it, so switching to
+// a declared model still moves the window off the global value.
 func Resolve(ctx context.Context, cfg config.Config, info provider.Info, baseURL string) int64 {
+	// The per-model declaration is the only source that names this exact
+	// model, so it beats the catalog, the live queries and the global below.
+	if n := cfg.ContextWindowFor(info.Provider, info.Model); n > 0 {
+		return n
+	}
 	ctxWindowSize := provider.ContextWindowSizeFor(info.Provider, info.Model)
 	if info.Ollama {
 		if n := provider.OllamaContextWindowSize(ctx, baseURL, info.Model); n > 0 {
@@ -35,12 +44,6 @@ func Resolve(ctx context.Context, cfg config.Config, info provider.Info, baseURL
 		if n := provider.OpenRouterContextWindowSize(ctx, baseURL, info.Model); n > 0 {
 			ctxWindowSize = n
 		}
-	}
-	// A window declared per model on a declared provider (config.json
-	// "providers") beats the catalog: those models are not in it, and without
-	// this auto-compaction would stay off for them entirely.
-	if n := cfg.ContextWindowFor(info.Provider, info.Model); n > 0 {
-		ctxWindowSize = n
 	}
 	if cfg.ContextWindow > 0 {
 		ctxWindowSize = cfg.ContextWindow

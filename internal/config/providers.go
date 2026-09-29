@@ -12,6 +12,8 @@ type ProviderModelConfig struct {
 	// unknown: auto-compaction then falls back to the embedded catalog, which
 	// does not know a custom endpoint's models, and ends up disabled. Declare
 	// the window whenever the endpoint's models are absent from that catalog.
+	// A declared window is the most specific answer and also wins over the
+	// global contextWindow, so switching to this model moves the gauge off it.
 	ContextWindow int64 `json:"contextWindow,omitempty"`
 }
 

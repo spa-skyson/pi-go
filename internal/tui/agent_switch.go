@@ -47,7 +47,7 @@ func (m *model) applyAgent(name string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	sw, err := m.cfg.AgentSwitcher(m.ctx, name)
+	sw, err := m.cfg.AgentSwitcher(m.ctx, name, m.agentModelOverride(name))
 	if err != nil {
 		m.chatModel.AppendNotice(fmt.Sprintf("Agent switch failed: %v", err))
 		return m, nil
@@ -65,17 +65,33 @@ func (m *model) applyAgent(name string) (tea.Model, tea.Cmd) {
 	}
 	m.activeAgent = name
 
-	var b strings.Builder
-	if name == "" {
-		b.WriteString("Switched to the default agent.")
-	} else {
-		fmt.Fprintf(&b, "Switched to agent **%s**.", name)
-	}
-	if sw.LLM != nil {
-		fmt.Fprintf(&b, " Model: **%s** (%s).", sw.ModelName, sw.Provider)
-	}
-	m.chatModel.AppendNotice(b.String())
+	// Success is silent: the sidebar already shows the agent and model, and a
+	// notice per Shift+Tab stop just spams the transcript. Only failures
+	// above surface as notices.
 	return m, nil
+}
+
+// agentModelOverride returns the session model recorded for the named agent
+// by a /model typed while it was active. "" for the default agent and for
+// agents without an override — their own model specification stands.
+func (m *model) agentModelOverride(name string) string {
+	if name == "" || m.agentModelOverrides == nil {
+		return ""
+	}
+	return m.agentModelOverrides[name]
+}
+
+// setAgentModelOverride records a session-only model override for a primary
+// agent. In-memory by design: it lives as long as the TUI session, is never
+// persisted to config, and re-applies on every switch back to the agent.
+func (m *model) setAgentModelOverride(name, modelName string) {
+	if name == "" {
+		return
+	}
+	if m.agentModelOverrides == nil {
+		m.agentModelOverrides = make(map[string]string)
+	}
+	m.agentModelOverrides[name] = modelName
 }
 
 // primaryAgentNames returns the switchable agents' names, sorted for a

@@ -87,6 +87,13 @@ type model struct {
 	// defaultAgent; shown in the sidebar next to the model.
 	activeAgent string
 
+	// agentModelOverrides holds the session model per primary agent
+	// (agent name → model), recorded when /model is typed while that agent
+	// is active. In-memory only — never persisted — and re-applied by
+	// applyAgent on every switch back to the agent. Nil until the first
+	// override.
+	agentModelOverrides map[string]string
+
 	// steering marks the current turn as replaced by a steer rather than
 	// stopped. The turn still ends with context.Canceled — that is the only
 	// thing cancellation can produce — but a steer is not a failure, so the

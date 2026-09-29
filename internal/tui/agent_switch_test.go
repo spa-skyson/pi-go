@@ -2,13 +2,17 @@ package tui
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	adkmodel "google.golang.org/adk/v2/model"
 
 	"github.com/dimetron/pi-go/internal/agent"
 	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/dimetron/pi-go/internal/testenv"
 )
 
 // switchTestAgents returns two primary agent configs, deliberately listed
@@ -21,8 +25,9 @@ func switchTestAgents() []subagent.AgentConfig {
 }
 
 // newSwitchTestModel builds a model wired to a real agent over a stub LLM,
-// with a switcher that records the requested name and applies a distinct
-// prompt per target, so the test can see what reached the runner.
+// with a switcher that records the requested (agent, override) pairs and
+// applies a distinct prompt per target, so the test can see what reached the
+// runner.
 func newSwitchTestModel(t *testing.T, asked *[]string) *model {
 	t.Helper()
 	ag, err := agent.New(agent.Config{
@@ -32,8 +37,8 @@ func newSwitchTestModel(t *testing.T, asked *[]string) *model {
 	if err != nil {
 		t.Fatalf("agent.New: %v", err)
 	}
-	switcher := func(_ context.Context, name string) (AgentSwitch, error) {
-		*asked = append(*asked, name)
+	switcher := func(_ context.Context, name string, override string) (AgentSwitch, error) {
+		*asked = append(*asked, name+"/"+override)
 		instruction := "Built-in prompt."
 		if name != "" {
 			instruction = "Prompt of " + name + "."
@@ -81,31 +86,35 @@ func TestNextAgentName(t *testing.T) {
 }
 
 // TestCycleAgentSequence drives Shift+Tab through the full cycle and back,
-// asserting the switcher receives the right name at each stop and the
-// transcript carries a notice.
+// asserting the switcher receives the right (agent, override) pair at each
+// stop and that a successful switch stays silent — the sidebar already shows
+// the agent and model, so the transcript only carries failure notices.
 func TestCycleAgentSequence(t *testing.T) {
 	var asked []string
 	m := newSwitchTestModel(t, &asked)
 
 	shiftTab := (tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}).Key()
-	want := []string{"build", "pm", "", "build"}
-	for i, name := range want {
+	want := []struct{ agent, override string }{
+		{"build", ""}, {"pm", ""}, {"", ""}, {"build", ""},
+	}
+	for i, w := range want {
 		newM, _, _ := m.handleToggleKey(shiftTab)
 		m = newM.(*model)
-		if m.activeAgent != name {
-			t.Fatalf("step %d: activeAgent = %q, want %q", i, m.activeAgent, name)
+		if m.activeAgent != w.agent {
+			t.Fatalf("step %d: activeAgent = %q, want %q", i, m.activeAgent, w.agent)
 		}
 	}
 	if len(asked) != len(want) {
 		t.Fatalf("switcher called %d times, want %d", len(asked), len(want))
 	}
-	for i, name := range want {
-		if asked[i] != name {
-			t.Errorf("switcher call %d: got %q, want %q", i, asked[i], name)
+	for i, w := range want {
+		if got := w.agent + "/" + w.override; asked[i] != got {
+			t.Errorf("switcher call %d: got %q, want %q", i, asked[i], got)
 		}
 	}
-	if !strings.Contains(m.chatModel.Messages[0].content, "Switched to agent **build**") {
-		t.Errorf("expected a switch notice, got %q", m.chatModel.Messages[0].content)
+	if len(m.chatModel.Messages) != 0 {
+		t.Errorf("successful switches must stay silent, transcript got %d messages, first: %q",
+			len(m.chatModel.Messages), m.chatModel.Messages[0].content)
 	}
 }
 
@@ -130,8 +139,7 @@ func TestShiftTabRefusesWhileRunning(t *testing.T) {
 }
 
 // TestHandleAgentCommandSwitch drives /agent <name>: the switcher receives
-// the exact name, "default" maps to the built-in agent, and the notice
-// confirms.
+// the exact name, "default" maps to the built-in agent.
 func TestHandleAgentCommandSwitch(t *testing.T) {
 	var asked []string
 	m := newSwitchTestModel(t, &asked)
@@ -141,8 +149,8 @@ func TestHandleAgentCommandSwitch(t *testing.T) {
 	if m.activeAgent != "pm" {
 		t.Errorf("activeAgent = %q, want pm", m.activeAgent)
 	}
-	if len(asked) != 1 || asked[0] != "pm" {
-		t.Fatalf("switcher got %v, want [pm]", asked)
+	if len(asked) != 1 || asked[0] != "pm/" {
+		t.Fatalf("switcher got %v, want [pm/]", asked)
 	}
 
 	newM, _ = m.handleSlashCommand("/agent default")
@@ -150,8 +158,8 @@ func TestHandleAgentCommandSwitch(t *testing.T) {
 	if m.activeAgent != "" {
 		t.Errorf("activeAgent = %q, want empty (default)", m.activeAgent)
 	}
-	if last := asked[len(asked)-1]; last != "" {
-		t.Errorf("switcher got %q, want \"\" for default", last)
+	if last := asked[len(asked)-1]; last != "/" {
+		t.Errorf("switcher got %q, want \"/\" for default", last)
 	}
 }
 
@@ -162,7 +170,7 @@ func TestHandleAgentCommandUnknown(t *testing.T) {
 	m := newSwitchTestModel(t, &asked)
 	// The switcher itself rejects unknown names, as the CLI one does
 	// (unknown agent / non-primary are pre-checked errors there).
-	m.cfg.AgentSwitcher = func(_ context.Context, name string) (AgentSwitch, error) {
+	m.cfg.AgentSwitcher = func(_ context.Context, name string, _ string) (AgentSwitch, error) {
 		asked = append(asked, name)
 		return AgentSwitch{}, errUnknownTestAgent
 	}
@@ -214,5 +222,88 @@ func TestAgentSidebarIndicator(t *testing.T) {
 	in := m.sidebarRenderInput(30, 40)
 	if in.AgentName != "build" {
 		t.Errorf("sidebar AgentName = %q, want build", in.AgentName)
+	}
+}
+
+// TestModelCommandWithActiveAgent pins the session-override semantics of
+// /model while a primary agent is active: the switch applies to the session,
+// the override is remembered for that agent only (and re-handed to the
+// switcher on the way back), and the default role in config.json is left
+// alone. The default session keeps its persist-as-before behavior.
+func TestModelCommandWithActiveAgent(t *testing.T) {
+	home := t.TempDir()
+	testenv.SetHome(t, home)
+	cfgPath := filepath.Join(home, ".pi-go", "config.json")
+
+	var asked []string
+	m := newSwitchTestModel(t, &asked)
+	m.activeAgent = "pm"
+	m.cfg.ModelSwitcher = func(_ context.Context, modelName string) (adkmodel.LLM, string, string, error) {
+		return &stubLLM{name: modelName}, modelName, "anthropic", nil
+	}
+
+	// /model with pm active: session override, no persistence, agent-scoped
+	// wording so the user can see WHAT changed.
+	newM, _ := m.handleSlashCommand("/model claude-sonnet-4-6")
+	m = newM.(*model)
+	if got := m.agentModelOverride("pm"); got != "claude-sonnet-4-6" {
+		t.Errorf("override for pm = %q, want claude-sonnet-4-6", got)
+	}
+	if m.cfg.ActiveRole != "" {
+		t.Errorf("ActiveRole moved to %q; an agent /model must not touch role state", m.cfg.ActiveRole)
+	}
+	if content := m.chatModel.Messages[0].content; !strings.Contains(content, "Model for agent **pm** switched to **claude-sonnet-4-6**") {
+		t.Errorf("expected an agent-scoped notice, got %q", content)
+	}
+	if _, err := os.Stat(cfgPath); !os.IsNotExist(err) {
+		t.Errorf("config.json exists after an agent /model (%v); the default role must not be rewritten", err)
+	}
+
+	// Back to default, then to pm again: only the pm return carries the
+	// override, /agent default keeps its no-override behavior.
+	newM, _ = m.handleSlashCommand("/agent default")
+	m = newM.(*model)
+	newM, _ = m.handleSlashCommand("/agent pm")
+	m = newM.(*model)
+	if len(asked) != 2 {
+		t.Fatalf("switcher called %d times, want 2 (%v)", len(asked), asked)
+	}
+	if asked[0] != "/" {
+		t.Errorf("switch to default got %q, want \"/\"", asked[0])
+	}
+	if asked[1] != "pm/claude-sonnet-4-6" {
+		t.Errorf("switch back to pm got %q, want the recorded override", asked[1])
+	}
+
+	// The default session persists as before.
+	newM, _ = m.handleSlashCommand("/agent default")
+	m = newM.(*model)
+	newM, _ = m.handleSlashCommand("/model gpt-5.6-sol")
+	m = newM.(*model)
+	if m.cfg.ActiveRole != "default" {
+		t.Errorf("ActiveRole = %q, want default after a default-session /model", m.cfg.ActiveRole)
+	}
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("config.json not written by a default-session /model: %v", err)
+	}
+	if !strings.Contains(string(data), "gpt-5.6-sol") {
+		t.Errorf("config.json lacks the persisted model:\n%s", data)
+	}
+}
+
+// TestApplyAgentFailureKeepsNotice pins the other half of the quiet switch:
+// a failed switch still surfaces as a notice.
+func TestApplyAgentFailureKeepsNotice(t *testing.T) {
+	var asked []string
+	m := newSwitchTestModel(t, &asked)
+	m.cfg.AgentSwitcher = func(_ context.Context, _ string, _ string) (AgentSwitch, error) {
+		return AgentSwitch{}, errUnknownTestAgent
+	}
+
+	newM, _, _ := m.handleToggleKey((tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}).Key())
+	m = newM.(*model)
+	if len(m.chatModel.Messages) != 1 || !strings.Contains(m.chatModel.Messages[0].content, "Agent switch failed") {
+		t.Errorf("expected a failure notice, got %d messages", len(m.chatModel.Messages))
 	}
 }
