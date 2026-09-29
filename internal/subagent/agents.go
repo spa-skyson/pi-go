@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/dimetron/pi-go/internal/permission"
 )
 
 // minAgentTimeoutMs is the smallest frontmatter `timeout:` treated as a real
@@ -56,8 +58,13 @@ type AgentConfig struct {
 	// time by normalizeReasoningEffort; empty means inherit.
 	ReasoningEffort string
 	// Steps caps the child's tool-call iterations (0 = no limit).
-	Steps  int
-	Source string // "bundled", "user", or "project"
+	Steps int
+	// Permission holds the agent's frontmatter `permission:` rules. They gate
+	// the child's tool calls; the orchestrator serializes them into the
+	// child's environment and the child layers them over the global config
+	// rules. Zero value = no agent-specific rules.
+	Permission permission.Rules
+	Source     string // "bundled", "user", or "project"
 }
 
 // AgentDiscoveryResult contains all discovered agents.
@@ -116,6 +123,7 @@ func parseAgentContent(content, path string) (AgentConfig, error) {
 	inFrontmatter := false
 	frontmatterDone := false
 	var body strings.Builder
+	var perm permissionParser
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -133,7 +141,17 @@ func parseAgentContent(content, path string) (AgentConfig, error) {
 		}
 
 		if inFrontmatter {
+			// Inside an open `permission:` block every indented line belongs
+			// to it; the block ends at the first non-indented line, which is
+			// then processed as a regular frontmatter key.
+			if perm.open() && perm.feed(cfg.Name, line) {
+				continue
+			}
 			if key, value, ok := parseAgentFrontmatterLine(line); ok {
+				if key == "permission" && value == "" {
+					perm.begin()
+					continue
+				}
 				applyAgentFrontmatterKey(&cfg, key, value)
 			}
 		} else {
@@ -147,6 +165,7 @@ func parseAgentContent(content, path string) (AgentConfig, error) {
 	}
 
 	cfg.Instruction = strings.TrimSpace(body.String())
+	cfg.Permission = perm.rules
 	return cfg, nil
 }
 
@@ -182,7 +201,125 @@ func applyAgentFrontmatterKey(cfg *AgentConfig, key, value string) {
 		if n, ok := parseAgentSteps(cfg.Name, value); ok {
 			cfg.Steps = n
 		}
+	case "permission":
+		// The block form is consumed by parseAgentContent before this switch
+		// sees the key; reaching it here means a scalar value like
+		// `permission: deny`, which is not a rule set.
+		if value != "" {
+			slog.Warn("subagent: permission must be a block of rules; scalar value ignored",
+				"agent", cfg.Name, "value", value)
+		}
 	}
+}
+
+// permissionParser accumulates rules from an indented `permission:` block in
+// agent frontmatter. It understands exactly the two levels the opencode
+// permission format uses — tool-name rules and a nested `bash:` block of
+// command-pattern rules — not YAML in general:
+//
+//	permission:
+//	  edit: deny
+//	  serena*: deny
+//	  bash:
+//	    "*": ask
+//	    "git *": allow
+type permissionParser struct {
+	rules      permission.Rules
+	begun      bool // saw the opening `permission:` line
+	inBash     bool // inside the nested bash: block
+	bashIndent int  // indent of the `bash:` line itself
+}
+
+// open reports whether a `permission:` block is being read.
+func (p *permissionParser) open() bool { return p.begun }
+
+// begin marks the parser as inside a `permission:` block.
+func (p *permissionParser) begin() {
+	p.begun = true
+	p.inBash = false
+}
+
+// feed consumes one line while the block is open, reporting whether the line
+// belonged to it. Blank lines stay inside; a non-indented line closes the
+// block and is returned to the regular frontmatter keys.
+func (p *permissionParser) feed(agentName, line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return true
+	}
+	indent := len(line) - len(strings.TrimLeft(line, " \t"))
+	if indent == 0 {
+		return false
+	}
+	// A line deeper than the `bash:` key itself is a command pattern.
+	if p.inBash && indent > p.bashIndent {
+		p.addBash(agentName, trimmed)
+		return true
+	}
+	p.inBash = false
+
+	key, value, ok := parseAgentFrontmatterLine(trimmed)
+	if !ok {
+		slog.Warn("subagent: unusable permission line ignored", "agent", agentName, "line", trimmed)
+		return true
+	}
+	key = unquoteFrontmatter(key)
+	value = unquoteFrontmatter(value)
+	if key == "bash" {
+		if value == "" {
+			p.inBash = true
+			p.bashIndent = indent
+			return true
+		}
+		// A scalar `bash: deny` gates the tool wholesale — the command
+		// patterns are the block form above.
+		p.addTool(agentName, "bash", value)
+		return true
+	}
+	p.addTool(agentName, key, value)
+	return true
+}
+
+// addTool records one tool-name rule; an unusable directive warns and is
+// skipped, matching how the other frontmatter values behave.
+func (p *permissionParser) addTool(agentName, pattern, value string) {
+	d, err := permission.ParseDirective(value)
+	if err != nil {
+		slog.Warn("subagent: permission rule ignored", "agent", agentName, "rule", pattern, "error", err)
+		return
+	}
+	if p.rules.Tools == nil {
+		p.rules.Tools = make(map[string]permission.Directive)
+	}
+	p.rules.Tools[pattern] = d
+}
+
+// addBash records one command-pattern rule from inside the bash: block.
+func (p *permissionParser) addBash(agentName, trimmed string) {
+	pattern, value, ok := parseAgentFrontmatterLine(trimmed)
+	if !ok {
+		slog.Warn("subagent: unusable bash permission line ignored", "agent", agentName, "line", trimmed)
+		return
+	}
+	d, err := permission.ParseDirective(value)
+	if err != nil {
+		slog.Warn("subagent: permission rule ignored", "agent", agentName, "rule", pattern, "error", err)
+		return
+	}
+	p.rules.Bash = append(p.rules.Bash, permission.BashRule{
+		Pattern:   unquoteFrontmatter(pattern),
+		Directive: d,
+	})
+}
+
+// unquoteFrontmatter strips one pair of matching surrounding quotes, so both
+// `"git *": allow` and `git *: allow` parse to the same pattern.
+func unquoteFrontmatter(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) >= 2 && (s[0] == '"' && s[len(s)-1] == '"' || s[0] == '\'' && s[len(s)-1] == '\'') {
+		return s[1 : len(s)-1]
+	}
+	return s
 }
 
 // parseAgentTimeout reads a frontmatter `timeout:` value, reporting ok=false

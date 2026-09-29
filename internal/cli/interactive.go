@@ -101,13 +101,16 @@ func (r *initResources) cleanup() {
 
 // runInteractive starts the TUI immediately and performs heavy initialization
 // in a background goroutine, reporting progress via InitEvent channel.
+// headerSessionID is the session ID already baked into the LLM client's
+// ${SESSION_ID} headers (empty when none were needed): the TUI's session is
+// created under it, so the header names the conversation the logs do.
 func runInteractive(
 	ctx context.Context,
 	cfg config.Config,
 	llm adkmodel.LLM,
 	info provider.Info,
 	tokenTracker *guardrail.Tracker,
-	activeRole, cwd, sandboxRoot, worktreeDir string,
+	activeRole, cwd, sandboxRoot, worktreeDir, headerSessionID string,
 ) error {
 	initCh := make(chan tui.InitEvent, 32)
 
@@ -155,7 +158,7 @@ func runInteractive(
 	go func() {
 		defer close(initDone)
 		defer close(initCh)
-		deferredInit(initCtx, cfg, llm, info.Provider, info.Model, info.BaseURL, tokenTracker, cwd, sandboxRoot, worktreeDir, initCh, noticeCh, &res)
+		deferredInit(initCtx, cfg, llm, info.Provider, info.Model, info.BaseURL, tokenTracker, cwd, sandboxRoot, worktreeDir, headerSessionID, initCh, noticeCh, &res)
 	}()
 
 	tuiErr := tui.Run(ctx, tui.Config{
@@ -174,7 +177,7 @@ func runInteractive(
 		DeferredInit:   initCh,
 		SystemNoticeCh: noticeCh,
 		ModelSwitcher: func(switchCtx context.Context, modelName string) (adkmodel.LLM, string, string, error) {
-			return buildSwitchedLLM(switchCtx, cfg, tokenTracker, modelName)
+			return buildSwitchedLLM(switchCtx, cfg, tokenTracker, modelName, headerSessionID)
 		},
 		A2A: cfg.A2A,
 	})
@@ -202,6 +205,7 @@ func deferredInit(
 	baseURL string,
 	tokenTracker *guardrail.Tracker,
 	cwd, sandboxRoot, worktreeDir string,
+	headerSessionID string,
 	ch chan<- tui.InitEvent,
 	noticeCh chan string,
 	res *initResources,
@@ -345,7 +349,7 @@ func deferredInit(
 		return
 	}
 
-	sessionID, defaultTitle, resumed, err := resolveDeferredSession(ctx, ag, sessionSvc, llm, providerName, baseURL)
+	sessionID, defaultTitle, resumed, err := resolveDeferredSession(ctx, ag, sessionSvc, llm, providerName, baseURL, headerSessionID)
 	if err != nil {
 		fail(err)
 		return
@@ -603,6 +607,14 @@ func buildDeferredCallbacks(
 
 	hooks := convertHooks(cfg.Hooks)
 	beforeCBs := extension.BuildBeforeToolCallbacks(hooks)
+
+	// Permission rules gate every tool call before execution. The primary
+	// interactive session has no frontmatter of its own — per-agent rules
+	// travel with each subagent's process — so only the global config rules
+	// apply here.
+	if rules := globalPermissionRules(cfg); !rules.Empty() {
+		beforeCBs = append(beforeCBs, agent.NewPermissionCallback(rules))
+	}
 	afterCBs := extension.BuildAfterToolCallbacks(hooks)
 
 	// Always add OTEL tracing callbacks so all tool calls are traced.
@@ -660,12 +672,15 @@ func resolveDeferredSession(
 	sessionSvc *pisession.FileService,
 	llm adkmodel.LLM,
 	providerName, baseURL string,
+	headerSessionID string,
 ) (sessionID, defaultTitle string, resumed bool, err error) {
 	// --continue is resolved in the fast path, which sets flagSession.
 	sessionID = flagSession
 	resumed = sessionID != ""
 	if sessionID == "" {
-		sessionID, defaultTitle, err = ag.CreateSession(ctx)
+		// The header ID wins when one was baked in: the LLM client is already
+		// sending it, so the session must carry the same name.
+		sessionID, defaultTitle, err = ag.CreateSessionWithID(ctx, headerSessionID)
 		if err != nil {
 			return "", "", false, fmt.Errorf("creating session: %w", err)
 		}
@@ -1062,7 +1077,9 @@ func buildMCPServerConfigs(cfg config.Config) []extension.MCPServerConfig {
 // the current config and token tracker. It resolves the provider, validates
 // the model, creates the LLM, updates the token tracker's context window size,
 // and wraps it with the guardrail. Used by the TUI /model <name> command.
-func buildSwitchedLLM(ctx context.Context, cfg config.Config, tokenTracker *guardrail.Tracker, modelName string) (adkmodel.LLM, string, string, error) {
+// headerSessionID keeps the ${SESSION_ID} headers pointed at the conversation
+// the client was originally built for — /model switches models, not sessions.
+func buildSwitchedLLM(ctx context.Context, cfg config.Config, tokenTracker *guardrail.Tracker, modelName, headerSessionID string) (adkmodel.LLM, string, string, error) {
 	providerName := ""
 	if rc, ok := cfg.Roles["default"]; ok && rc.Provider != "" {
 		providerName = rc.Provider
@@ -1074,7 +1091,7 @@ func buildSwitchedLLM(ctx context.Context, cfg config.Config, tokenTracker *guar
 	}
 
 	llmOpts := &provider.LLMOptions{
-		ExtraHeaders: mergeExtraHeaders(cfg.ExtraHeaders, flagHeaders),
+		ExtraHeaders: providerExtraHeaders(cfg, info.Provider, headerSessionID, flagHeaders),
 		Temperature:  temperatureFlagOpt(),
 	}
 	applyTransportOptions(llmOpts, cfg, info)

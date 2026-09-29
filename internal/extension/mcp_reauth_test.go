@@ -111,7 +111,7 @@ func TestResilientToolset_ReauthorizesOn401(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Tools() returned an error: %v", err)
 	}
-	if len(tools) != 1 || tools[0].Name() != "list-benchmarks" {
+	if len(tools) != 1 || tools[0].Name() != "openrouter_list-benchmarks" {
 		t.Fatalf("tools = %v, want the authorized connection's tools", tools)
 	}
 	if rt.failed {

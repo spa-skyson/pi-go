@@ -17,8 +17,11 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 	"google.golang.org/adk/v2/agent"
+	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/tool"
 	"google.golang.org/adk/v2/tool/mcptoolset"
+	"google.golang.org/adk/v2/tool/toolutils"
+	"google.golang.org/genai"
 
 	piauth "github.com/dimetron/pi-go/internal/auth" // SDK auth pkg is imported above
 	"github.com/dimetron/pi-go/internal/browser"
@@ -142,10 +145,14 @@ func (t *connTrackingTransport) closeConn() {
 // A timeout guards against hanging MCP servers that start but never respond
 // to the JSON-RPC "initialize" handshake.
 //
-// Tool names are returned as the server reports them. Making them unique
-// against pi-go's built-in tools and against the other servers is the agent's
-// job, since only it can see every source at once — see dedupeToolsets in
-// internal/agent.
+// Tool names are prefixed with the (sanitized, lowercased) server name —
+// "<server>_<tool>", the opencode-compatible shape. This is what lets a
+// permission rule like "serena*" match every tool one server exposes, and it
+// removes cross-server collisions at the source. It is a visible change for
+// anything that names MCP tools: prompts, hooks with a tools filter, and
+// permission rules must use the prefixed spelling. Any residual collision
+// (with a built-in or with another server) is still resolved downstream by
+// dedupeToolsets in internal/agent, which renames only the losers.
 type resilientToolset struct {
 	inner     tool.Toolset
 	name      string
@@ -179,12 +186,111 @@ func (r *resilientToolset) Tools(ctx agent.ReadonlyContext) ([]tool.Tool, error)
 			r.failed = true
 			return
 		}
-		r.tools = tools
+		r.tools = prefixToolNames(r.name, tools)
 	})
 	if r.failed {
 		return nil, nil
 	}
 	return r.tools, nil
+}
+
+// prefixedTool presents an MCP tool to the model under its "<server>_<tool>"
+// name. Only the name changes: Run delegates to the inner tool, which still
+// addresses its server by the tool's original name. (Twin of renamedTool in
+// internal/agent/toolnames.go; extension cannot import agent for it —
+// agent imports extension.)
+type prefixedTool struct {
+	tool.Tool
+	name string
+}
+
+func (p *prefixedTool) Name() string { return p.name }
+
+func (p *prefixedTool) Declaration() *genai.FunctionDeclaration {
+	type declarer interface {
+		Declaration() *genai.FunctionDeclaration
+	}
+	d, ok := p.Tool.(declarer)
+	if !ok {
+		return nil
+	}
+	decl := d.Declaration()
+	if decl == nil {
+		return nil
+	}
+	renamed := *decl
+	renamed.Name = p.name
+	return &renamed
+}
+
+func (p *prefixedTool) ProcessRequest(_ agent.Context, req *model.LLMRequest) error {
+	return toolutils.PackTool(req, p)
+}
+
+func (p *prefixedTool) Run(ctx agent.Context, args any) (map[string]any, error) {
+	type runner interface {
+		Run(agent.Context, any) (map[string]any, error)
+	}
+	inner, ok := p.Tool.(runner)
+	if !ok {
+		return nil, fmt.Errorf("tool %q is not callable", p.name)
+	}
+	return inner.Run(ctx, args)
+}
+
+// prefixToolNames renames each listed tool to "<server>_<tool>" so tools are
+// namespaced by the server that owns them.
+func prefixToolNames(server string, tools []tool.Tool) []tool.Tool {
+	prefix := sanitizeMCPPrefix(server)
+	out := make([]tool.Tool, 0, len(tools))
+	for _, t := range tools {
+		if t == nil {
+			continue
+		}
+		out = append(out, &prefixedTool{Tool: t, name: truncateToolName(prefix + "_" + t.Name())})
+	}
+	return out
+}
+
+// sanitizeMCPPrefix maps a free-form server name onto a lowercase function-name
+// prefix: anything the model APIs reject becomes an underscore, runs collapse
+// and the ends are trimmed.
+func sanitizeMCPPrefix(server string) string {
+	lower := strings.ToLower(server)
+	var b strings.Builder
+	b.Grow(len(lower))
+	prevUnderscore := false
+	for _, r := range lower {
+		ok := r == '-' || r == '.' || r == '_' ||
+			(r >= '0' && r <= '9') || (r >= 'a' && r <= 'z')
+		if !ok {
+			r = '_'
+		}
+		if r == '_' {
+			if prevUnderscore {
+				continue
+			}
+			prevUnderscore = true
+		} else {
+			prevUnderscore = false
+		}
+		b.WriteRune(r)
+	}
+	prefix := strings.Trim(b.String(), "_")
+	if prefix == "" {
+		prefix = "mcp"
+	}
+	return prefix
+}
+
+// truncateToolName trims a name to the model APIs' 64-character function-name
+// limit, cutting from the front so the tool's own name survives.
+func truncateToolName(s string) string {
+	const maxToolNameLen = 64
+	if len(s) <= maxToolNameLen {
+		return s
+	}
+	return strings.TrimLeft(s[len(s)-maxToolNameLen:], "_-.")
 }
 
 // failureNotice renders the message shown when a server cannot be used.
