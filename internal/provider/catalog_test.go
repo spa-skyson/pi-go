@@ -85,6 +85,66 @@ func TestCatalogForNoCacheFallsBackToEmbedded(t *testing.T) {
 	}
 }
 
+// NamedCatalog serves a declared provider from its cache when one exists and
+// fetches — through listAs, caching under the provider's own name — when it
+// does not. A protocol name must never become a cache key: every declared
+// OpenAI-compatible provider would otherwise share one file.
+func TestNamedCatalog(t *testing.T) {
+	cacheDir := withTempCacheDir(t)
+
+	var lists int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lists++
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{{"id": "corp-large"}},
+		})
+	}))
+	defer srv.Close()
+
+	opts := ListModelsOptions{APIKey: "k", BaseURL: srv.URL}
+
+	// Miss: live fetch through the protocol, cached under the provider name.
+	models, err := NamedCatalog(context.Background(), "corp", "openai-compatible", opts)
+	if err != nil {
+		t.Fatalf("NamedCatalog: %v", err)
+	}
+	if len(models) != 1 || models[0].ID != "corp-large" {
+		t.Fatalf("models = %+v", models)
+	}
+	if _, err := os.Stat(filepath.Join(cacheDir, "corp.json")); err != nil {
+		t.Fatalf("cache file for corp: %v", err)
+	}
+
+	// Hit: the cache answers, no second listing.
+	before := lists
+	models, err = NamedCatalog(context.Background(), "corp", "openai-compatible", opts)
+	if err != nil {
+		t.Fatalf("NamedCatalog (cached): %v", err)
+	}
+	if lists != before {
+		t.Errorf("cached NamedCatalog listed again (%d → %d)", before, lists)
+	}
+	if len(models) != 1 || models[0].ID != "corp-large" {
+		t.Errorf("cached models = %+v", models)
+	}
+
+	// A same-protocol sibling provider never sees corp's cache.
+	if _, err := NamedCatalog(context.Background(), "corp2", "openai-compatible", opts); err != nil {
+		t.Fatalf("NamedCatalog corp2: %v", err)
+	}
+	if got := lists - before; got != 1 {
+		t.Errorf("corp2 made %d listings, want exactly 1 (its own)", got)
+	}
+
+	// Fetch failure surfaces as an error, leaving no cache behind.
+	if _, err := NamedCatalog(context.Background(), "dead", "openai-compatible", ListModelsOptions{APIKey: "k", BaseURL: "http://127.0.0.1:1"}); err == nil {
+		t.Error("NamedCatalog on a dead endpoint returned no error")
+	}
+	if _, err := os.Stat(filepath.Join(cacheDir, "dead.json")); !os.IsNotExist(err) {
+		t.Errorf("a failed fetch left a cache file (%v)", err)
+	}
+}
+
 func TestCatalogForCacheModelNotInEmbedded(t *testing.T) {
 	cacheDir := withTempCacheDir(t)
 	cf := catalogFile{

@@ -194,8 +194,9 @@ type testError struct{ msg string }
 
 func (e *testError) Error() string { return e.msg }
 
-// TestHandleAgentCommandList checks the no-arg listing: every switchable
-// agent with its description, the active one marked.
+// TestHandleAgentCommandList checks the no-arg path: it opens the agent
+// picker popup — default plus every primary agent, the active one marked in
+// its description — instead of printing a listing into the chat.
 func TestHandleAgentCommandList(t *testing.T) {
 	var asked []string
 	m := newSwitchTestModel(t, &asked)
@@ -203,11 +204,30 @@ func TestHandleAgentCommandList(t *testing.T) {
 
 	newM, _ := m.handleSlashCommand("/agent")
 	m = newM.(*model)
-	content := m.chatModel.Messages[0].content
-	for _, want := range []string{"default", "build", "pm", "orchestrator", "←"} {
-		if !strings.Contains(content, want) {
-			t.Errorf("listing missing %q:\n%s", want, content)
-		}
+	if m.searchPopup == nil || m.searchPopup.mode != searchModeAgents {
+		t.Fatalf("/agent did not open the agents popup (popup = %+v)", m.searchPopup)
+	}
+	if len(m.chatModel.Messages) != 0 {
+		t.Errorf("the popup must replace the chat listing, got %d messages", len(m.chatModel.Messages))
+	}
+
+	var texts []string
+	descs := make(map[string]string)
+	for _, it := range m.searchPopup.filtered {
+		texts = append(texts, it.Text)
+		descs[it.Text] = it.Description
+	}
+	if len(texts) != 3 || texts[0] != "default" || texts[1] != "build" || texts[2] != "pm" {
+		t.Fatalf("popup entries = %v, want [default build pm]", texts)
+	}
+	if !strings.Contains(descs["default"], "built-in pi-go agent") {
+		t.Errorf("default description = %q", descs["default"])
+	}
+	if !strings.Contains(descs["build"], "executor") || !strings.Contains(descs["pm"], "orchestrator") {
+		t.Errorf("agent descriptions = %q / %q, want the agents' own", descs["build"], descs["pm"])
+	}
+	if !strings.Contains(descs["pm"], "active") || strings.Contains(descs["default"], "active") {
+		t.Errorf("active marker wrong: default = %q, pm = %q", descs["default"], descs["pm"])
 	}
 }
 

@@ -76,17 +76,26 @@ func TestHandleSlashCommandModel(t *testing.T) {
 	m := &model{
 		inputModel: InputModel{Text: "/model"},
 		chatModel:  ChatModel{Messages: make([]message, 0)},
-		cfg:        Config{ModelName: "test-model"},
+		cfg: Config{
+			ModelName: "test-model",
+			ModelCandidates: []SearchItem{
+				{Text: "zai-coding-plan/glm-5.3", Description: "zai-coding-plan"},
+			},
+		},
 	}
 
 	newM, _ := m.handleSlashCommand("/model")
 	mm := newM.(*model)
 
-	if len(mm.chatModel.Messages) != 1 {
-		t.Fatalf("expected 1 message, got %d", len(mm.chatModel.Messages))
+	// /model now opens the picker popup instead of printing a listing.
+	if mm.searchPopup == nil || mm.searchPopup.mode != searchModeModels {
+		t.Fatalf("/model did not open the models popup (popup = %+v)", mm.searchPopup)
 	}
-	if !strings.Contains(mm.chatModel.Messages[0].content, "Current model: **test-model**") {
-		t.Errorf("unexpected content: %q", mm.chatModel.Messages[0].content)
+	if len(mm.chatModel.Messages) != 0 {
+		t.Errorf("expected no chat messages, got %d", len(mm.chatModel.Messages))
+	}
+	if got := mm.searchPopup.filtered; len(got) != 1 || got[0].Text != "zai-coding-plan/glm-5.3" {
+		t.Errorf("popup entries = %+v", got)
 	}
 }
 
@@ -122,6 +131,11 @@ func TestHandleSlashCommandModelShowsRoles(t *testing.T) {
 		cfg: Config{
 			ModelName:  "claude-sonnet-4-6",
 			ActiveRole: "default",
+			ModelCandidates: []SearchItem{
+				{Text: "default", Description: "role · claude-sonnet-4-6"},
+				{Text: "smol", Description: "role · gemini-2.5-flash"},
+				{Text: "slow", Description: "role · claude-opus-4-7 [anthropic]"},
+			},
 			Roles: map[string]config.RoleConfig{
 				"default": {Model: "claude-sonnet-4-6"},
 				"smol":    {Model: "gemini-2.5-flash"},
@@ -133,21 +147,28 @@ func TestHandleSlashCommandModelShowsRoles(t *testing.T) {
 	newM, _ := m.handleSlashCommand("/model")
 	mm := newM.(*model)
 
-	if len(mm.chatModel.Messages) != 1 {
-		t.Fatalf("expected 1 message, got %d", len(mm.chatModel.Messages))
+	if mm.searchPopup == nil || mm.searchPopup.mode != searchModeModels {
+		t.Fatalf("/model did not open the models popup (popup = %+v)", mm.searchPopup)
 	}
-	content := mm.chatModel.Messages[0].content
-	if !strings.Contains(content, "Configured roles:") {
-		t.Errorf("expected roles section, got %q", content)
+	var texts, descs []string
+	for _, it := range mm.searchPopup.filtered {
+		texts = append(texts, it.Text)
+		descs = append(descs, it.Description)
 	}
-	if !strings.Contains(content, "smol") {
-		t.Errorf("expected smol role listed, got %q", content)
+	joined := strings.Join(texts, " ") + " | " + strings.Join(descs, " ")
+	for _, want := range []string{"smol", "slow", "gemini-2.5-flash", "claude-opus-4-7", "[anthropic]", "default"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("popup entries missing %q: %q", want, joined)
+		}
 	}
-	if !strings.Contains(content, "slow") {
-		t.Errorf("expected slow role listed, got %q", content)
-	}
-	if !strings.Contains(content, "[anthropic]") {
-		t.Errorf("expected provider annotation for slow role, got %q", content)
+	// The active role is marked in its description.
+	for _, it := range mm.searchPopup.filtered {
+		if it.Text == "default" && !strings.Contains(it.Description, "active") {
+			t.Errorf("default role not marked active: %q", it.Description)
+		}
+		if it.Text == "smol" && strings.Contains(it.Description, "active") {
+			t.Errorf("inactive smol role marked active: %q", it.Description)
+		}
 	}
 }
 
@@ -158,6 +179,10 @@ func TestHandleSlashCommandModelShowsActiveRole(t *testing.T) {
 		cfg: Config{
 			ModelName:  "gemini-2.5-flash",
 			ActiveRole: "smol",
+			ModelCandidates: []SearchItem{
+				{Text: "default", Description: "role · claude-sonnet-4-6"},
+				{Text: "smol", Description: "role · gemini-2.5-flash"},
+			},
 			Roles: map[string]config.RoleConfig{
 				"default": {Model: "claude-sonnet-4-6"},
 				"smol":    {Model: "gemini-2.5-flash"},
@@ -168,9 +193,17 @@ func TestHandleSlashCommandModelShowsActiveRole(t *testing.T) {
 	newM, _ := m.handleSlashCommand("/model")
 	mm := newM.(*model)
 
-	content := mm.chatModel.Messages[0].content
-	if !strings.Contains(content, "(role: smol)") {
-		t.Errorf("expected active role indicator, got %q", content)
+	for _, it := range mm.searchPopup.filtered {
+		switch it.Text {
+		case "smol":
+			if !strings.Contains(it.Description, "active") {
+				t.Errorf("active role smol not marked: %q", it.Description)
+			}
+		case "default":
+			if strings.Contains(it.Description, "active") {
+				t.Errorf("inactive default role marked active: %q", it.Description)
+			}
+		}
 	}
 }
 
@@ -1803,12 +1836,22 @@ func TestHandleSkillLoadCommand_Empty(t *testing.T) {
 func TestHandleSlashCommand_Model(t *testing.T) {
 	m := &model{
 		chatModel: ChatModel{Messages: make([]message, 0)},
-		cfg:       Config{ModelName: "gpt-4o", ActiveRole: "default", Roles: map[string]config.RoleConfig{"default": {Model: "gpt-4o"}}},
+		cfg: Config{
+			ModelName:  "gpt-4o",
+			ActiveRole: "default",
+			ModelCandidates: []SearchItem{
+				{Text: "default", Description: "role · gpt-4o"},
+			},
+			Roles: map[string]config.RoleConfig{"default": {Model: "gpt-4o"}},
+		},
 	}
 	newM, _ := m.handleSlashCommand("/model")
 	mm := newM.(*model)
-	if !strings.Contains(mm.chatModel.Messages[0].content, "gpt-4o") {
-		t.Errorf("expected model name in output, got %q", mm.chatModel.Messages[0].content)
+	if mm.searchPopup == nil || mm.searchPopup.mode != searchModeModels {
+		t.Fatalf("/model did not open the models popup (popup = %+v)", mm.searchPopup)
+	}
+	if got := mm.searchPopup.filtered; len(got) != 1 || !strings.Contains(got[0].Description, "gpt-4o") {
+		t.Errorf("popup entries = %+v, want the gpt-4o role candidate", got)
 	}
 }
 

@@ -10,15 +10,12 @@ import (
 	"github.com/dimetron/pi-go/internal/subagent"
 )
 
-// handleAgentCommand handles /agent: no args lists the switchable agents with
-// the active one marked; an argument applies that agent — or "default" — to
-// the main session.
+// handleAgentCommand handles /agent <name>: applies that agent — or
+// "default" — to the main session. The argument-less popup is routed by
+// handleSlashCommand (see the note there); direct calls with no argument are
+// a no-op.
 func (m *model) handleAgentCommand(args []string) (tea.Model, tea.Cmd) {
 	if len(args) == 0 {
-		m.chatModel.Messages = append(m.chatModel.Messages, message{
-			role:    "assistant",
-			content: m.formatAgentList(),
-		})
 		return m, nil
 	}
 	name := strings.TrimSpace(args[0])
@@ -126,37 +123,49 @@ func nextAgentName(current string, names []string) string {
 	return names[0]
 }
 
-// formatAgentList renders the /agent listing: every switchable agent with a
-// one-line description, the active one marked.
-func (m *model) formatAgentList() string {
-	var b strings.Builder
-	b.WriteString("**Agents** — Shift+Tab cycles, `/agent <name>` switches\n\n")
-
-	marker := ""
-	if m.activeAgent == "" {
-		marker = " ←"
-	}
-	fmt.Fprintf(&b, "- **default**: built-in pi-go agent%s\n", marker)
-
-	desc := make(map[string]string, len(m.cfg.PrimaryAgents))
+// agentSearchItems builds the /agent popup list: the built-in default first,
+// then the primary agents alphabetically. Text stays a clean agent name — it
+// is executed as `/agent <name>` — so the active marker lives in the
+// description beside the agent's own description and model.
+func (m *model) agentSearchItems() []SearchItem {
+	cfgs := make(map[string]subagent.AgentConfig, len(m.cfg.PrimaryAgents))
 	for _, ac := range m.cfg.PrimaryAgents {
-		if ac.Description != "" {
-			desc[ac.Name] = ac.Description
-		}
+		cfgs[ac.Name] = ac
 	}
+
+	mark := func(name string) string {
+		if name == m.activeAgent || (name == "default" && m.activeAgent == "") {
+			return " — active"
+		}
+		return ""
+	}
+
+	items := make([]SearchItem, 0, len(m.cfg.PrimaryAgents)+1)
+	items = append(items, SearchItem{Text: "default", Description: "built-in pi-go agent" + mark("default")})
 	for _, name := range primaryAgentNames(m.cfg.PrimaryAgents) {
-		marker = ""
-		if name == m.activeAgent {
-			marker = " ←"
+		ac := cfgs[name]
+		desc := ac.Description
+		if desc == "" {
+			desc = "(no description)"
 		}
-		d := desc[name]
-		if d == "" {
-			d = "(no description)"
+		if model := agentDisplayModel(m.cfg, ac); model != "" {
+			desc += " · " + model
 		}
-		fmt.Fprintf(&b, "- **%s**: %s%s\n", name, d, marker)
+		items = append(items, SearchItem{Text: name, Description: desc + mark(name)})
 	}
-	if len(m.cfg.PrimaryAgents) == 0 {
-		b.WriteString("\nNo primary agents found — set `mode: primary` in an agent's frontmatter under `~/.pi-go/agents/`.\n")
+	return items
+}
+
+// agentDisplayModel names the model an agent runs on: its `model:`, or the
+// model behind its `role:`. Empty when neither resolves.
+func agentDisplayModel(cfg Config, ac subagent.AgentConfig) string {
+	if ac.Model != "" {
+		return ac.Model
 	}
-	return b.String()
+	if ac.Role != "" {
+		if rc, ok := cfg.Roles[ac.Role]; ok {
+			return rc.Model
+		}
+	}
+	return ""
 }

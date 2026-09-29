@@ -39,6 +39,21 @@ func (m *model) handleSlashCommand(input string) (tea.Model, tea.Cmd) {
 	}
 
 	if spec, ok := slashCommandByName[cmd]; ok {
+		// /model and /agent with no argument open their picker popups instead
+		// of printing a listing into the chat. Routed here rather than from
+		// inside the handlers: they are referenced from the slashCommandSpecs
+		// package variable, and a static reference back into newSearchPopup —
+		// which reaches that variable through the derived command tables —
+		// would close an initialization cycle.
+		if len(parts) == 1 {
+			switch cmd {
+			case "/model":
+				return m, m.openModelsPopup()
+			case "/agent":
+				m.newSearchPopup(searchModeAgents)
+				return m, nil
+			}
+		}
 		return spec.run(m, parts[1:])
 	}
 
@@ -476,51 +491,47 @@ func (m *model) handleAgentsCommand() {
 	})
 }
 
-// formatModelInfo returns a formatted string showing the current model and all configured roles.
-func (m *model) formatModelInfo() string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "Current model: **%s**", m.cfg.ModelName)
-	if m.cfg.ActiveRole != "" && m.cfg.ActiveRole != "default" {
-		fmt.Fprintf(&b, " (role: %s)", m.cfg.ActiveRole)
-	}
+// modelCandidatesMsg carries the background catalog refresh for an open
+// models popup. nil items mean "nothing new" (fetch failed, nothing
+// configured) and leave the popup's list alone.
+type modelCandidatesMsg struct{ items []SearchItem }
 
-	if len(m.cfg.Roles) > 0 {
-		b.WriteString("\n\n**Configured roles:**\n")
-		// Sort role names for stable output.
-		names := make([]string, 0, len(m.cfg.Roles))
-		for name := range m.cfg.Roles {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			rc := m.cfg.Roles[name]
-			// The active role is marked after the name, not before it: a "*"
-			// right after the "- " bullet opens emphasis as far as the
-			// markdown renderer is concerned, and the role name ends up on a
-			// line of its own under an empty bullet.
-			active := ""
-			if name == m.cfg.ActiveRole || (m.cfg.ActiveRole == "" && name == "default") {
-				active = " ←"
-			}
-			provInfo := ""
-			if rc.Provider != "" {
-				provInfo = fmt.Sprintf(" [%s]", rc.Provider)
-			}
-			fmt.Fprintf(&b, "- **%s**: `%s`%s%s\n", name, rc.Model, provInfo, active)
-		}
+// openModelsPopup opens the /model picker and kicks off the background
+// catalog refresh. The refresh runs only while the popup is open — its result
+// is dropped if the user has already moved on. A nil refresh source simply
+// skips the fetch; the popup shows the declared list on its own.
+func (m *model) openModelsPopup() tea.Cmd {
+	m.newSearchPopup(searchModeModels)
+	if m.cfg.ModelCandidatesRefresh == nil {
+		return nil
 	}
-	return b.String()
+	refresh, ctx := m.cfg.ModelCandidatesRefresh, m.ctx
+	return func() tea.Msg {
+		return modelCandidatesMsg{items: refresh(ctx)}
+	}
 }
 
-// handleModelCommand handles /model: show current model, switch model, or switch role.
-//   - /model           — show current model and configured roles
-//   - /model <name>    — switch to the named model (or role if name matches a role)
+// handleModelCandidates applies a refreshed candidate list to an open models
+// popup: entries are replaced, the current search query re-filtered, and the
+// visible window recomputed for the new count.
+func (m *model) handleModelCandidates(msg modelCandidatesMsg) (tea.Model, tea.Cmd) {
+	if len(msg.items) == 0 || m.searchPopup == nil || m.searchPopup.mode != searchModeModels {
+		return m, nil
+	}
+	sp := m.searchPopup
+	markActiveRole(msg.items, m.cfg.ActiveRole)
+	sp.entries = msg.items
+	sp.filterSearch()
+	m.refreshSearchPopupHeight()
+	return m, nil
+}
+
+// handleModelCommand handles /model <name>: switch to the named model (or
+// role if name matches a role). The argument-less popup is routed by
+// handleSlashCommand (see the note there); direct calls with no argument are
+// a no-op.
 func (m *model) handleModelCommand(args []string) (tea.Model, tea.Cmd) {
 	if len(args) == 0 {
-		m.chatModel.Messages = append(m.chatModel.Messages, message{
-			role:    "assistant",
-			content: m.formatModelInfo(),
-		})
 		return m, nil
 	}
 

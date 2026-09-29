@@ -1414,7 +1414,7 @@ func TestCplxAcceptSearchPopupSelection(t *testing.T) {
 func TestCplxHandleSearchPopupKey(t *testing.T) {
 	t.Run("nil popup is not handled", func(t *testing.T) {
 		m := cplxModel(t)
-		if m.handleSearchPopupKey(tea.Key{Code: tea.KeyUp}) {
+		if _, handled := m.handleSearchPopupKey(tea.Key{Code: tea.KeyUp}); handled {
 			t.Error("with no popup the key must not be consumed")
 		}
 	})
@@ -1422,7 +1422,7 @@ func TestCplxHandleSearchPopupKey(t *testing.T) {
 	t.Run("esc closes", func(t *testing.T) {
 		m := cplxModel(t)
 		m.searchPopup = cplxPopup(searchModeCommands, 3, 3)
-		if !m.handleSearchPopupKey(tea.Key{Code: tea.KeyEsc}) {
+		if _, handled := m.handleSearchPopupKey(tea.Key{Code: tea.KeyEsc}); !handled {
 			t.Error("esc must be consumed")
 		}
 		if m.searchPopup != nil {
@@ -1451,7 +1451,7 @@ func TestCplxHandleSearchPopupKey(t *testing.T) {
 	t.Run("printable runes filter", func(t *testing.T) {
 		m := cplxModel(t)
 		m.searchPopup = cplxPopup(searchModeCommands, 3, 3)
-		if !m.handleSearchPopupKey(tea.Key{Code: 'x', Text: "x"}) {
+		if _, handled := m.handleSearchPopupKey(tea.Key{Code: 'x', Text: "x"}); !handled {
 			t.Error("a printable rune must be consumed")
 		}
 		if m.searchPopup.search != "x" {
@@ -1462,13 +1462,13 @@ func TestCplxHandleSearchPopupKey(t *testing.T) {
 	t.Run("modified and multi-rune keys fall through", func(t *testing.T) {
 		m := cplxModel(t)
 		m.searchPopup = cplxPopup(searchModeCommands, 3, 3)
-		if m.handleSearchPopupKey(tea.Key{Code: 'x', Text: "x", Mod: tea.ModCtrl}) {
+		if _, handled := m.handleSearchPopupKey(tea.Key{Code: 'x', Text: "x", Mod: tea.ModCtrl}); handled {
 			t.Error("ctrl+x must not be swallowed as search text")
 		}
-		if m.handleSearchPopupKey(tea.Key{Code: 'x', Text: "xy"}) {
+		if _, handled := m.handleSearchPopupKey(tea.Key{Code: 'x', Text: "xy"}); handled {
 			t.Error("multi-rune text must not be swallowed as search text")
 		}
-		if m.handleSearchPopupKey(tea.Key{Code: tea.KeyF1}) {
+		if _, handled := m.handleSearchPopupKey(tea.Key{Code: tea.KeyF1}); handled {
 			t.Error("an unhandled key must not be consumed")
 		}
 	})
@@ -1481,7 +1481,7 @@ func TestCplxHandleSearchPopupKey(t *testing.T) {
 		} {
 			m := cplxModel(t)
 			m.searchPopup = cplxPopup(searchModeCommands, 3, 3)
-			if !m.handleSearchPopupKey(key) {
+			if _, handled := m.handleSearchPopupKey(key); !handled {
 				t.Errorf("key %v must be consumed", key.Code)
 			}
 		}

@@ -158,9 +158,10 @@ func TestSlashCommand_Clear(t *testing.T) {
 
 func TestSlashCommand_Model(t *testing.T) {
 	m := newTestModel(t)
+	m.cfg.ModelCandidates = []SearchItem{{Text: "test-model", Description: "current"}}
 	m.handleSlashCommand("/model")
-	if len(m.chatModel.Messages) == 0 {
-		t.Fatal("expected model info message")
+	if m.searchPopup == nil || m.searchPopup.mode != searchModeModels {
+		t.Fatal("expected the models popup")
 	}
 }
 

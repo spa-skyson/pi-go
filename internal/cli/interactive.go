@@ -199,6 +199,13 @@ func runInteractive(
 		ModelSwitcher: func(switchCtx context.Context, modelName string) (adkmodel.LLM, string, string, error) {
 			return buildSwitchedLLM(switchCtx, cfg, tokenTracker, modelName, headerSessionID)
 		},
+		// ModelCandidates seeds the /model popup; the refresh fills in each
+		// named provider's catalog (cache first, then a live fetch) while the
+		// popup is open.
+		ModelCandidates: modelCandidates(cfg),
+		ModelCandidatesRefresh: func(refreshCtx context.Context) []tui.SearchItem {
+			return refreshModelCandidates(refreshCtx, cfg)
+		},
 		// AgentSwitcher fires only after deferred init has filled res (the
 		// InitEvent send is the happens-before edge): it rebuilds the
 		// session's callback chains from the shared inputs and builds the
