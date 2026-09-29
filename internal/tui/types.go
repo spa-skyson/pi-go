@@ -123,6 +123,11 @@ type Config struct {
 	// statuses inferred from the cards' results.
 	SubagentStatuses func() []subagent.AgentStatus
 
+	// SteerSubagent sends text to a running subagent as a follow-up message
+	// (the monitor's `s` key). The cli closes over Orchestrator.Steer; nil
+	// disables steering, and the key says so via a notice.
+	SteerSubagent func(agentID, text string) error
+
 	// PrimaryAgents lists the agents the main session can switch into
 	// (frontmatter `mode: primary` or `all`), sorted by name. Filled by
 	// deferred init; empty until then and when no agent declares a mode.

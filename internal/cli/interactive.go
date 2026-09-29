@@ -232,6 +232,15 @@ func runInteractive(
 			}
 			return res.orch.List()
 		},
+		// SteerSubagent sends a follow-up message to a running subagent (the
+		// monitor's `s` key). Same deferred-init closure as SubagentStatuses:
+		// the orchestrator only exists from the InitEvent onward.
+		SteerSubagent: func(agentID, text string) error {
+			if res.orch == nil {
+				return fmt.Errorf("orchestrator is not ready yet")
+			}
+			return res.orch.Steer(agentID, text)
+		},
 		// AgentSwitcher fires only after deferred init has filled res (the
 		// InitEvent send is the happens-before edge): it rebuilds the
 		// session's callback chains from the shared inputs and builds the

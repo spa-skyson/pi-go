@@ -192,6 +192,11 @@ type model struct {
 	// full agentEvents; nil when closed. See subagent_monitor.go.
 	subagentViewer *subagentViewerState
 
+	// steerInput is the monitor's mini-input for sending a follow-up message
+	// to a running subagent (`s` on a running row); nil when closed. See
+	// subagent_monitor.go.
+	steerInput *subagentSteerState
+
 	// Legacy selection index for slash commands (used in tests).
 	slashCommandSelected int
 
@@ -474,6 +479,10 @@ func (m *model) newSearchPopup(mode searchMode) {
 		availableRows--
 	}
 	popupHeight := searchPopupListHeight(len(items), availableRows)
+
+	// A fresh popup never inherits a steer input from a previous monitor
+	// session — an orphaned mini-input would own keys with nothing on screen.
+	m.steerInput = nil
 
 	m.searchPopup = &searchPopupState{
 		mode:      mode,
@@ -1386,6 +1395,12 @@ func (m *model) handleBranchPopupKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 func (m *model) handleInterruptKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 	switch {
 	case key.Code == tea.KeyEsc:
+		if m.steerInput != nil {
+			// The monitor's steer mini-input: Esc backs out of the input
+			// first, a second Esc closes the monitor itself.
+			m.steerInput = nil
+			return m, nil, true
+		}
 		if m.searchPopup != nil {
 			m.searchPopup = nil
 			return m, nil, true
@@ -1571,6 +1586,17 @@ func (m *model) handleSearchPopupKey(key tea.Key) (tea.Cmd, bool) {
 	}
 
 	sp := m.searchPopup
+
+	// The steer mini-input (subagent monitor) owns every key while open, and
+	// `s` on a running row opens it before the key reaches the filter below.
+	if m.steerInput != nil {
+		return m.handleSubagentSteerKey(key), true
+	}
+	if sp.mode == searchModeSubagents && key.Mod == 0 && key.Text == "s" {
+		m.tryOpenSubagentSteer()
+		// Consumed either way: a refusal is a notice, not a filter edit.
+		return nil, true
+	}
 
 	switch key.Code {
 	case tea.KeyUp:
@@ -2764,6 +2790,15 @@ func (m *model) renderSearchPopup(width int) string {
 	}
 
 	writeSearchPopupItems(&b, sp, st, width)
+
+	// The steer mini-input renders below the list; the cursor is a plain "▏"
+	// — the input is append-only with backspace, no real caret.
+	if m.steerInput != nil {
+		line := fmt.Sprintf("  Steer %s: %s▏  (Enter send · Esc cancel)",
+			agentTitleFit(m.steerInput.label, 32), m.steerInput.text)
+		b.WriteString("\n")
+		b.WriteString(st.searchStyle.Width(width).Render(clipRunes(line, width)))
+	}
 
 	return st.popupStyle.Render(b.String())
 }

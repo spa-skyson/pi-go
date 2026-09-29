@@ -26,6 +26,9 @@ import (
 // tells the reader nothing about which limit was hit or how to raise it.
 var ErrSubagentTimeout = errors.New("subagent timeout")
 
+// ErrProcessDone marks a Steer on a subagent process that has already exited.
+var ErrProcessDone = errors.New("subagent process already done")
+
 // maxStderrCapture bounds the stderr retained for error reporting. The whole
 // point of draining stderr concurrently is to unblock a chatty child, so the
 // buffer must not become the new place the memory goes.
@@ -96,6 +99,10 @@ type Process struct {
 	events chan Event
 	done   chan struct{}
 	cancel context.CancelFunc
+	// stdin is the steer channel to a json-mode child: Process.Steer writes
+	// one line per follow-up message. Set only by spawner.Spawn — ACP and
+	// codex adapters leave it nil, and steering those is not supported.
+	stdin  io.WriteCloser
 	result string
 	err    error
 	mu     sync.Mutex
@@ -105,6 +112,29 @@ type Process struct {
 // The channel is closed when the process exits.
 func (p *Process) Events() <-chan Event {
 	return p.events
+}
+
+// Steer sends text to the child as a follow-up message. The child (pi --mode
+// json) queues it and runs it as a full extra turn in the same session once
+// its current turn finishes; see runJSON in internal/cli. Fails with
+// ErrProcessDone once the child has exited, and for agents whose runner has
+// no stdin channel (ACP, codex).
+func (p *Process) Steer(text string) error {
+	select {
+	case <-p.done:
+		return fmt.Errorf("steer subagent: %w", ErrProcessDone)
+	default:
+	}
+	p.mu.Lock()
+	w := p.stdin
+	p.mu.Unlock()
+	if w == nil {
+		return fmt.Errorf("steer subagent: no stdin channel (agent runner does not support steering)")
+	}
+	if _, err := io.WriteString(w, text+"\n"); err != nil {
+		return fmt.Errorf("steer subagent: %w", err)
+	}
+	return nil
 }
 
 // Wait blocks until the process exits and returns the accumulated result or an error.
@@ -186,23 +216,30 @@ func (s *Spawner) buildCommand(procCtx context.Context, opts SpawnOpts) *exec.Cm
 	return cmd
 }
 
-// startChildProcess opens both output pipes and starts cmd. The pipes must be
-// created before Start, so a failure at any of the three steps aborts the spawn.
-func startChildProcess(cmd *exec.Cmd) (stdout, stderr io.ReadCloser, err error) {
+// startChildProcess opens all three pipes and starts cmd. The pipes must be
+// created before Start, so a failure at any of the four steps aborts the spawn.
+// The stdin write end is the steer channel — the child reads it as follow-up
+// messages, and exec's Wait closes it after the process exits.
+func startChildProcess(cmd *exec.Cmd) (stdin io.WriteCloser, stdout, stderr io.ReadCloser, err error) {
+	stdin, err = cmd.StdinPipe()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("creating stdin pipe: %w", err)
+	}
+
 	stdout, err = cmd.StdoutPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating stdout pipe: %w", err)
+		return nil, nil, nil, fmt.Errorf("creating stdout pipe: %w", err)
 	}
 
 	stderr, err = cmd.StderrPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating stderr pipe: %w", err)
+		return nil, nil, nil, fmt.Errorf("creating stderr pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		return nil, nil, fmt.Errorf("starting pi process: %w", err)
+		return nil, nil, nil, fmt.Errorf("starting pi process: %w", err)
 	}
-	return stdout, stderr, nil
+	return stdin, stdout, stderr, nil
 }
 
 // stderrCollector drains a child's stderr into a bounded buffer, concurrently
@@ -276,7 +313,7 @@ func (s *Spawner) Spawn(ctx context.Context, opts SpawnOpts) (*Process, error) {
 
 	cmd := s.buildCommand(procCtx, opts)
 
-	stdout, stderr, err := startChildProcess(cmd)
+	stdin, stdout, stderr, err := startChildProcess(cmd)
 	if err != nil {
 		cancel()
 		return nil, err
@@ -287,6 +324,7 @@ func (s *Spawner) Spawn(ctx context.Context, opts SpawnOpts) (*Process, error) {
 		events: make(chan Event, 64),
 		done:   make(chan struct{}),
 		cancel: cancel,
+		stdin:  stdin,
 	}
 
 	stderrC := startStderrCollector(stderr)

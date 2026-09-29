@@ -523,6 +523,11 @@ func agentEventLines(ev agentEv, st agentEventStyles, width int) []string {
 		// content), so without its own branch it rendered as a grey
 		// "error: ..." line indistinguishable from lifecycle bookkeeping.
 		line = st.failure.Render("✗ " + truncateRunes(collapseToSingleLine(ev.content), 120))
+	case "steer_queued":
+		// The parent sent a follow-up message while the agent ran. The text
+		// itself never reaches the stream, so one fixed line is the whole
+		// event — the card equivalent of the monitor's "steer queued" notice.
+		line = st.lifecycle.Render("⏎ steer queued")
 	default:
 		content := collapseToSingleLine(ev.content)
 		if content == "" {

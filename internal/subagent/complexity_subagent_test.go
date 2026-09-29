@@ -800,11 +800,11 @@ func TestStartChildProcess(t *testing.T) {
 	// /bin/echo does not exist on Windows; the runners do carry a POSIX shell.
 	sh := testenv.RequireShell(t)
 	cmd := exec.Command(sh, "-c", "echo hello")
-	stdout, stderr, err := startChildProcess(cmd)
+	stdin, stdout, stderr, err := startChildProcess(cmd)
 	if err != nil {
 		t.Fatalf("startChildProcess: %v", err)
 	}
-	if stdout == nil || stderr == nil {
+	if stdin == nil || stdout == nil || stderr == nil {
 		t.Fatal("nil pipe returned on success")
 	}
 	if _, err := stdout.Read(make([]byte, 1)); err != nil {
@@ -815,7 +815,7 @@ func TestStartChildProcess(t *testing.T) {
 
 func TestStartChildProcess_StartFailure(t *testing.T) {
 	cmd := exec.Command(filepath.Join(t.TempDir(), "no-such-binary"))
-	_, _, err := startChildProcess(cmd)
+	_, _, _, err := startChildProcess(cmd)
 	if err == nil {
 		t.Fatal("expected an error starting a missing binary")
 	}

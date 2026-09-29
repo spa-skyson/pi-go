@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"iter"
 	"log/slog"
 	"maps"
@@ -1352,7 +1354,7 @@ func dispatchMode(ctx context.Context, mode, prompt string, ag *agent.Agent, ses
 		return nil
 	}
 	if mode == "json" {
-		return runJSON(ctx, ag, sessionID, prompt, sessionLog)
+		return runJSON(ctx, ag, sessionID, prompt, os.Stdin, sessionLog)
 	}
 	return runPrint(ctx, ag, sessionID, prompt, sessionLog, providerName)
 }
@@ -2087,11 +2089,21 @@ type jsonEvent struct {
 // runJSON runs the agent and emits JSONL events to stdout.
 // Events: message_start (once), text_delta (one per sentence, or per text chunk
 // under --json-deltas full), tool_call, tool_result, message_end (once).
-func runJSON(ctx context.Context, ag *agent.Agent, sessionID, prompt string, log *logger.Logger) error {
+//
+// Steer input: lines read from stdin are follow-up messages for the same
+// conversation. The protocol is deliberately minimal — one line of UTF-8 text
+// per steer, no JSON envelope; empty lines are ignored. A steer received while
+// a turn runs (or between turns) queues a full extra turn on the same session
+// once the current turn finishes: message_start through message_end, exactly
+// like the first one. This is the child half of the parent's subagent-steer
+// channel (see subagent.Process.Steer).
+func runJSON(ctx context.Context, ag *agent.Agent, sessionID, prompt string, stdin io.Reader, log *logger.Logger) error {
 	log.UserMessage(prompt)
 	// Auto-set the session title for JSON mode too. The first jsonEvent
 	// carries session_id, so the title is just metadata to keep meta.json
 	// in sync with the user prompt — consumers can use it to label sessions.
+	// Steer turns must not retitle the session, so this stays on the first
+	// prompt only.
 	if title := derivePrintTitle(prompt); title != "" {
 		_ = ag.SetSessionTitle(sessionID, title)
 	}
@@ -2100,14 +2112,78 @@ func runJSON(ctx context.Context, ag *agent.Agent, sessionID, prompt string, log
 		return err
 	}
 	em := newJSONEmitter(json.NewEncoder(os.Stdout), log, raw)
+	retryCfg := agent.DefaultRetryConfig()
+	steers := startJSONSteer(ctx, stdin, em)
+
+	queue := []string{prompt}
+	for len(queue) > 0 {
+		msg := queue[0]
+		queue = queue[1:]
+		if err := runJSONTurn(ctx, ag, sessionID, msg, em, retryCfg, log); err != nil {
+			return err
+		}
+		// Drain steers that arrived while the turn ran; each one queues the
+		// next turn. Non-blocking: when nothing is queued the process is done
+		// — stdin is never waited on, so EOF without steers behaves exactly
+		// as before.
+		for {
+			select {
+			case s, ok := <-steers:
+				if ok {
+					queue = append(queue, s)
+					continue
+				}
+				steers = nil // EOF: no further steer can arrive
+			default:
+			}
+			break
+		}
+	}
+	return nil
+}
+
+// startJSONSteer scans stdin lines as steer messages, announcing each with a
+// steer_queued event. It never blocks the run: lines land in a bounded channel
+// the turn loop drains between turns, and context cancellation stops the
+// scanner. A nil reader yields an immediately-closed channel.
+func startJSONSteer(ctx context.Context, r io.Reader, em *jsonEmitter) <-chan string {
+	ch := make(chan string, 16)
+	if r == nil {
+		close(ch)
+		return ch
+	}
+	go func() {
+		defer close(ch)
+		sc := bufio.NewScanner(r)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			em.emit(jsonEvent{Type: "steer_queued"})
+			select {
+			case ch <- line:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return ch
+}
+
+// runJSONTurn streams one turn — one RunStreaming pass — and emits its full
+// event cycle. Each turn is self-contained (own StreamDedup, own message_start
+// and message_end), so a steer turn reads exactly like the first one.
+func runJSONTurn(ctx context.Context, ag *agent.Agent, sessionID, msg string, em *jsonEmitter, retryCfg agent.RetryConfig, log *logger.Logger) error {
+	log.UserMessage(msg)
 	started := false
 	// SSE delivers the reply as deltas and then once more as an aggregate;
-	// without this every text_delta is emitted twice.
+	// without this every text_delta is emitted twice. One dedup per turn: it
+	// tracks one event stream, and each turn is its own stream.
 	var dedup agent.StreamDedup
 
-	retryCfg := agent.DefaultRetryConfig()
 	for ev, err := range agent.WithRetryContext(ctx, retryCfg, func() iter.Seq2[*session.Event, error] {
-		return ag.RunStreaming(ctx, sessionID, prompt)
+		return ag.RunStreaming(ctx, sessionID, msg)
 	}) {
 		if err != nil {
 			if ctx.Err() != nil {
