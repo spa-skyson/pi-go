@@ -138,7 +138,21 @@ if providerName != "" { info.Provider = providerName }
 поверх `tools.CoreTools` (`internal/tools/registry.go:92`) + MCP-наборов.
 
 ### 6. `temperature`, `reasoningEffort`, `steps`
-**Статус:** не начато
+**Статус:** сделано
+
+Frontmatter-ключи → `SpawnOpts` → флаги `--temperature`/`--thinking`/`--steps`
+дочернего процесса. `LLMOptions.Temperature *float64` применяется на
+OpenAI-совместимых (chat + responses) и Anthropic-путях; guard: Anthropic
+отвергает temperature ≠ 1 при включённом thinking — температура не ставится,
+если thinking активен. `reasoningEffort` нормализуется (minimal→none) и бьёт
+конфигурационный `thinkingLevel` (флаг `--thinking` на самом `pi` — тоже).
+`steps` — `agent.NewStepLimitCallback` в after-tool цепочке (до
+`ComposeAfterToolChain`): (N+1)-й вызов инструмента прерывает цикл ошибкой
+`steps limit N reached`. Мусорные значения во frontmatter — warning и дефолт.
+
+Проверено живым прогоном: агент с `steps: 2` выполнил два инструментальных
+вызова, третий заблокирован «steps limit 2 reached». Temperature покрыта
+wire-тестами (применяется при заданном, отсутствует при nil).
 
 Сейчас: `temperature` в коде отсутствует полностью. `reasoningEffort` частично
 покрыт `thinkingLevel` (`provider.LLMOptions.ThinkingLevel`), но на уровне
