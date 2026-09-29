@@ -268,6 +268,13 @@ temperature/reasoningEffort/steps и permission-правила (мердж по�
 config.json стартует интерактив внутри агента (мягкий fallback при ошибке).
 Primary-only агенты скрыты из списка субагентов. Headless не менялся.
 
+Попапы (issue #4): `/model` и `/agent` без аргументов открывают живой
+search-попап в режимах models/agents: модели — declared из
+`providers.<name>.models` + роли, с фоновой догрузкой полных каталогов
+named-провайдеров (кэш→fetch, ошибки тихо); агенты — default + primary,
+активный помечен. Enter применяет через существующие обработчики
+(override/персист — как у `/model <name>`).
+
 Follow-ups (issue #2): `/model` при активном агенте меняет модель этого
 агента на сессию (override в памяти, без персиста; default-сессия — как
 раньше); Shift+Tab тихий (notice только при ошибках, агент+модель видны
