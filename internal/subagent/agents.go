@@ -27,9 +27,15 @@ const (
 
 // AgentConfig represents a parsed agent definition from markdown.
 type AgentConfig struct {
-	Name        string   // Agent identifier (e.g., "explore", "plan")
-	Description string   // One-line description from frontmatter
-	Role        string   // Config role name for model resolution (e.g., "smol", "plan", "slow")
+	Name        string // Agent identifier (e.g., "explore", "plan")
+	Description string // One-line description from frontmatter
+	Role        string // Config role name for model resolution (e.g., "smol", "plan", "slow")
+	// Model names the model this agent runs on, set via frontmatter `model:`.
+	// It overrides `role:` and may carry a provider prefix — a built-in one
+	// ("openai/gpt-5.6") or a declared provider's name from the config.json
+	// `providers` section ("corp-codex/gpt-5.6-sol"). Empty means `role:`
+	// decides.
+	Model       string
 	Worktree    bool     // Whether this agent runs in an isolated git worktree
 	Timeout     int      // Absolute timeout in milliseconds (0 = use default)
 	Instruction string   // System prompt (markdown body)
@@ -56,10 +62,15 @@ type AgentDiscoveryResult struct {
 // name: agent-name
 // description: One-line description
 // role: smol
+// model: corp-codex/gpt-5.6-sol
 // worktree: false
 // tools: read, write, edit
 // ---
 // Markdown instruction body...
+//
+// `model:` overrides `role:` when both are set; it may name a built-in
+// provider's model or a declared one ("provider/model", see the `providers`
+// section of config.json).
 func ParseAgentFile(path string) (AgentConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -132,6 +143,8 @@ func applyAgentFrontmatterKey(cfg *AgentConfig, key, value string) {
 		cfg.Description = value
 	case "role":
 		cfg.Role = value
+	case "model":
+		cfg.Model = strings.TrimSpace(value)
 	case "worktree":
 		cfg.Worktree = strings.ToLower(value) == "true"
 	case "timeout":

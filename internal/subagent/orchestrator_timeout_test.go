@@ -162,7 +162,9 @@ func TestSpawnWithInput_CarriesTimeout(t *testing.T) {
 	}
 
 	gotOpts := captureSpawnOpts(t)
-	orch := NewOrchestrator(testConfig(), "", nil)
+	// SpawnWithInput resolves the agent through the orchestrator's registry,
+	// so "claude" must be registered even though it is a bundled name.
+	orch := NewOrchestrator(testConfig(), "", []AgentConfig{{Name: "claude"}})
 	t.Cleanup(orch.Shutdown)
 
 	events, _, err := orch.SpawnWithInput(context.Background(), in)
