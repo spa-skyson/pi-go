@@ -23,6 +23,7 @@ import (
 	"github.com/dimetron/pi-go/internal/permission"
 	"github.com/dimetron/pi-go/internal/sop"
 	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/dimetron/pi-go/internal/tools"
 )
 
 // model is the Bubble Tea model for the interactive TUI.
@@ -208,6 +209,10 @@ type model struct {
 	// is suppressed briefly after resize to let terminal response sequences
 	// (OSC color replies, DECRPM, CPR) drain without leaking into the input.
 	resizeAt time.Time
+
+	// todoState is the latest todo/plan state from todo_write, or nil when
+	// no plan has been set or todo tracking is disabled.
+	todoState *tools.TodoState
 }
 
 // branchPopupState manages the git branch list popup.
@@ -333,6 +338,9 @@ const (
 	// opens the fullscreen stream viewer on Enter. Deliberately not
 	// searchModeAgents — that popup selects the session's primary agent.
 	searchModeSubagents searchMode = "subagents"
+	// searchModeTodos shows the current todo/plan list. View-only: Enter
+	// does nothing; Esc closes it.
+	searchModeTodos searchMode = "todos"
 )
 
 // SearchItem represents an item in the search popup (command or history entry).
@@ -438,6 +446,24 @@ func (m *model) newSearchPopup(mode searchMode) {
 		// The monitor always opens, even with nothing to show: the user
 		// asked for it explicitly, and the empty state says why it is empty
 		// better than a silent refusal would.
+
+	case searchModeTodos:
+		if m.todoState == nil || len(m.todoState.Items) == 0 {
+			items = []SearchItem{{Text: "No plan set. Use todo_write to create one."}}
+		} else {
+			items = make([]SearchItem, len(m.todoState.Items))
+			for i, it := range m.todoState.Items {
+				prefix := "[ ]"
+				switch it.Status {
+				case "in_progress":
+					prefix = "[~]"
+				case "completed":
+					prefix = "[x]"
+				}
+				items[i] = SearchItem{Text: prefix + " " + it.Content}
+			}
+		}
+
 	}
 
 	availableRows := m.messageViewportHeight()
@@ -680,6 +706,9 @@ func (m *model) Init() tea.Cmd {
 		if m.cfg.ApprovalCh != nil {
 			cmds = append(cmds, waitForApproval(m.cfg.ApprovalCh))
 		}
+		if m.cfg.TodoCh != nil {
+			cmds = append(cmds, waitForTodoUpdate(m.cfg.TodoCh))
+		}
 		return tea.Batch(cmds...)
 	}
 
@@ -694,6 +723,9 @@ func (m *model) Init() tea.Cmd {
 	}
 	if m.cfg.ApprovalCh != nil {
 		cmds = append(cmds, waitForApproval(m.cfg.ApprovalCh))
+	}
+	if m.cfg.TodoCh != nil {
+		cmds = append(cmds, waitForTodoUpdate(m.cfg.TodoCh))
 	}
 	cmds = append(cmds, memoryTickCmd(m.cwd()), requestBg)
 	return tea.Batch(cmds...)
@@ -957,6 +989,9 @@ func (m *model) updateAgentStream(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		// was the notice that vanished, never the repaint that failed.
 		m.chatModel.AppendNotice(msg.text)
 		return m, waitForSystemNotice(m.cfg.SystemNoticeCh), true
+	case todoUpdateMsg:
+		m.todoState = &msg.state
+		return m, waitForTodoUpdate(m.cfg.TodoCh), true
 	case agentDoneMsg:
 		model, cmd := m.handleAgentDone(msg)
 		return model, cmd, true
@@ -1654,6 +1689,8 @@ func (m *model) acceptSearchPopupSelection() tea.Cmd {
 		if item.ID != "" && m.agentCardByID(item.ID) != nil {
 			m.subagentViewer = &subagentViewerState{agentID: item.ID}
 		}
+	case searchModeTodos:
+		// View-only: Enter does nothing. Esc closes the popup.
 	}
 	return nil
 }
@@ -1958,6 +1995,7 @@ func (m *model) sidebarRenderInput(sidebarWidth, panelRows int) SidebarRenderInp
 		Artifacts:     m.artifactList(),
 		Palette:       m.palette,
 		BgRunning:     m.bgRunning,
+		TodoState:     m.todoState,
 	}
 	if m.run != nil && m.run.phase != "" {
 		in.RunChecklist = m.run.checklist
@@ -2777,6 +2815,10 @@ func (m *model) searchPopupStyles(mode searchMode, width int) searchPopupStyleSe
 		accent = m.palette.Blue // blue for the subagent monitor
 		st.itemStyle = st.itemStyle.Foreground(m.palette.Text)
 		st.header = "Subagents"
+	case searchModeTodos:
+		accent = m.palette.Green // green for todos
+		st.itemStyle = st.itemStyle.Foreground(m.palette.Text)
+		st.header = "Todos"
 	default:
 		return st
 	}

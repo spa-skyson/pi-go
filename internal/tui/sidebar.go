@@ -18,6 +18,7 @@ import (
 	"github.com/dimetron/pi-go/internal/palace"
 	"github.com/dimetron/pi-go/internal/sop"
 	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/dimetron/pi-go/internal/tools"
 )
 
 // SidebarWidth is the fixed width of the right sidebar.
@@ -83,6 +84,9 @@ type SidebarRenderInput struct {
 	Artifacts      []ArtifactEntry          // artifacts section; nil/empty = hidden
 	Palette        Palette                  // resolved theme palette; zero = dark default
 	BgRunning      int                      // number of running background subagents, shown next to agent name
+	// TodoState is the latest todo/plan state, or nil. When set, the sidebar
+	// shows a compact indicator in the Model section.
+	TodoState *tools.TodoState
 }
 
 // A2AAgentEntry is one row in the A2A Agents sidebar section.
@@ -383,6 +387,14 @@ func sidebarModelLines(in SidebarRenderInput, innerW int, st sidebarStyles) []st
 			line += " ⧗ bg:" + fmt.Sprint(in.BgRunning)
 		}
 		lines = append(lines, st.text.
+			Render("  "+truncateLabel(line, innerW)))
+	}
+	if in.TodoState != nil && in.TodoState.Total > 0 {
+		line := fmt.Sprintf("☑ %d/%d", in.TodoState.Done, in.TodoState.Total)
+		if in.TodoState.InProgress != "" {
+			line += " · " + truncateLabel(in.TodoState.InProgress, max(innerW-10, 6))
+		}
+		lines = append(lines, st.green.
 			Render("  "+truncateLabel(line, innerW)))
 	}
 	return append(lines, "")

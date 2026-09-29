@@ -10,6 +10,7 @@ import (
 	"github.com/dimetron/pi-go/internal/permission"
 	pisession "github.com/dimetron/pi-go/internal/session"
 	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/dimetron/pi-go/internal/tools"
 
 	llmmodel "google.golang.org/adk/v2/model"
 	adktool "google.golang.org/adk/v2/tool"
@@ -90,6 +91,11 @@ type Config struct {
 	MCPServers []extension.MCPServerConfig
 	// A2A holds the configured A2A agent endpoints, shown in the sidebar.
 	A2A *config.A2AConfig
+
+	// TodoCh receives todo/plan state updates after every todo_write call.
+	// Buffered, non-blocking send; the TUI keeps the latest state. Nil = no
+	// todo tracking.
+	TodoCh <-chan tools.TodoState
 
 	// ModelSwitcher creates a new LLM instance for the given model name,
 	// updates the token tracker's context window size, and returns the

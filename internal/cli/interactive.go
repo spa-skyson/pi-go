@@ -155,6 +155,20 @@ func runInteractive(
 	// erased a message written then.
 	config.NotifyReroutedLLMS(cfg)
 
+	// Todo updates are sent from the todo_write tool to the TUI via a
+	// buffered channel. Non-blocking send; the TUI keeps the latest state.
+	todoCh := make(chan tools.TodoState, 1)
+
+	// The todo tools need the session ID at CoreTools build time, which runs
+	// in deferred init's first phase — before resolveDeferredSession creates
+	// the session. A fresh run therefore gets a pre-generated ID here (the
+	// same generator FileService uses internally), so the session, its LLM
+	// headers and todos.json all name the same conversation. A --session or
+	// --continue ID is already final by this point and is kept as-is.
+	if headerSessionID == "" {
+		headerSessionID = pisession.GenerateSessionID()
+	}
+
 	// A user is present and a browser is reachable, so an MCP server that
 	// answers 401 can be re-authorized interactively. Headless modes leave
 	// this off and skip the server instead of blocking on an approval nobody
@@ -177,7 +191,7 @@ func runInteractive(
 	go func() {
 		defer close(initDone)
 		defer close(initCh)
-		deferredInit(initCtx, cfg, llm, info.Provider, info.Model, info.BaseURL, tokenTracker, cwd, sandboxRoot, worktreeDir, headerSessionID, initCh, noticeCh, approvalCh, &res)
+		deferredInit(initCtx, cfg, llm, info.Provider, info.Model, info.BaseURL, tokenTracker, cwd, sandboxRoot, worktreeDir, headerSessionID, initCh, noticeCh, approvalCh, todoCh, &res)
 	}()
 
 	tuiErr := tui.Run(ctx, tui.Config{
@@ -196,6 +210,7 @@ func runInteractive(
 		DeferredInit:   initCh,
 		SystemNoticeCh: noticeCh,
 		ApprovalCh:     approvalCh,
+		TodoCh:         todoCh,
 		ModelSwitcher: func(switchCtx context.Context, modelName string) (adkmodel.LLM, string, string, error) {
 			return buildSwitchedLLM(switchCtx, cfg, tokenTracker, modelName, headerSessionID)
 		},
@@ -257,6 +272,7 @@ func deferredInit(
 	ch chan<- tui.InitEvent,
 	noticeCh chan string,
 	approvalCh chan permission.ApprovalRequest,
+	todoCh chan tools.TodoState,
 	res *initResources,
 ) {
 	initTotal := deferredInitTotal(cfg)
@@ -270,7 +286,7 @@ func deferredInit(
 	// --- Phase 1: Core tools (fast, needed by everything) ---
 	send("tools", false)
 
-	coreTools, err := deferredInitCoreTools(sandboxRoot, worktreeDir, res)
+	coreTools, err := deferredInitCoreTools(sandboxRoot, worktreeDir, headerSessionID, todoCh, res)
 	if err != nil {
 		fail(err)
 		return
@@ -539,7 +555,13 @@ func deferredInit(
 // deferredInitCoreTools builds the sandbox, the bash supervisor and the core
 // tool set. Both the sandbox and the supervisor are recorded on res as soon as
 // they exist, so a later failure here still leaves them for cleanup to close.
-func deferredInitCoreTools(sandboxRoot, worktreeDir string, res *initResources) ([]adktool.Tool, error) {
+//
+// headerSessionID registers the todo tools (todo_write/todo_read); todoCh
+// receives the aggregated state after each todo_write so the sidebar and the
+// /todos popup stay live. The send is non-blocking — a state update dropped
+// while the TUI is busy is self-correcting, because the next todo_write
+// carries the full list again.
+func deferredInitCoreTools(sandboxRoot, worktreeDir, headerSessionID string, todoCh chan tools.TodoState, res *initResources) ([]adktool.Tool, error) {
 	sandbox, err := tools.NewSandbox(sandboxRoot, worktreeDir)
 	if err != nil {
 		return nil, fmt.Errorf("creating sandbox: %w", err)
@@ -557,7 +579,16 @@ func deferredInitCoreTools(sandboxRoot, worktreeDir string, res *initResources) 
 	bashSup := tools.NewBashSupervisor()
 	res.bashSup = bashSup
 
-	coreTools, err := tools.CoreTools(sandbox, coreToolOptions(bashSup)...)
+	var todoNotifier func(tools.TodoState)
+	if todoCh != nil {
+		todoNotifier = func(s tools.TodoState) {
+			select {
+			case todoCh <- s:
+			default:
+			}
+		}
+	}
+	coreTools, err := tools.CoreTools(sandbox, coreToolOptions(bashSup, headerSessionID, todoNotifier)...)
 	if err != nil {
 		return nil, fmt.Errorf("creating core tools: %w", err)
 	}

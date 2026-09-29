@@ -25,6 +25,12 @@ type coreConfig struct {
 	// needs a search backend that is often absent, so advertising it hands the
 	// model something that fails mid-turn. See WithWebSearch.
 	webSearch bool
+	// sessionID, when non-empty, registers the todo_write and todo_read tools.
+	sessionID string
+	// todoNotifier, when non-nil, is called after each successful todo_write
+	// with the new aggregated state. The caller is responsible for non-blocking
+	// delivery (buffered channel, or drop-on-overflow).
+	todoNotifier func(TodoState)
 }
 
 // WithBashSupervisor makes the bash tool use a caller-owned supervisor, so the
@@ -42,6 +48,19 @@ func WithBashSupervisor(sup *BashSupervisor) CoreOption {
 // for tools built by this call.
 func WithReadLedger(l *ReadLedger) CoreOption {
 	return func(c *coreConfig) { c.readLedger = l }
+}
+
+// WithSessionID sets the session ID for tools that need it (todo_write,
+// todo_read). When empty, the todo tools are not registered.
+func WithSessionID(id string) CoreOption {
+	return func(c *coreConfig) { c.sessionID = id }
+}
+
+// WithTodoNotifier sets the callback that receives TodoState updates after
+// every successful todo_write. The callback must be non-blocking (send to a
+// buffered channel, or drop on overflow).
+func WithTodoNotifier(fn func(TodoState)) CoreOption {
+	return func(c *coreConfig) { c.todoNotifier = fn }
 }
 
 // WithWebSearch registers the web_search tool.
@@ -131,6 +150,21 @@ func CoreTools(sandbox *Sandbox, opts ...CoreOption) ([]tool.Tool, error) {
 		return nil, err
 	}
 	tools = append(tools, sessionStatsTool)
+
+	// Add todo_write/todo_read when a session ID is configured.
+	if cfg.sessionID != "" {
+		todoWriteTool, err := newTodoWriteTool(cfg.sessionID, cfg.todoNotifier)
+		if err != nil {
+			return nil, err
+		}
+		tools = append(tools, todoWriteTool)
+
+		todoReadTool, err := newTodoReadTool(cfg.sessionID)
+		if err != nil {
+			return nil, err
+		}
+		tools = append(tools, todoReadTool)
+	}
 
 	// Add web_search only when the caller opted in. It reaches the network
 	// rather than the filesystem, and where no Ollama daemon or OLLAMA_API_KEY

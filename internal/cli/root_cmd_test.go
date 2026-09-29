@@ -114,7 +114,7 @@ func TestInitNonInteractiveRuntime_Basic(t *testing.T) {
 	cwd := tmpHome
 	sandboxRoot := tmpHome
 
-	rt, err := initNonInteractiveRuntime(context.Background(), cfg, cwd, sandboxRoot, "")
+	rt, err := initNonInteractiveRuntime(context.Background(), cfg, cwd, sandboxRoot, "", "")
 	if err != nil {
 		t.Fatalf("initNonInteractiveRuntime: %v", err)
 	}
