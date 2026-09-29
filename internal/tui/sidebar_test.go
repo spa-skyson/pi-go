@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/mattn/go-runewidth"
 
 	"github.com/dimetron/pi-go/internal/extension"
 	"github.com/dimetron/pi-go/internal/palace"
@@ -105,14 +106,35 @@ func TestRenderSidebar_NarrowWidth(t *testing.T) {
 	}
 }
 
-func TestRenderSidebar_LongModelName(t *testing.T) {
+func TestRenderSidebar_LongModelNameHardCutOnNarrow(t *testing.T) {
+	// Width=20, innerW=17. A hyphenated word with no whitespace or '/' is a
+	// single token — hard-cut with ellipsis is correct here.
 	result := RenderSidebar(SidebarRenderInput{
 		Width:     20,
 		Height:    10,
 		ModelName: "this-is-a-very-long-model-name-that-exceeds-the-width",
 	})
-	if !strings.Contains(result, "…") {
-		t.Error("expected truncated model name with ellipsis")
+	strip := ansi.Strip(result)
+	if !strings.Contains(strip, "…") {
+		t.Error("expected hard-cut ellipsis for a hyphenated single-token model name at width=20")
+	}
+}
+
+func TestRenderSidebar_LongModelNameWithSlashesWraps(t *testing.T) {
+	// Width=40, innerW=37. A model name with '/' separators should wrap rather
+	// than truncate.
+	result := RenderSidebar(SidebarRenderInput{
+		Width:        40,
+		Height:       10,
+		ProviderName: "openrouter",
+		ModelName:    "anthropic/claude-3.7-sonnet-thinking",
+	})
+	strip := ansi.Strip(result)
+	if strings.Contains(strip, "…") {
+		t.Error("model name with slashes should wrap, not truncate with ellipsis:\n" + strip)
+	}
+	if !strings.Contains(strip, "claude-3.7-sonnet-thinking") {
+		t.Errorf("wrapped model content should be present, got:\n%s", strip)
 	}
 }
 
@@ -283,7 +305,7 @@ func TestRenderSidebar_RunChecklist(t *testing.T) {
 	}
 }
 
-func TestRenderSidebar_RunChecklistTruncatesLongTitles(t *testing.T) {
+func TestRenderSidebar_RunChecklistLongTitlesWrap(t *testing.T) {
 	result := RenderSidebar(SidebarRenderInput{
 		Width:  30,
 		Height: 20,
@@ -296,8 +318,12 @@ func TestRenderSidebar_RunChecklistTruncatesLongTitles(t *testing.T) {
 		RunMaxCycle: 5,
 	})
 
-	if !strings.Contains(result, "…") {
-		t.Error("expected truncated title with ellipsis")
+	strip := ansi.Strip(result)
+	if strings.Contains(strip, "…") {
+		t.Error("long title should wrap instead of truncating with ellipsis")
+	}
+	if !strings.Contains(strip, "truncated") {
+		t.Errorf("wrapped title content should be present, got:\n%s", strip)
 	}
 }
 
@@ -723,5 +749,162 @@ func TestRenderSidebar_VersionHiddenWhenUnset(t *testing.T) {
 	result := ansi.Strip(RenderSidebar(SidebarRenderInput{Width: SidebarWidth, Height: 20}))
 	if strings.Contains(result, "pi-go") {
 		t.Errorf("version line rendered with no AppVersion:\n%s", result)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// sidebarWidth clamps
+// ---------------------------------------------------------------------------
+
+func TestSidebarWidth_Clamps(t *testing.T) {
+	tests := []struct {
+		termW int
+		want  int
+		label string
+	}{
+		{0, 26, "zero → min"},
+		{50, 26, "narrow → min"},
+		{86, 26, "86 cols → 26"},
+		{93, 26, "93 cols → 26 (28% = 26)"},
+		{120, 34, "120 cols → 34"},
+		{150, 42, "150 cols → 42"},
+		{172, 48, "172 cols → max 48"},
+		{200, 48, "200 cols → max 48"},
+		{500, 48, "wide → max"},
+	}
+	for _, tc := range tests {
+		if got := sidebarWidth(tc.termW); got != tc.want {
+			t.Errorf("sidebarWidth(%d) = %d, want %d (%s)", tc.termW, got, tc.want, tc.label)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// wrapLabel
+// ---------------------------------------------------------------------------
+
+func TestWrapLabel_ShortStringReturnsOneLine(t *testing.T) {
+	got := wrapLabel("hello", 40, 0)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 line, got %d: %q", len(got), got)
+	}
+	if got[0] != "hello" {
+		t.Errorf("expected %q, got %q", "hello", got[0])
+	}
+}
+
+func TestWrapLabel_WrapsAtWordBoundary(t *testing.T) {
+	got := wrapLabel("hello world foo bar baz", 12, 0)
+	if len(got) < 2 {
+		t.Fatalf("expected multiple lines, got %d: %q", len(got), got)
+	}
+	for _, line := range got {
+		if w := runewidth.StringWidth(line); w > 12 {
+			t.Errorf("line %q is %d cells, exceeds %d", line, w, 12)
+		}
+	}
+}
+
+func TestWrapLabel_SlashDelimitedSplitsOnSlash(t *testing.T) {
+	s := "openrouter/anthropic/claude-3.7-sonnet-thinking"
+	got := wrapLabel(s, 30, 0)
+	if len(got) < 2 {
+		t.Fatalf("expected multiple lines for long slash-delimited string, got %d: %q", len(got), got)
+	}
+	joined := strings.Join(got, "")
+	if strings.Contains(joined, "…") {
+		t.Errorf("wrapLabel introduced ellipsis, all content should be present:\n%q", got)
+	}
+	if !strings.Contains(joined, "openrouter") || !strings.Contains(joined, "claude") {
+		t.Errorf("wrapLabel dropped content:\n%q", got)
+	}
+}
+
+func TestWrapLabel_HardCutLongWord(t *testing.T) {
+	got := wrapLabel("superlongwordwithoutbreaks", 10, 0)
+	if len(got) < 1 {
+		t.Fatal("expected at least one line")
+	}
+	for _, line := range got {
+		if w := runewidth.StringWidth(line); w > 10 {
+			t.Errorf("line %q is %d cells, exceeds %d", line, w, 10)
+		}
+	}
+}
+
+func TestWrapLabel_WideRunesNotSplit(t *testing.T) {
+	// CJK characters are 2 cells wide.
+	s := "你好世界这是一段很长的中文"
+	got := wrapLabel(s, 12, 0)
+	if len(got) < 1 {
+		t.Fatal("expected at least one line")
+	}
+	for _, line := range got {
+		if w := runewidth.StringWidth(line); w > 12 {
+			t.Errorf("line %q is %d cells, exceeds %d", line, w, 12)
+		}
+	}
+}
+
+func TestWrapLabel_EmptyString(t *testing.T) {
+	got := wrapLabel("", 10, 0)
+	if len(got) != 1 || got[0] != "" {
+		t.Errorf("expected [\"\"], got %q", got)
+	}
+}
+
+func TestWrapLabel_NarrowMaxW(t *testing.T) {
+	got := wrapLabel("hello", 1, 0)
+	if len(got) < 1 {
+		t.Fatal("expected at least one line")
+	}
+	for _, line := range got {
+		if w := runewidth.StringWidth(line); w > 1 {
+			t.Errorf("line %q is %d cells, exceeds 1", line, w)
+		}
+	}
+}
+
+func TestWrapLabel_ContinuationWidth(t *testing.T) {
+	// maxW=10, contW=3 means continuation lines have only 7 cells for content.
+	got := wrapLabel("hello world this is a test", 10, 3)
+	_ = got
+	// First line should be "hello" (≤10), continuation lines should be ≤10.
+	for i, line := range got {
+		if w := runewidth.StringWidth(line); w > 10 {
+			t.Errorf("line %d %q is %d cells, exceeds %d", i, line, w, 10)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// sidebarModelLines — the whole long model name is visible without "…"
+// ---------------------------------------------------------------------------
+
+func TestSidebarModelLines_LongModelNameWraps(t *testing.T) {
+	// On a 120-column terminal: sidebar = 34, innerW = 31.
+	const innerW = 31
+	// Use a thinner indent so wrapping is more obvious.
+	st := testSidebarStyles()
+	in := SidebarRenderInput{
+		ProviderName: "openrouter",
+		ModelName:    "anthropic/claude-3.7-sonnet-thinking",
+	}
+	lines := sidebarModelLines(in, innerW, st)
+	got := strings.Join(lines, "\n")
+	// No ellipsis anywhere in the model or provider lines.
+	strip := ansi.Strip(got)
+	if strings.Contains(strip, "…") {
+		t.Errorf("model lines contain ellipsis — wrapping should make text fit:\n%s", strip)
+	}
+	// The full provider and model names should be present in full.
+	if !strings.Contains(strip, "openrouter") {
+		t.Errorf("provider name missing:\n%s", strip)
+	}
+	if !strings.Contains(strip, "anthropic") {
+		t.Errorf("model name part missing:\n%s", strip)
+	}
+	if !strings.Contains(strip, "claude-3.7-sonnet-thinking") {
+		t.Errorf("model name part missing:\n%s", strip)
 	}
 }

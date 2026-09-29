@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image/color"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,13 +21,43 @@ import (
 	"github.com/dimetron/pi-go/internal/subagent"
 )
 
-// SidebarWidth is the fixed width of the right sidebar.
+// minSidebarWidth and maxSidebarWidth clamp the adaptive sidebar so it never
+// starves the chat panel on a narrow terminal nor wastes columns on a wide one.
+const minSidebarWidth = 26
+const maxSidebarWidth = 48
+
+// sidebarWidth returns the right-sidebar width in columns for a given terminal
+// width. The sidebar takes about 28% of the terminal, clamped to stay within
+// [minSidebarWidth, maxSidebarWidth].
 //
-// 23 is the 18 it used to be, widened by 5: the sidebar's rows are short labels
-// and counts, so the columns it gives back to the chat panel are worth more than
-// the slack it keeps. Every consumer reads this constant — mainWidth, the
-// render-integrity test's column check — so the whole frame follows from it.
-const SidebarWidth = 23
+// 28% was chosen so that on a 120-column terminal the sidebar gets ~34 columns
+// — enough to show a provider+model name like
+// "openrouter/anthropic/claude-3.7-sonnet" without truncation (it wraps instead).
+// The 26-column floor leaves 60 columns for the chat panel at 86-wide terminals,
+// and the 48-column ceiling keeps ~two thirds of a 200-column display for chat.
+func sidebarWidth(terminalWidth int) int {
+	if terminalWidth <= 0 {
+		return minSidebarWidth
+	}
+	w := int(math.Round(float64(terminalWidth) * 0.28))
+	return clamp(w, minSidebarWidth, maxSidebarWidth)
+}
+
+// clamp returns v constrained to [lo, hi].
+func clamp(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+// SidebarWidth is the sidebar width on a 120-column terminal (~34 columns).
+// It is a var so sidebarWidth can compute it; tests import it as a convenience
+// constant. Production code should call sidebarWidth(terminalWidth) instead.
+var SidebarWidth = sidebarWidth(120)
 
 // SidebarRenderInput provides data needed by the sidebar.
 type SidebarRenderInput struct {
@@ -367,11 +398,14 @@ func sidebarVersionLines(in SidebarRenderInput, innerW int, st sidebarStyles) []
 func sidebarModelLines(in SidebarRenderInput, innerW int, st sidebarStyles) []string {
 	lines := []string{st.heading.Render("  Model")}
 	if in.ProviderName != "" {
-		lines = append(lines, st.text.Render("  "+in.ProviderName))
+		for _, l := range wrapLabel(in.ProviderName, innerW-2, 0) {
+			lines = append(lines, st.text.Render("  "+l))
+		}
 	}
 	if in.ModelName != "" {
-		lines = append(lines, st.yellow.
-			Render("  "+truncateLabel(in.ModelName, innerW)))
+		for _, l := range wrapLabel(in.ModelName, innerW-2, 0) {
+			lines = append(lines, st.yellow.Render("  "+l))
+		}
 	}
 	if level := in.ThinkingLevel; level != "" {
 		lines = append(lines, st.subtext.
@@ -472,12 +506,22 @@ func sidebarRunLines(in SidebarRenderInput, innerW int, st sidebarStyles) []stri
 	doneStyle := st.green
 	todoStyle := st.overlay
 	for _, step := range in.RunChecklist {
-		title := truncateLabel(step.Title, max(innerW-5, 10)) // room for "  [x] " prefix
+		// room for "  [x] " prefix (5 cells) on the first line; continuation
+		// lines get "       " (7 cells: 2 sidebar pad + 5 indent under "[x] ").
+		titleW := max(innerW-5, 10)
+		contW := 5 // extra indent on continuation lines
+		wrapped := wrapLabel(step.Title, titleW, contW)
 		if step.Done {
-			lines = append(lines, doneStyle.Render("  [x] "+title))
+			lines = append(lines, doneStyle.Render("  [x] "+wrapped[0]))
+			for _, l := range wrapped[1:] {
+				lines = append(lines, doneStyle.Render("       "+l))
+			}
 			continue
 		}
-		lines = append(lines, todoStyle.Render("  [ ] "+title))
+		lines = append(lines, todoStyle.Render("  [ ] "+wrapped[0]))
+		for _, l := range wrapped[1:] {
+			lines = append(lines, todoStyle.Render("       "+l))
+		}
 	}
 
 	if in.Running {
@@ -525,17 +569,25 @@ func sidebarPlanLines(in SidebarRenderInput, innerW int, st sidebarStyles) []str
 		return nil
 	}
 	lines := []string{st.heading.Render("  Plan")}
-	current := true
+	currentPhase := true
 	for _, p := range in.PlanPhases {
-		title := truncateLabel(p.Name, max(innerW-5, 10)) // room for "  [x] " prefix
+		// room for "  [x] " prefix (5 cells) on the first line.
+		titleW := max(innerW-5, 10)
+		contW := 5
+		wrapped := wrapLabel(p.Name, titleW, contW)
+		var prefix string
 		switch {
 		case p.Done:
-			lines = append(lines, st.green.Render("  [x] "+title))
-		case current:
-			lines = append(lines, st.peach.Render("  ▶ "+title))
-			current = false
+			prefix = st.green.Render("  [x] ")
+		case currentPhase:
+			prefix = st.peach.Render("  ▶ ")
+			currentPhase = false
 		default:
-			lines = append(lines, st.overlay.Render("  [ ] "+title))
+			prefix = st.overlay.Render("  [ ] ")
+		}
+		lines = append(lines, prefix+wrapped[0])
+		for _, l := range wrapped[1:] {
+			lines = append(lines, "       "+l)
 		}
 	}
 	return append(lines, "")
@@ -800,6 +852,84 @@ func truncateLabel(s string, maxW int) string {
 		return s
 	}
 	return runewidth.Truncate(s, maxW, "…")
+}
+
+// wrapLabel wraps s into lines at most maxW display cells wide. It splits on
+// whitespace first, then on '/' for tokens that still exceed maxW, and
+// hard-cuts any remaining segment that is still too wide. Wide glyphs and
+// multi-byte runes are never split mid-rune.
+//
+// Each returned line is a *content* string without indentation. The caller
+// should indent each line as needed. maxW is the total available width for a
+// line including any fixed prefix. contW is the number of cells consumed by
+// caller indentation on continuation lines (after the first), so the content
+// area shrinks by contW.
+//
+// When a single segment (between whitespace or '/') still exceeds the content
+// width, it is hard-cut with an ellipsis.
+func wrapLabel(s string, maxW int, contW int) []string {
+	if maxW < 1 {
+		return []string{s}
+	}
+	if runewidth.StringWidth(s) <= maxW {
+		return []string{s}
+	}
+
+	contentW := max(1, maxW-contW)
+
+	// Tokenise by whitespace, then split each word at '/'.
+	var tokens []string
+	for _, w := range strings.Fields(s) {
+		parts := strings.Split(w, "/")
+		for i, p := range parts {
+			if i == 0 {
+				if p != "" {
+					tokens = append(tokens, p)
+				}
+			} else {
+				tokens = append(tokens, "/"+p)
+			}
+		}
+	}
+	if len(tokens) == 0 {
+		return []string{s}
+	}
+
+	var lines []string
+	current := tokens[0]
+
+	for _, tok := range tokens[1:] {
+		sep := " "
+		if strings.HasPrefix(tok, "/") {
+			sep = ""
+		}
+		candidate := current + sep + tok
+		if runewidth.StringWidth(candidate) <= maxW {
+			current = candidate
+			continue
+		}
+
+		// Flush current line. Start a new continuation line with this token.
+		lines = append(lines, current)
+
+		// If the token itself exceeds the continuation content width, hard-cut.
+		if runewidth.StringWidth(tok) > contentW {
+			tok = runewidth.Truncate(tok, contentW, "…")
+		}
+		current = tok
+	}
+
+	if current != "" {
+		lines = append(lines, current)
+	}
+
+	// Final hard-cut for any line still wider than maxW.
+	for i, line := range lines {
+		if runewidth.StringWidth(line) > maxW {
+			lines[i] = runewidth.Truncate(line, maxW-1, "…")
+		}
+	}
+	return lines
 }
 
 func sidebarFolderName(workDir string) string {

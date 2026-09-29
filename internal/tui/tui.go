@@ -2266,11 +2266,13 @@ func (m *model) mainWidth() int {
 	if m.width <= 0 {
 		return 1
 	}
-	if m.width > 80 {
-		w := m.width - SidebarWidth
-		if w > 0 {
-			return w
-		}
+	sw := sidebarWidth(m.width)
+	chatW := m.width - sw
+	// Show the sidebar only when the chat panel has at least 60 columns — wide
+	// enough for readable message text. Below that threshold the sidebar is
+	// hidden and the full terminal width belongs to the chat.
+	if chatW >= 60 {
+		return chatW
 	}
 	return m.width
 }
