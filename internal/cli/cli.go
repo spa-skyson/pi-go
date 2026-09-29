@@ -359,6 +359,15 @@ func resolveRuntimeModelForRole(cfg config.Config, modelName, providerName, acti
 			}
 		}
 	}
+	// An explicit provider prefix on the model name wins over the role's
+	// provider, which is only a default for a bare name. Not applied to a
+	// resumed session: there the recorded provider is the authority for which
+	// backend actually served the model.
+	if resumedProvider == "" {
+		if _, _, prefixed := provider.ProviderFromPrefix(modelName); prefixed {
+			providerName = ""
+		}
+	}
 	if baseURL == "" && providerName != "" {
 		baseURLs := cfg.ResolveBaseURLs()
 		baseURL = baseURLs[providerName]
