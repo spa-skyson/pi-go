@@ -22,6 +22,8 @@ func (m *model) handleSlashCommand(input string) (tea.Model, tea.Cmd) {
 
 	// /todos opens the plan popup. Handled here to avoid an init cycle:
 	// slashCommandSpecs → handler → newSearchPopup → allSearchCandidates → slashCommands → slashCommandSpecs.
+	// It is still listed in autocomplete via extraSlashCommands. It takes no
+	// arguments: trailing whitespace or stray text is ignored, the popup opens.
 	if cmd == "/todos" {
 		m.newSearchPopup(searchModeTodos)
 		return m, nil
@@ -168,6 +170,19 @@ var slashCommandByName = func() map[string]slashCommandSpec {
 	}
 	return byName
 }()
+
+// extraSlashCommands lists commands that dispatch as special cases in
+// handleSlashCommand rather than through slashCommandSpecs: their handlers
+// reach the search popup, which reads slashCommands — initialized from
+// slashCommandSpecs — so putting them in the table would close an
+// initialization cycle. They still appear in autocomplete and /help via
+// slashCommands/slashCommandDesc.
+var extraSlashCommands = []struct {
+	name string
+	desc string
+}{
+	{"/todos", "Show todo/plan list"},
+}
 
 // showHelpMessage appends the help text as an assistant message.
 func (m *model) showHelpMessage() {

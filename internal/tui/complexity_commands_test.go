@@ -121,6 +121,9 @@ func TestCplxSlashCommands_DerivedOrder(t *testing.T) {
 		// After /run, so "/r" still completes to /run.
 		"/retry",
 		"/skills", "/theme", "/ping", "/model-price-refresh", "/rtk", "/mcp", "/exit", "/quit",
+		// extraSlashCommands are appended after the table: "/t" still
+		// completes to /theme, and "/todos" owns "/to" outright.
+		"/todos",
 	}
 	if len(slashCommands) != len(want) {
 		t.Fatalf("slashCommands = %v (%d), want %d entries", slashCommands, len(slashCommands), len(want))
@@ -164,6 +167,8 @@ func TestCplxSlashCommandDesc(t *testing.T) {
 		{"/login", "Configure API keys (codex, openai, anthropic, gemini)"},
 		{"/exit", "Exit"},
 		{"/quit", "Exit"},
+		// extraSlashCommands: dispatched as a special case, described anyway.
+		{"/todos", "Show todo/plan list"},
 		// The switch's default arm: anything not a built-in has no description.
 		{"/nope", ""},
 		{"", ""},
