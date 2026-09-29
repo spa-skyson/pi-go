@@ -110,8 +110,10 @@ type SidebarRenderInput struct {
 	Artifacts      []ArtifactEntry          // artifacts section; nil/empty = hidden
 	Palette        Palette                  // resolved theme palette; zero = dark default
 	BgRunning      int                      // number of running background subagents, shown next to agent name
-	// TodoState is the latest todo/plan state, or nil. When set, the sidebar
-	// shows a compact indicator in the Model section.
+	// TodoState is the latest todo/plan state, or nil. When it carries items,
+	// the sidebar renders the full plan checklist in its own section below
+	// MCP Tools (a ≥50-step extreme collapses into one line — maxTodoItems);
+	// the /todos popup stays for navigation.
 	TodoState *tools.TodoState
 }
 
@@ -320,6 +322,7 @@ func sidebarTailLines(in SidebarRenderInput, innerW int, st sidebarStyles) []str
 		sidebarSkillLines(in, st),
 		sidebarMemoryLines(in, st),
 		sidebarMCPLines(in, innerW, st),
+		sidebarTodoLines(in, innerW, st),
 		sidebarA2ALines(in, innerW, st),
 		sidebarLoadingLines(in, st),
 	} {
@@ -418,19 +421,52 @@ func sidebarModelLines(in SidebarRenderInput, innerW int, st sidebarStyles) []st
 		lines = append(lines, st.text.
 			Render("  "+truncateLabel(line, innerW)))
 	}
-	if in.TodoState != nil && in.TodoState.Total > 0 {
-		var line string
-		if in.TodoState.Done >= in.TodoState.Total {
-			// Match the PM-agent summary format: no glyph, a trailing "done".
-			line = fmt.Sprintf("Plan — %d/%d done", in.TodoState.Done, in.TodoState.Total)
-		} else {
-			line = fmt.Sprintf("Plan — %d/%d", in.TodoState.Done, in.TodoState.Total)
-			if in.TodoState.InProgress != "" {
-				line += " · " + truncateLabel(in.TodoState.InProgress, max(innerW-10, 6))
-			}
+	return append(lines, "")
+}
+
+// maxTodoItems is the extreme-plan guard only. The full list renders in the
+// sidebar — the owner's requirement, and realistic plans (5–20 steps) always
+// do — but at 50+ steps the section alone would overflow the panel and bury
+// its own tail, so past this point the remainder collapses into one line
+// pointing at /todos.
+const maxTodoItems = 50
+
+// sidebarTodoLines renders the plan section below MCP Tools: a
+// "Plan — done/total" heading followed by one checklist row per item —
+// [x] completed (green), [~] in progress (peach), [ ] pending (dim). Long
+// content wraps with the continuation indented under the marker
+// (sidebarChecklistLines). Hidden entirely when there is no plan.
+//
+// The section grows downward: sidebarFrame clips from the bottom, so a long
+// plan can push out only what sits below it (A2A, Loading, filler) — never
+// the sections above it (Model … MCP Tools). TestSidebarTodoSectionKeepsMCP
+// pins that invariant.
+func sidebarTodoLines(in SidebarRenderInput, innerW int, st sidebarStyles) []string {
+	if in.TodoState == nil || len(in.TodoState.Items) == 0 {
+		return nil
+	}
+	head := fmt.Sprintf("Plan — %d/%d", in.TodoState.Done, in.TodoState.Total)
+	if in.TodoState.Done >= in.TodoState.Total {
+		// Match the PM-agent summary format: a trailing "done" when finished.
+		head += " done"
+	}
+	lines := []string{st.green.Bold(true).Render("  " + truncateLabel(head, innerW))}
+
+	items := in.TodoState.Items
+	for i, it := range items {
+		if i >= maxTodoItems {
+			lines = append(lines, st.dim.Render(fmt.Sprintf(
+				"  … +%d more — /todos", len(items)-maxTodoItems)))
+			break
 		}
-		lines = append(lines, st.green.
-			Render("  "+truncateLabel(line, innerW)))
+		style, marker := st.dim, "  [ ] "
+		switch it.Status {
+		case "completed":
+			style, marker = st.green, "  [x] "
+		case "in_progress":
+			style, marker = st.peach, "  [~] "
+		}
+		sidebarChecklistLines(&lines, style, marker, it.Content, innerW)
 	}
 	return append(lines, "")
 }

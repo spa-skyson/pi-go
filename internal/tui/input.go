@@ -302,22 +302,34 @@ func isLineEndKey(key tea.Key) bool {
 // slashCommands is the list of available slash commands for autocomplete.
 // Skill subcommands (/skill-list, /skill-load, /skill-create) are handled
 // as args to /skills and omitted from the top-level list to keep it concise.
-// It is derived from slashCommandSpecs (commands.go), which is the single
-// source of truth for name, description and handler.
+// It is derived from slashCommandSpecs (commands.go) — the single source of
+// truth for name, description and handler — plus extraSlashCommands, whose
+// entries dispatch outside the table to avoid an initialization cycle.
 var slashCommands = func() []string {
-	names := make([]string, 0, len(slashCommandSpecs))
+	names := make([]string, 0, len(slashCommandSpecs)+len(extraSlashCommands))
 	for _, spec := range slashCommandSpecs {
 		if spec.hidden {
 			continue
 		}
 		names = append(names, spec.name)
 	}
+	for _, e := range extraSlashCommands {
+		names = append(names, e.name)
+	}
 	return names
 }()
 
 // slashCommandDesc returns the description for a slash command.
 func slashCommandDesc(cmd string) string {
-	return slashCommandByName[cmd].desc
+	if spec, ok := slashCommandByName[cmd]; ok {
+		return spec.desc
+	}
+	for _, e := range extraSlashCommands {
+		if e.name == cmd {
+			return e.desc
+		}
+	}
+	return ""
 }
 
 // completeSlashCommand returns the best matching slash command for the current input.
