@@ -41,6 +41,16 @@ type ProviderConfig struct {
 	// Models declares per-model metadata, keyed by the model name as it is
 	// sent to the endpoint (the part after the "name/" prefix).
 	Models map[string]ProviderModelConfig `json:"models,omitempty"`
+	// Headers are static HTTP headers sent with every request to this
+	// provider. Two substitution mechanisms apply:
+	//
+	//   - ${VAR} names an environment variable (or a ~/.pi-go/.env entry) and
+	//     is expanded at load, like apiKey — secrets stay out of config.json.
+	//   - ${SESSION_ID} is NOT env: it survives load verbatim and is replaced
+	//     with the current session's ID when the LLM client is built, so a
+	//     conversation-scoped header (OpenCode Zen's "x-opencode-session",
+	//     which keys routing and prompt caching) stays stable per session.
+	Headers map[string]string `json:"headers,omitempty"`
 }
 
 // Protocol maps the configured type onto the wire-protocol name the provider
@@ -130,10 +140,22 @@ func validProviderName(name string) bool {
 	return name != ""
 }
 
-// substituteProviderEnv expands ${VAR} in each declared provider's baseURL
-// and apiKey, from the same sources the MCP-URL substitution reads
+// SessionIDPlaceholder in a header value (provider Headers or global
+// ExtraHeaders) is replaced with the running session's ID when the LLM client
+// is built — see providerExtraHeaders in internal/cli. It is deliberately not
+// env: a session ID does not exist at config load.
+const SessionIDPlaceholder = "${SESSION_ID}"
+
+// sessionIDSentinel shields SessionIDPlaceholder from ${VAR} expansion during
+// load: substituteEnv would blank an unknown ${VAR}, so the placeholder wears
+// a marker without "$" while expansion runs, then changes back.
+const sessionIDSentinel = "\x00PI_SESSION_ID\x00"
+
+// substituteProviderEnv expands ${VAR} in each declared provider's baseURL,
+// apiKey and headers, from the same sources the MCP-URL substitution reads
 // (~/.pi-go/.env, project .pi-go/.env, then the process environment). Secrets
 // stay out of config.json; the expanded values live in memory only.
+// ${SESSION_ID} is shielded — it is not env and is substituted later.
 func substituteProviderEnv(cfg *Config, cwd string) {
 	if len(cfg.Providers) == 0 {
 		return
@@ -145,6 +167,10 @@ func substituteProviderEnv(cfg *Config, cwd string) {
 		}
 		if p.APIKey != "" {
 			p.APIKey = substituteEnv(env, p.APIKey)
+		}
+		for k, v := range p.Headers {
+			shielded := strings.ReplaceAll(v, SessionIDPlaceholder, sessionIDSentinel)
+			p.Headers[k] = strings.ReplaceAll(substituteEnv(env, shielded), sessionIDSentinel, SessionIDPlaceholder)
 		}
 		cfg.Providers[name] = p
 	}

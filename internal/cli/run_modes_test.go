@@ -70,7 +70,7 @@ func TestRunInteractive_CancelContext(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- runInteractive(ctx, cfg, llm, info, tracker, "default", tmpHome, tmpHome, "")
+		done <- runInteractive(ctx, cfg, llm, info, tracker, "default", tmpHome, tmpHome, "", "")
 	}()
 
 	// Give it a moment to start, then cancel. tui.Run requires a real TTY

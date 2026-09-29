@@ -994,7 +994,7 @@ func TestResolveDeferredSessionResumed(t *testing.T) {
 	// ag is never touched on the resume path: the session ID is already known,
 	// so CreateSession is not reached. Passing nil pins that.
 	sessionID, title, resumed, err := resolveDeferredSession(
-		context.Background(), nil, svc, &cliMockLLM{name: "test-model"}, "anthropic", "http://x.invalid")
+		context.Background(), nil, svc, &cliMockLLM{name: "test-model"}, "anthropic", "http://x.invalid", "")
 	if err != nil {
 		t.Fatalf("resolveDeferredSession: %v", err)
 	}

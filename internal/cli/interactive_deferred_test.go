@@ -63,7 +63,7 @@ func TestDeferredInit_MemoryOffBasic(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		deferredInit(ctx, cfg, llm, "openai", "", "", tracker, cwd, cwd, "", ch, make(chan string, 8), &res)
+		deferredInit(ctx, cfg, llm, "openai", "", "", tracker, cwd, cwd, "", "", ch, make(chan string, 8), &res)
 		close(ch)
 	}()
 
@@ -125,7 +125,7 @@ func TestDeferredInit_WithMCP(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		deferredInit(ctx, cfg, llm, "openai", "", "", tracker, tmpHome, tmpHome, "", ch, make(chan string, 8), &res)
+		deferredInit(ctx, cfg, llm, "openai", "", "", tracker, tmpHome, tmpHome, "", "", ch, make(chan string, 8), &res)
 		close(ch)
 	}()
 
@@ -163,7 +163,7 @@ func TestDeferredInit_WithMemoryEnabled(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		deferredInit(ctx, cfg, llm, "openai", "", "", tracker, tmpHome, tmpHome, "", ch, make(chan string, 8), &res)
+		deferredInit(ctx, cfg, llm, "openai", "", "", tracker, tmpHome, tmpHome, "", "", ch, make(chan string, 8), &res)
 		close(ch)
 	}()
 
@@ -214,7 +214,7 @@ func TestBuildSwitchedLLM_OpenAI(t *testing.T) {
 	}
 	tracker := guardrail.New(0)
 
-	llm, modelName, providerName, err := buildSwitchedLLM(context.Background(), cfg, tracker, "gpt-5.5")
+	llm, modelName, providerName, err := buildSwitchedLLM(context.Background(), cfg, tracker, "gpt-5.5", "")
 	if err != nil {
 		t.Fatalf("buildSwitchedLLM() error: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestBuildSwitchedLLM_InvalidModel(t *testing.T) {
 	}
 	tracker := guardrail.New(0)
 
-	_, _, _, err := buildSwitchedLLM(context.Background(), cfg, tracker, "this-model-does-not-exist-xyz")
+	_, _, _, err := buildSwitchedLLM(context.Background(), cfg, tracker, "this-model-does-not-exist-xyz", "")
 	if err == nil {
 		t.Fatal("expected error for invalid model name, got nil")
 	}
@@ -282,7 +282,7 @@ func TestBuildSwitchedLLM_NoProvider(t *testing.T) {
 	cfg := config.Config{}
 	tracker := guardrail.New(0)
 
-	llm, modelName, _, err := buildSwitchedLLM(context.Background(), cfg, tracker, "gpt-5.5")
+	llm, modelName, _, err := buildSwitchedLLM(context.Background(), cfg, tracker, "gpt-5.5", "")
 	if err != nil {
 		t.Fatalf("buildSwitchedLLM() error: %v", err)
 	}
@@ -319,7 +319,7 @@ func TestBuildSwitchedLLM_AnthropicProvider(t *testing.T) {
 	}
 	tracker := guardrail.New(0)
 
-	llm, modelName, providerName, err := buildSwitchedLLM(context.Background(), cfg, tracker, "claude-sonnet-4-6")
+	llm, modelName, providerName, err := buildSwitchedLLM(context.Background(), cfg, tracker, "claude-sonnet-4-6", "")
 	if err != nil {
 		t.Fatalf("buildSwitchedLLM() error: %v", err)
 	}
@@ -387,7 +387,7 @@ func TestDeferredInit_WithSkillDir(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		deferredInit(ctx, config.Config{}, llm, "openai", "", "", tracker, tmpHome, tmpHome, "", ch, make(chan string, 8), &res)
+		deferredInit(ctx, config.Config{}, llm, "openai", "", "", tracker, tmpHome, tmpHome, "", "", ch, make(chan string, 8), &res)
 		close(ch)
 	}()
 
@@ -424,7 +424,7 @@ func runDeferredInitForTest(t *testing.T, cfg config.Config) *tui.InitResult {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		deferredInit(ctx, cfg, llm, "openai", "", "", tracker, tmpHome, tmpHome, "", ch, make(chan string, 8), &res)
+		deferredInit(ctx, cfg, llm, "openai", "", "", tracker, tmpHome, tmpHome, "", "", ch, make(chan string, 8), &res)
 		close(ch)
 	}()
 	var result *tui.InitResult
