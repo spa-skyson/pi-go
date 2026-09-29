@@ -1678,8 +1678,8 @@ func (m *model) View() tea.View {
 		mainWidth = m.mainWidth()
 	}
 	bodyWidth := m.chatWidth()
-	sidebarWidth := m.width - mainWidth
-	showSidebar := sidebarWidth > 0
+	sideW := m.width - mainWidth
+	showSidebar := sideW > 0
 
 	// Render components.
 	m.inputModel.SetWidth(max(0, m.width-3))
@@ -1778,8 +1778,8 @@ func (m *model) View() tea.View {
 
 	var topSection string
 	if showSidebar {
-		sidebar := RenderSidebar(m.sidebarRenderInput(sidebarWidth, panelRows))
-		topSection = joinPanelSidebar(leftPanel, sidebar, mainWidth, sidebarWidth)
+		sidebar := RenderSidebar(m.sidebarRenderInput(sideW, panelRows))
+		topSection = joinPanelSidebar(leftPanel, sidebar, mainWidth, sideW)
 	} else {
 		topSection = padLinesTo(leftPanel, m.width)
 	}

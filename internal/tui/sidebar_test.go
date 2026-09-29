@@ -702,6 +702,32 @@ func TestRenderSidebar_PlanChecklist(t *testing.T) {
 	}
 }
 
+// Plan checklist lines carry their state's colour on the entire row, not just
+// the marker. A done phase must not render as default overlay text.
+func TestRenderSidebar_PlanChecklistFullRowStyle(t *testing.T) {
+	result := RenderSidebar(SidebarRenderInput{
+		Width:  40,
+		Height: 30,
+		Mode:   "plan",
+		PlanPhases: []PlanPhase{
+			{Name: "Idea", Done: true},
+			{Name: "Requirements", Done: false},
+		},
+	})
+	stripped := ansi.Strip(result)
+	if !strings.Contains(stripped, "[x] Idea") {
+		t.Errorf("done phase missing in plan checklist:\n%s", stripped)
+	}
+	if !strings.Contains(stripped, "▶ Requirements") {
+		t.Errorf("current phase missing in plan checklist:\n%s", stripped)
+	}
+	// The stripped output must contain the full title word on the
+	// same line as its marker — not truncated with "…".
+	if strings.Contains(stripped, "…") {
+		t.Errorf("plan phases should not be truncated with ellipsis:\n%s", stripped)
+	}
+}
+
 func TestRenderSidebar_NoPlanSection(t *testing.T) {
 	result := RenderSidebar(SidebarRenderInput{
 		Width:  30,
@@ -722,7 +748,7 @@ func TestRenderSidebar_NoPlanSection(t *testing.T) {
 // next to the binary that produced it.
 func TestRenderSidebar_VersionTopmost(t *testing.T) {
 	result := ansi.Strip(RenderSidebar(SidebarRenderInput{
-		Width:        SidebarWidth,
+		Width:        sidebarWidth(120),
 		Height:       40,
 		AppVersion:   "1.4.2+a1b2c3d",
 		ProviderName: "agentgateway",
@@ -746,7 +772,7 @@ func TestRenderSidebar_VersionTopmost(t *testing.T) {
 // No version configured means no line at all — an empty "pi-go " row would
 // occupy a scarce sidebar row to say nothing.
 func TestRenderSidebar_VersionHiddenWhenUnset(t *testing.T) {
-	result := ansi.Strip(RenderSidebar(SidebarRenderInput{Width: SidebarWidth, Height: 20}))
+	result := ansi.Strip(RenderSidebar(SidebarRenderInput{Width: sidebarWidth(120), Height: 20}))
 	if strings.Contains(result, "pi-go") {
 		t.Errorf("version line rendered with no AppVersion:\n%s", result)
 	}
@@ -866,14 +892,29 @@ func TestWrapLabel_NarrowMaxW(t *testing.T) {
 }
 
 func TestWrapLabel_ContinuationWidth(t *testing.T) {
-	// maxW=10, contW=3 means continuation lines have only 7 cells for content.
-	got := wrapLabel("hello world this is a test", 10, 3)
-	_ = got
-	// First line should be "hello" (≤10), continuation lines should be ≤10.
+	// maxW=10, contW=3 means continuation lines have only 7 cells for content,
+	// so a token exceeding 7 gets hard-cut.
+	got := wrapLabel("axl bcdefghij", 10, 3)
+	if len(got) < 2 {
+		t.Fatalf("expected multiple lines, got %d: %q", len(got), got)
+	}
 	for i, line := range got {
 		if w := runewidth.StringWidth(line); w > 10 {
-			t.Errorf("line %d %q is %d cells, exceeds %d", i, line, w, 10)
+			t.Errorf("line %d %q is %d cells, exceeds maxW=10", i, line, w)
 		}
+	}
+	// First line: "axl" fits in 10.
+	if got[0] != "axl" {
+		t.Errorf("first line = %q, want %q", got[0], "axl")
+	}
+	// The long token "bcdefghij" (10 cells) on a continuation line with
+	// contW=3 contentW=7 should be hard-cut: first 6 chars + "…" = 7.
+	last := got[len(got)-1]
+	if !strings.Contains(last, "…") {
+		t.Errorf("expected hard-cut continuation for 10-cell token on 7-cell budget, got %q", last)
+	}
+	if w := runewidth.StringWidth(last); w > 7 {
+		t.Errorf("hard-cut continuation %q is %d cells, expected ≤7", last, w)
 	}
 }
 

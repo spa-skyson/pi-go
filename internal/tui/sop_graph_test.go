@@ -90,7 +90,7 @@ func TestSidebarGraphLines_ReviewIsAChild(t *testing.T) {
 // overflows would break the frame, which the render-integrity tests pin
 // globally — catch it here first.
 func TestSidebarGraphLines_FitsSidebarWidth(t *testing.T) {
-	testSW := SidebarWidth // 34 — sidebar for a 120-column terminal
+	testSW := sidebarWidth(120) // 34 — sidebar for a 120-column terminal
 	innerW := testSW - 3
 	for _, name := range []string{"run", "plan"} {
 		t.Run(name, func(t *testing.T) {
@@ -119,7 +119,7 @@ func TestRenderSidebar_DrawsTheGraphUnderThePlanList(t *testing.T) {
 		{"Design", false}, {"Outline", false}, {"Plan", false}, {"Prompt", false},
 	}
 	in := SidebarRenderInput{
-		Width: SidebarWidth, Height: 50, Mode: "plan", PlanPhases: phases,
+		Width: sidebarWidth(120), Height: 50, Mode: "plan", PlanPhases: phases,
 		Graph: &SOPGraph{Order: c.Order, Edges: c.GraphEdges(), Status: planStageStatus(phases)},
 	}
 
@@ -152,7 +152,7 @@ func TestRenderSidebar_DropsTheGraphWhenItCannotFit(t *testing.T) {
 	c := compileEmbedded(t, "plan")
 	phases := []PlanPhase{{"Idea", true}, {"Requirements", false}}
 	in := SidebarRenderInput{
-		Width: SidebarWidth, Height: 20, Mode: "plan", PlanPhases: phases,
+		Width: sidebarWidth(120), Height: 20, Mode: "plan", PlanPhases: phases,
 		Graph: &SOPGraph{Order: c.Order, Edges: c.GraphEdges(), Status: planStageStatus(phases)},
 	}
 

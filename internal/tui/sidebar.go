@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"image/color"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -39,7 +38,8 @@ func sidebarWidth(terminalWidth int) int {
 	if terminalWidth <= 0 {
 		return minSidebarWidth
 	}
-	w := int(math.Round(float64(terminalWidth) * 0.28))
+	// 28% via integer arithmetic — equivalent to round(x * 0.28).
+	w := (terminalWidth*28 + 50) / 100
 	return clamp(w, minSidebarWidth, maxSidebarWidth)
 }
 
@@ -53,11 +53,6 @@ func clamp(v, lo, hi int) int {
 	}
 	return v
 }
-
-// SidebarWidth is the sidebar width on a 120-column terminal (~34 columns).
-// It is a var so sidebarWidth can compute it; tests import it as a convenience
-// constant. Production code should call sidebarWidth(terminalWidth) instead.
-var SidebarWidth = sidebarWidth(120)
 
 // SidebarRenderInput provides data needed by the sidebar.
 type SidebarRenderInput struct {
@@ -493,6 +488,25 @@ func sidebarModeLines(in SidebarRenderInput, innerW int, st sidebarStyles) []str
 	return append(lines, "")
 }
 
+// sidebarChecklistLines appends wrapped checklist items to lines. Each item is
+// rendered as a state-styled row: the first line carries "  [✓] " / "  ▶ " /
+// "  [ ] " and the title; continuation lines indent under the content with
+// "      " so they align regardless of the marker width.
+//
+// stateStyle wraps the entire row (prefix + title + continuations) in the
+// state's colour. marker is the state prefix. title is the item text.
+func sidebarChecklistLines(lines *[]string, stateStyle lipgloss.Style, marker, title string, innerW int) {
+	// "  [x] " is 6 cells; "  ▶ " is 5. Use the wider one (6) for continuation
+	// so both align under the content column.
+	const prefixW = 6
+	titleW := max(innerW-prefixW, 10)
+	wrapped := wrapLabel(title, titleW, 0)
+	*lines = append(*lines, stateStyle.Render(marker+wrapped[0]))
+	for _, l := range wrapped[1:] {
+		*lines = append(*lines, stateStyle.Render("      "+l))
+	}
+}
+
 // sidebarRunLines renders the spec name, cycle/phase and step checklist of an
 // in-progress /run.
 func sidebarRunLines(in SidebarRenderInput, innerW int, st sidebarStyles) []string {
@@ -503,24 +517,11 @@ func sidebarRunLines(in SidebarRenderInput, innerW int, st sidebarStyles) []stri
 		"",
 	}
 
-	doneStyle := st.green
-	todoStyle := st.overlay
 	for _, step := range in.RunChecklist {
-		// room for "  [x] " prefix (5 cells) on the first line; continuation
-		// lines get "       " (7 cells: 2 sidebar pad + 5 indent under "[x] ").
-		titleW := max(innerW-5, 10)
-		contW := 5 // extra indent on continuation lines
-		wrapped := wrapLabel(step.Title, titleW, contW)
 		if step.Done {
-			lines = append(lines, doneStyle.Render("  [x] "+wrapped[0]))
-			for _, l := range wrapped[1:] {
-				lines = append(lines, doneStyle.Render("       "+l))
-			}
-			continue
-		}
-		lines = append(lines, todoStyle.Render("  [ ] "+wrapped[0]))
-		for _, l := range wrapped[1:] {
-			lines = append(lines, todoStyle.Render("       "+l))
+			sidebarChecklistLines(&lines, st.green, "  [x] ", step.Title, innerW)
+		} else {
+			sidebarChecklistLines(&lines, st.overlay, "  [ ] ", step.Title, innerW)
 		}
 	}
 
@@ -571,23 +572,14 @@ func sidebarPlanLines(in SidebarRenderInput, innerW int, st sidebarStyles) []str
 	lines := []string{st.heading.Render("  Plan")}
 	currentPhase := true
 	for _, p := range in.PlanPhases {
-		// room for "  [x] " prefix (5 cells) on the first line.
-		titleW := max(innerW-5, 10)
-		contW := 5
-		wrapped := wrapLabel(p.Name, titleW, contW)
-		var prefix string
 		switch {
 		case p.Done:
-			prefix = st.green.Render("  [x] ")
+			sidebarChecklistLines(&lines, st.green, "  [x] ", p.Name, innerW)
 		case currentPhase:
-			prefix = st.peach.Render("  ▶ ")
+			sidebarChecklistLines(&lines, st.peach, "  ▶ ", p.Name, innerW)
 			currentPhase = false
 		default:
-			prefix = st.overlay.Render("  [ ] ")
-		}
-		lines = append(lines, prefix+wrapped[0])
-		for _, l := range wrapped[1:] {
-			lines = append(lines, "       "+l)
+			sidebarChecklistLines(&lines, st.overlay, "  [ ] ", p.Name, innerW)
 		}
 	}
 	return append(lines, "")
@@ -854,30 +846,29 @@ func truncateLabel(s string, maxW int) string {
 	return runewidth.Truncate(s, maxW, "…")
 }
 
-// wrapLabel wraps s into lines at most maxW display cells wide. It splits on
-// whitespace first, then on '/' for tokens that still exceed maxW, and
-// hard-cuts any remaining segment that is still too wide. Wide glyphs and
-// multi-byte runes are never split mid-rune.
+// wrapLabel wraps s into lines, each at most maxW display cells wide. It splits
+// on whitespace first (consecutive whitespace is collapsed), then on '/' for
+// tokens that still exceed maxW, and hard-cuts any remaining segment that is
+// still too wide. Wide glyphs and multi-byte runes are never split mid-rune.
 //
-// Each returned line is a *content* string without indentation. The caller
-// should indent each line as needed. maxW is the total available width for a
-// line including any fixed prefix. contW is the number of cells consumed by
-// caller indentation on continuation lines (after the first), so the content
-// area shrinks by contW.
+// Each returned line is a content string without indentation — the caller
+// prepends any prefix (e.g. "  [x] "). maxW limits each returned line; the
+// caller's prefix is on top of that and pushes past maxW into the full column.
+// contW shrinks the content budget on continuation lines (after the first) by
+// contW cells, so the caller can tuck continuations under the marker while
+// keeping their total width under maxW.
 //
 // When a single segment (between whitespace or '/') still exceeds the content
 // width, it is hard-cut with an ellipsis.
 func wrapLabel(s string, maxW int, contW int) []string {
-	if maxW < 1 {
-		return []string{s}
-	}
-	if runewidth.StringWidth(s) <= maxW {
+	safeW := max(1, maxW)
+	if runewidth.StringWidth(s) <= safeW {
 		return []string{s}
 	}
 
 	contentW := max(1, maxW-contW)
 
-	// Tokenise by whitespace, then split each word at '/'.
+	// Tokenise by whitespace (collapsed), then split each word at '/'.
 	var tokens []string
 	for _, w := range strings.Fields(s) {
 		parts := strings.Split(w, "/")
@@ -891,8 +882,9 @@ func wrapLabel(s string, maxW int, contW int) []string {
 			}
 		}
 	}
+	// All-whitespace or all-separator input: return truncated.
 	if len(tokens) == 0 {
-		return []string{s}
+		return []string{runewidth.Truncate(s, safeW, "…")}
 	}
 
 	var lines []string
