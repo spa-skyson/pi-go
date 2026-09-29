@@ -801,6 +801,15 @@ func (m *WorktreeManager) gitIn(dir string, args ...string) (string, error) {
 func runGit(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
+	// String-matching of git output (CONFLICT in MergeBack, "not found" in
+	// cleanupWorktree) relies on English messages, but the process locale is
+	// whatever the user's shell has: under LANG=ru_RU.UTF-8 git prints
+	// «КОНФЛИКТ», which no matcher here understands, and a merge conflict
+	// silently degrades to a generic failure without `git merge --abort`.
+	// Pin the child to the C locale so git always speaks English; appended
+	// entries win over same-named ones in os.Environ() (os/exec keeps the
+	// last value for duplicate keys). English git logs are the accepted trade.
+	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANGUAGE=C")
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
 }
