@@ -2,6 +2,16 @@
 # exit on error
 set -e
 
+# pi-go installer (fork: spa-skyson/pi-go).
+#
+# Two install modes:
+#   1. release — download the latest published GitHub release asset and
+#      install `pi` (used whenever the repo has a published release).
+#   2. source  — fallback when no release is published yet or the asset
+#      download fails: shallow-clone the repo, run `make build`, and install
+#      both `pi` and `pi-sandbox`. Requires git and Go (>= the go.mod
+#      minimum). Set DRY_RUN=1 to print the chosen path without installing.
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -11,8 +21,10 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-# Configuration
-REPO="dimetron/pi-go"
+# Configuration (REPO/BRANCH overridable via environment — useful for forks,
+# mirrors and testing, e.g. REPO=owner/repo ./install.sh)
+REPO="${REPO:-spa-skyson/pi-go}"
+BRANCH="${BRANCH:-main}"
 BINARY_NAME="pi"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 
@@ -44,6 +56,7 @@ log_error() {
 log_header() {
     echo -e "\n${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}" >&2
     echo -e "${BOLD}${CYAN}  🚀 pi-go Installer${NC}" >&2
+    echo -e "${BOLD}${CYAN}  repo: ${REPO}${NC}" >&2
     echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n" >&2
 }
 
@@ -108,42 +121,53 @@ get_latest_version() {
     local version=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
 
     if [ -z "$version" ]; then
-        echo "" >&2
-        log_error "Failed to get latest version from GitHub API"
-        exit 1
+        # No published release (404 / empty tag) or API hiccup — the caller
+        # falls back to a source build instead of failing hard.
+        log_warn "No published release found for ${BOLD}${REPO}${NC}"
+        return 0
     fi
 
     echo "$version"
 }
 
-# Download binary
-download_binary() {
+# URL of the release archive for a version/platform pair (GoReleaser naming:
+# tag v0.0.13 -> asset pi-go_0.0.13_darwin_arm64.tar.gz).
+asset_url() {
     local version="$1"
     local platform="$2"
 
     # GoReleaser strips 'v' from version in asset names
-    # Tag is v0.0.13, asset is pi-go_0.0.13_darwin_arm64.tar.gz
     local version_nov="${version#v}"
     local ext="tar.gz"
     if [[ "$platform" == windows-* ]]; then
         ext="zip"
     fi
     # Assets use underscore: pi-go_0.0.13_darwin_arm64.tar.gz
-    local download_url="https://github.com/${REPO}/releases/download/${version}/pi-go_${version_nov}_${platform//-/_}.${ext}"
+    echo "https://github.com/${REPO}/releases/download/${version}/pi-go_${version_nov}_${platform//-/_}.${ext}"
+}
+
+# Download binary. Returns 1 on failure so the caller can fall back to a
+# source build instead of exiting hard.
+download_binary() {
+    local version="$1"
+    local platform="$2"
+
+    local download_url
+    download_url=$(asset_url "$version" "$platform")
     local temp_file="/tmp/pi-install.$$.archive"
 
     log_step "Downloading pi-go ${BOLD}${version}${NC} for ${BOLD}${platform}${NC}..."
 
     if command_exists curl; then
-        curl -fsSL -o "$temp_file" "$download_url"
+        curl -fsSL -o "$temp_file" "$download_url" || { rm -f "$temp_file"; return 1; }
     elif command_exists wget; then
-        wget -q -O "$temp_file" "$download_url"
+        wget -q -O "$temp_file" "$download_url" || { rm -f "$temp_file"; return 1; }
     fi
 
-    if [ ! -f "$temp_file" ]; then
+    if [ ! -s "$temp_file" ]; then
         echo "" >&2
         log_error "Failed to download binary from $download_url"
-        exit 1
+        return 1
     fi
 
     echo "$temp_file"
@@ -196,6 +220,119 @@ verify_installation() {
     fi
 }
 
+# Ensure the installed Go toolchain satisfies a "major.minor[.patch]"
+# requirement (the minimum comes from the clone's go.mod). Compares
+# major.minor only. Exits with an install hint when the toolchain is older.
+check_go_version() {
+    local required="$1"
+    local have
+    have=$(go version 2>/dev/null | awk '{print $3}')
+    have="${have#go}"
+
+    if ! [[ "$have" =~ ^[0-9]+\. ]]; then
+        log_warn "Could not parse go version ('${have:-none}') — assuming it satisfies ${required}"
+        return 0
+    fi
+
+    local have_major have_minor want_major want_minor
+    have_major="${have%%.*}"
+    have_minor="${have#*.}"
+    have_minor="${have_minor%%.*}"
+    want_major="${required%%.*}"
+    want_minor="${required#*.}"
+    want_minor="${want_minor%%.*}"
+
+    if [ "$have_major" -lt "$want_major" ] ||
+        { [ "$have_major" -eq "$want_major" ] && [ "$have_minor" -lt "$want_minor" ]; }; then
+        log_error "Go ${want_major}.${want_minor}+ is required (found: ${have})."
+        log_info "Install a current toolchain from https://go.dev/dl/ and re-run this script."
+        exit 1
+    fi
+    log_step_complete "Go ${BOLD}${have}${NC} satisfies the required ${want_major}.${want_minor}"
+}
+
+# Build and install from source — fallback when no release exists or the
+# release asset cannot be downloaded. Installs BOTH `pi` and `pi-sandbox`.
+build_and_install_from_source() {
+    if [ -n "${DRY_RUN:-}" ]; then
+        log_info "DRY_RUN: source path selected (nothing will be cloned, built or installed):"
+        log_info "DRY_RUN:   git clone --depth 1 --branch ${BRANCH} https://github.com/${REPO}.git /tmp/pi-src.<pid>"
+        log_info "DRY_RUN:   go version check: >= minimum from go.mod (otherwise error + https://go.dev/dl/)"
+        log_info "DRY_RUN:   make build  (in the clone)"
+        log_info "DRY_RUN:   install pi and pi-sandbox into ${INSTALL_DIR}"
+        return 0
+    fi
+
+    if ! command_exists git; then
+        log_error "git is required for the source build. Install git and re-run."
+        exit 1
+    fi
+
+    local src_dir="/tmp/pi-src.$$"
+    # shellcheck disable=SC2064  — $$ is stable in the parent shell; expands to
+    # the same PID at trap-fire time and sidesteps local-var scoping in traps.
+    trap 'rm -rf /tmp/pi-src.$$' EXIT
+
+    log_step "Cloning ${BOLD}${REPO}${NC} (branch ${BOLD}${BRANCH}${NC}, shallow)..."
+    if ! git clone --depth 1 --branch "$BRANCH" "https://github.com/${REPO}.git" "$src_dir"; then
+        log_error "Failed to clone https://github.com/${REPO}.git (branch: ${BRANCH})"
+        exit 1
+    fi
+
+    if ! command_exists go; then
+        log_error "Go is required to build from source but was not found in PATH."
+        log_info "Install Go from https://go.dev/dl/ and re-run this script."
+        exit 1
+    fi
+    local required
+    required=$(awk '$1 == "go" {print $2; exit}' "$src_dir/go.mod")
+    required="${required:-1.27}"
+    check_go_version "$required"
+
+    log_step "Building from source (make build)..."
+    if ! (cd "$src_dir" && make build); then
+        log_error "make build failed in ${src_dir}"
+        exit 1
+    fi
+
+    log_step "Installing binaries to ${BOLD}${INSTALL_DIR}${NC}..."
+    mkdir -p "$INSTALL_DIR"
+    install -m 0755 "$src_dir/pi" "${INSTALL_DIR}/pi"
+    install -m 0755 "$src_dir/pi-sandbox" "${INSTALL_DIR}/pi-sandbox"
+
+    log_success "Installed ${INSTALL_DIR}/pi and ${INSTALL_DIR}/pi-sandbox (source build, branch ${BRANCH})"
+    verify_installation "${INSTALL_DIR}/pi"
+}
+
+# Release path: download the published archive and install `pi`.
+# Returns 1 on any failure so the caller can fall back to a source build.
+install_from_release() {
+    local version="$1"
+    local platform="$2"
+
+    if [ -n "${DRY_RUN:-}" ]; then
+        log_info "DRY_RUN: release path selected (nothing will be downloaded or installed):"
+        log_info "DRY_RUN:   curl/wget $(asset_url "$version" "$platform")"
+        log_info "DRY_RUN:   extract and install to ${INSTALL_DIR}/pi"
+        return 0
+    fi
+
+    local temp_file
+    temp_file=$(download_binary "$version" "$platform") || return 1
+    log_step_complete "Download complete"
+
+    local install_path
+    install_path=$(install_binary "$temp_file") || return 1
+    log_step_complete "Binary installed"
+
+    verify_installation "$install_path"
+}
+
+finish() {
+    echo -e "\n${BOLD}${GREEN}🎉 Installation complete!${NC}" >&2
+    echo -e "${GREEN}   Run ${BOLD}pi${NC}${GREEN} to start.${NC}\n" >&2
+}
+
 # Main installation function
 main() {
     log_header
@@ -214,23 +351,23 @@ main() {
     local platform=$(detect_platform)
     log_step_complete "Platform detected: ${BOLD}${platform}${NC}"
 
-    # Get latest version
-    local version=$(get_latest_version)
-    log_step_complete "Found latest version: ${BOLD}${version}${NC}"
+    # Get latest version — empty when the repo has no published release
+    local version
+    version=$(get_latest_version)
 
-    # Download binary
-    local temp_file=$(download_binary "$version" "$platform")
-    log_step_complete "Download complete"
+    if [ -n "$version" ]; then
+        log_step_complete "Found latest version: ${BOLD}${version}${NC}"
+        if install_from_release "$version" "$platform"; then
+            finish
+            return 0
+        fi
+        log_warn "Release install failed — falling back to source build"
+    else
+        log_info "no published release yet — building from source"
+    fi
 
-    # Install binary
-    local install_path=$(install_binary "$temp_file")
-    log_step_complete "Binary installed"
-
-    # Verify
-    verify_installation "$install_path"
-
-    echo -e "\n${BOLD}${GREEN}🎉 Installation complete!${NC}" >&2
-    echo -e "${GREEN}   Run ${BOLD}pi${NC}${GREEN} to start.${NC}\n" >&2
+    build_and_install_from_source
+    finish
 }
 
 # Handle command line arguments
@@ -242,8 +379,14 @@ case "${1:-}" in
         echo -e "  $0 [OPTIONS]"
         echo -e "\n${BOLD}OPTIONS:${NC}"
         echo -e "  -h, --help     Show this help message"
+        echo -e "\n${BOLD}MODES:${NC}"
+        echo -e "  release   Install 'pi' from the latest GitHub release (default when one exists)"
+        echo -e "  source    Fallback: shallow-clone the repo, make build, install 'pi' + 'pi-sandbox'"
         echo -e "\n${BOLD}ENVIRONMENT VARIABLES:${NC}"
         echo -e "  INSTALL_DIR    Installation directory (default: \$HOME/.local/bin)"
+        echo -e "  REPO           GitHub repository to install from (default: ${REPO})"
+        echo -e "  BRANCH         Branch used by the source-build fallback (default: main)"
+        echo -e "  DRY_RUN        Non-empty: print the chosen path and commands, install nothing"
         echo ""
         exit 0
         ;;
