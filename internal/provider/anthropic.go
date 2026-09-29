@@ -30,6 +30,7 @@ type anthropicModel struct {
 	advisorMaxUses       int    // Max advisor calls per request (0 = unlimited)
 	advisorCaching       bool   // Enable ephemeral prompt caching for advisor
 	disablePromptCaching bool   // When true, skip stamping cache_control markers
+	temperature          *float64
 }
 
 // NewAnthropic creates an Anthropic model.LLM.
@@ -82,11 +83,13 @@ func NewAnthropic(_ context.Context, modelName, apiKey, baseURL, thinkingLevel s
 	var advisorMaxUses int
 	var advisorCaching bool
 	var disablePromptCaching bool
+	var temperature *float64
 	if llmOpts != nil {
 		advisorModel = llmOpts.AdvisorModel
 		advisorMaxUses = llmOpts.AdvisorMaxUses
 		advisorCaching = llmOpts.AdvisorCaching
 		disablePromptCaching = llmOpts.DisablePromptCaching
+		temperature = llmOpts.Temperature
 	}
 
 	return &anthropicModel{
@@ -98,6 +101,7 @@ func NewAnthropic(_ context.Context, modelName, apiKey, baseURL, thinkingLevel s
 		advisorMaxUses:       advisorMaxUses,
 		advisorCaching:       advisorCaching,
 		disablePromptCaching: disablePromptCaching,
+		temperature:          temperature,
 	}, nil
 }
 
@@ -176,6 +180,12 @@ func (m *anthropicModel) buildParams(modelName string, messages []anthropic.Mess
 	if thinkingCfg != nil {
 		params.Thinking = *thinkingCfg
 	}
+	// Anthropic rejects any temperature other than 1 while extended thinking
+	// is on, so the caller's temperature only rides requests without a
+	// thinking budget rather than failing every thinking turn.
+	if m.temperature != nil && thinkingCfg == nil {
+		params.Temperature = param.NewOpt(*m.temperature)
+	}
 
 	if systemPrompt != "" {
 		params.System = []anthropic.TextBlockParam{
@@ -236,6 +246,11 @@ func (m *anthropicModel) buildBetaParams(modelName string, messages []anthropic.
 
 	if thinkingCfg != nil {
 		params.Thinking = *thinkingCfg
+	}
+	// Same thinking guard as buildParams: the beta surface rejects a
+	// temperature other than 1 alongside a thinking budget too.
+	if m.temperature != nil && thinkingCfg == nil {
+		params.Temperature = param.NewOpt(*m.temperature)
 	}
 
 	if systemPrompt != "" {

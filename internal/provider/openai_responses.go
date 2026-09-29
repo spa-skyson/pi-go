@@ -112,6 +112,12 @@ func (m *openaiModel) buildResponsesParams(req *model.LLMRequest, modelName stri
 		if maxOutputTokens := oaiMaxOutputTokens(req.Config, m.maxOutputTokens); maxOutputTokens > 0 {
 			params.MaxOutputTokens = param.NewOpt(maxOutputTokens)
 		}
+		// Sampling temperature sits behind the same boundary: the codex
+		// backend's restricted Responses surface is reported to strip it, and
+		// a rejected or stripped field must not break the turn.
+		if m.temperature != nil {
+			params.Temperature = param.NewOpt(*m.temperature)
+		}
 	}
 
 	// The ChatGPT codex backend is stateless — it rejects requests that

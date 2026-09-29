@@ -40,6 +40,11 @@ func (m *openaiModel) generateChat(ctx context.Context, req *model.LLMRequest, m
 		if effort, ok := m.chatReasoningEffort(); ok {
 			params.ReasoningEffort = effort
 		}
+		// Sampling temperature rides both wire paths; nil leaves the field off
+		// so the server default stands (see LLMOptions.Temperature).
+		if m.temperature != nil {
+			params.Temperature = param.NewOpt(*m.temperature)
+		}
 		if systemInstruction != "" {
 			params.Messages = append([]openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(systemInstruction),

@@ -465,19 +465,25 @@ func (o *Orchestrator) Spawn(ctx context.Context, input SpawnInput) (<-chan Even
 	}
 
 	// Build spawn options shared by the pi spawner and the ACP dispatcher.
+	// ThinkingLevel is normalized here rather than at parse time so the raw
+	// frontmatter value stays inspectable and unknown spellings warn once per
+	// spawn, next to everything else the orchestrator validates.
 	spawnOpts := SpawnOpts{
-		AgentID:     agentID,
-		Model:       model,
-		WorkDir:     workDir,
-		Prompt:      input.Prompt,
-		Instruction: agent.Instruction,
-		Timeout:     timeout,
-		Env:         o.spawnEnv(input.Env, workDir, attributionFor(input, agentID, workDir)),
-		BaseURL:     agentSpawnBaseURL(o.cfg, o.BaseURL, model),
-		Insecure:    o.Insecure,
-		Headers:     o.Headers,
-		LSP:         agent.LSP,
-		Tools:       agent.Tools,
+		AgentID:       agentID,
+		Model:         model,
+		WorkDir:       workDir,
+		Prompt:        input.Prompt,
+		Instruction:   agent.Instruction,
+		Timeout:       timeout,
+		Env:           o.spawnEnv(input.Env, workDir, attributionFor(input, agentID, workDir)),
+		BaseURL:       agentSpawnBaseURL(o.cfg, o.BaseURL, model),
+		Insecure:      o.Insecure,
+		Headers:       o.Headers,
+		LSP:           agent.LSP,
+		Tools:         agent.Tools,
+		Temperature:   agent.Temperature,
+		ThinkingLevel: normalizeReasoningEffort(agent.ReasoningEffort),
+		Steps:         agent.Steps,
 	}
 
 	proc, err := o.dispatchSpawn(ctx, spawnOpts, agent.Name)

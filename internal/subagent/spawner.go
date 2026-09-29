@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -55,6 +56,17 @@ type SpawnOpts struct {
 	// leaves the flag off, so the child keeps its full tool set. This carries
 	// the agent's frontmatter `tools:` list to the process that owns the tools.
 	Tools []string
+	// Temperature is the child's sampling temperature (passed as
+	// --temperature). Zero leaves the flag off, so the child inherits its
+	// caller's default; see AgentConfig.Temperature for the 0-means-unset tie.
+	Temperature float64
+	// ThinkingLevel is the child's reasoning effort (passed as --thinking),
+	// already normalized by normalizeReasoningEffort. Empty leaves the flag
+	// off and the child on its configured default.
+	ThinkingLevel string
+	// Steps caps the child's tool-call iterations (passed as --steps). Zero
+	// leaves the flag off — no limit.
+	Steps int
 }
 
 // Spawner creates and manages subagent pi processes.
@@ -133,6 +145,15 @@ func spawnArgs(opts SpawnOpts) []string {
 	}
 	if len(opts.Tools) > 0 {
 		args = append(args, "--tools", strings.Join(opts.Tools, ","))
+	}
+	if opts.Temperature != 0 {
+		args = append(args, "--temperature", strconv.FormatFloat(opts.Temperature, 'g', -1, 64))
+	}
+	if opts.ThinkingLevel != "" {
+		args = append(args, "--thinking", opts.ThinkingLevel)
+	}
+	if opts.Steps > 0 {
+		args = append(args, "--steps", strconv.Itoa(opts.Steps))
 	}
 	// The prompt is positional and must stay last. The "--" terminator keeps
 	// cobra from reading it as a subcommand or as flags: a prompt whose first

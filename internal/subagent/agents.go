@@ -44,7 +44,19 @@ type AgentConfig struct {
 	// "full". Empty means inherit the child process default (min). Set it in
 	// frontmatter on agents that navigate code, so the wide LSP surface is
 	// bought per-agent instead of by every session.
-	LSP    string
+	LSP string
+	// Temperature is the sampling temperature passed to the child as
+	// --temperature. Zero means unset: frontmatter temperatures are
+	// practically always > 0 (0.2-1.0), so 0 is safe as the "not asked for"
+	// sentinel — an agent that genuinely wants 0 sampling temperature is
+	// rare enough to lose the tie against keeping the plain float field.
+	Temperature float64
+	// ReasoningEffort is the raw frontmatter `reasoningEffort:` value
+	// (trimmed, lowercased). It is normalized to a thinking level at spawn
+	// time by normalizeReasoningEffort; empty means inherit.
+	ReasoningEffort string
+	// Steps caps the child's tool-call iterations (0 = no limit).
+	Steps  int
 	Source string // "bundled", "user", or "project"
 }
 
@@ -65,12 +77,17 @@ type AgentDiscoveryResult struct {
 // model: corp-codex/gpt-5.6-sol
 // worktree: false
 // tools: read, write, edit
+// temperature: 0.3
+// reasoningEffort: high
+// steps: 150
 // ---
 // Markdown instruction body...
 //
 // `model:` overrides `role:` when both are set; it may name a built-in
 // provider's model or a declared one ("provider/model", see the `providers`
-// section of config.json).
+// section of config.json). `temperature:`, `reasoningEffort:` and `steps:`
+// tune the child's sampling and iteration budget; unusable values warn and
+// leave the field at its zero value (= inherit / unlimited).
 func ParseAgentFile(path string) (AgentConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -155,6 +172,16 @@ func applyAgentFrontmatterKey(cfg *AgentConfig, key, value string) {
 		cfg.LSP = strings.ToLower(strings.TrimSpace(value))
 	case "tools":
 		cfg.Tools = append(cfg.Tools, parseAgentToolList(value)...)
+	case "temperature":
+		if t, ok := parseAgentTemperature(cfg.Name, value); ok {
+			cfg.Temperature = t
+		}
+	case "reasoningEffort":
+		cfg.ReasoningEffort = strings.ToLower(strings.TrimSpace(value))
+	case "steps":
+		if n, ok := parseAgentSteps(cfg.Name, value); ok {
+			cfg.Steps = n
+		}
 	}
 }
 
@@ -177,6 +204,52 @@ func parseAgentTimeout(agentName, value string) (int, bool) {
 		return 0, false
 	}
 	return ms, true
+}
+
+// parseAgentTemperature reads a frontmatter `temperature:` value, reporting
+// ok=false when it is unusable and the field should stay zero (= unset, child
+// inherits). Sampling temperatures are 0..2 by every provider's contract, so a
+// negative value is the same unit-class mistake as a non-numeric one.
+func parseAgentTemperature(agentName, value string) (float64, bool) {
+	t, err := strconv.ParseFloat(value, 64)
+	if err != nil || t < 0 {
+		slog.Warn("subagent: unusable temperature ignored",
+			"agent", agentName, "temperature", value, "using", "default")
+		return 0, false
+	}
+	return t, true
+}
+
+// parseAgentSteps reads a frontmatter `steps:` value — the cap on the child's
+// tool-call iterations — reporting ok=false when it is unusable and the field
+// should stay zero (= no limit).
+func parseAgentSteps(agentName, value string) (int, bool) {
+	n, err := strconv.Atoi(value)
+	if err != nil || n < 0 {
+		slog.Warn("subagent: unusable steps ignored",
+			"agent", agentName, "steps", value, "using", "unlimited")
+		return 0, false
+	}
+	return n, true
+}
+
+// normalizeReasoningEffort maps a raw `reasoningEffort:` value onto the
+// thinking levels the provider layer understands. "minimal" is OpenAI's
+// spelling of "none"; everything else passes through lowercased. Unknown
+// values warn and come back empty so the child inherits instead of failing.
+func normalizeReasoningEffort(value string) string {
+	switch v := strings.ToLower(strings.TrimSpace(value)); v {
+	case "":
+		return ""
+	case "minimal":
+		return "none"
+	case "none", "low", "medium", "high", "max":
+		return v
+	default:
+		slog.Warn("subagent: unknown reasoningEffort ignored",
+			"reasoningEffort", value, "known", "none, minimal, low, medium, high, max")
+		return ""
+	}
 }
 
 // parseAgentToolList splits a comma-separated frontmatter `tools:` value,

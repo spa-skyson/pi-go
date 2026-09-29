@@ -164,7 +164,7 @@ func runInteractive(
 		AppVersion:     versionString(),
 		ModelName:      llm.Name(),
 		ProviderName:   info.Provider,
-		ThinkingLevel:  cfg.ThinkingLevel,
+		ThinkingLevel:  effectiveThinkingLevel(cfg),
 		ActiveRole:     activeRole,
 		Roles:          cfg.Roles,
 		WorkDir:        cwd,
@@ -629,6 +629,13 @@ func buildDeferredCallbacks(
 		afterCBs = append(afterCBs, memRecorder.afterTool)
 	}
 
+	// --steps caps the tool-call iterations; 0 (the default) disables it.
+	// Must ride the composed chain below — a separate slice entry would never
+	// run (ADK stops at the first callback that returns a result).
+	if flagSteps > 0 {
+		afterCBs = append(afterCBs, agent.NewStepLimitCallback(flagSteps))
+	}
+
 	// Fold the after-tool chain into the single callback ADK runs. ADK's
 	// Flow.invokeAfterToolCallbacks returns at the first callback that yields a
 	// non-nil result, and every callback above returns the result map, so
@@ -1068,9 +1075,10 @@ func buildSwitchedLLM(ctx context.Context, cfg config.Config, tokenTracker *guar
 
 	llmOpts := &provider.LLMOptions{
 		ExtraHeaders: mergeExtraHeaders(cfg.ExtraHeaders, flagHeaders),
+		Temperature:  temperatureFlagOpt(),
 	}
 	applyTransportOptions(llmOpts, cfg, info)
-	llm, err := provider.NewLLM(ctx, info, apiKey, baseURL, cfg.ThinkingLevel, llmOpts)
+	llm, err := provider.NewLLM(ctx, info, apiKey, baseURL, effectiveThinkingLevel(cfg), llmOpts)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("creating LLM: %w", err)
 	}
