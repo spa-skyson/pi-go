@@ -197,6 +197,12 @@ type Info struct {
 	// cloud-looking tag on such a name from routing to api.ollama.com.
 	LocalOllama bool
 	Custom      bool // true when using an explicit custom OpenAI-compatible endpoint
+	// Protocol names the wire protocol a configurable provider speaks:
+	// "openai" or "anthropic". Set only for user-declared providers (the
+	// providers section of config.json), whose names NewLLM does not know;
+	// built-in providers are chosen by the provider name itself and leave
+	// this empty.
+	Protocol string
 	// BaseURL is the endpoint finally selected for this model, recorded so a
 	// session transcript identifies the backend and not just the model name.
 	// The same name served by ollama, by a gateway, and by a vendor API behaves
@@ -773,6 +779,18 @@ func NewLLM(ctx context.Context, info Info, apiKey, baseURL, thinkingLevel strin
 	case "agentgateway":
 		return NewAgentGateway(ctx, info.Model, apiKey, baseURL, opts)
 	default:
+		// A user-declared provider (config.json "providers") routes by its
+		// declared wire protocol onto the matching built-in client. The
+		// --url path also yields Custom, but with Provider "openai" and no
+		// Protocol — it is handled by the case above and stays unchanged.
+		if info.Custom && info.Protocol != "" {
+			switch info.Protocol {
+			case "anthropic":
+				return NewAnthropic(ctx, info.Model, apiKey, baseURL, thinkingLevel, opts)
+			default:
+				return NewOpenAI(ctx, info.Model, apiKey, baseURL, opts)
+			}
+		}
 		return nil, fmt.Errorf("unsupported provider: %s", info.Provider)
 	}
 }

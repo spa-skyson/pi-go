@@ -36,6 +36,12 @@ func Resolve(ctx context.Context, cfg config.Config, info provider.Info, baseURL
 			ctxWindowSize = n
 		}
 	}
+	// A window declared per model on a declared provider (config.json
+	// "providers") beats the catalog: those models are not in it, and without
+	// this auto-compaction would stay off for them entirely.
+	if n := cfg.ContextWindowFor(info.Provider, info.Model); n > 0 {
+		ctxWindowSize = n
+	}
 	if cfg.ContextWindow > 0 {
 		ctxWindowSize = cfg.ContextWindow
 	}

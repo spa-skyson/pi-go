@@ -1072,7 +1072,7 @@ func buildSwitchedLLM(ctx context.Context, cfg config.Config, tokenTracker *guar
 	tokenTracker.SetContextWindowSize(switchContextWindowSize(ctx, cfg, info, baseURL))
 	llm = guardrail.WrapModel(llm, tokenTracker)
 
-	return llm, switchedModelName(info), info.Provider, nil
+	return llm, switchedModelName(cfg, info), info.Provider, nil
 }
 
 // resolveSwitchedModel resolves modelName to a validated model info plus the
@@ -1080,6 +1080,17 @@ func buildSwitchedLLM(ctx context.Context, cfg config.Config, tokenTracker *guar
 // default role, base URL resolution, model validation, and Ollama endpoint
 // fallback all happen here.
 func resolveSwitchedModel(cfg config.Config, modelName, providerName string) (provider.Info, string, string, error) {
+	// A model served by a declared provider (config.json "providers") resolves
+	// through that provider's endpoint and key, by its prefixed name alone —
+	// before the role's provider and the built-in detection can mis-route it.
+	if info, apiKey, baseURL, ok := namedModelInfo(cfg, modelName, providerName); ok {
+		if err := provider.ValidateModel(info); err != nil {
+			return provider.Info{}, "", "", fmt.Errorf("model validation: %w", err)
+		}
+		info.BaseURL = baseURL
+		return info, baseURL, apiKey, nil
+	}
+
 	// A model named with an explicit provider prefix ("openrouter/gemma-4")
 	// keeps the provider it named: the role's provider is only a default for a
 	// bare name, and letting it win would send the request to the wrong
@@ -1115,7 +1126,10 @@ func resolveSwitchedModel(cfg config.Config, modelName, providerName string) (pr
 		return provider.Info{}, "", "", fmt.Errorf("model validation: %w", err)
 	}
 
-	apiKey := config.APIKeys()[info.Provider]
+	// ResolveAPIKeys covers the built-in env vars and each declared provider's
+	// key; the named branch above already returned, so this reads a built-in
+	// provider's key.
+	apiKey := cfg.ResolveAPIKeys()[info.Provider]
 
 	if info.Ollama {
 		baseURL = provider.ResolveOllamaEndpoint(provider.OllamaRouting{
@@ -1150,6 +1164,12 @@ func switchContextWindowSize(ctx context.Context, cfg config.Config, info provid
 	}
 	// An explicit config value wins: the embedded catalog does not cover every
 	// provider's models, and auto-compaction needs a real window to work from.
+	// A window declared per model on a declared provider (config.json
+	// "providers") also beats the catalog — those models are not in it — while
+	// the global contextWindow stays the top override.
+	if n := cfg.ContextWindowFor(info.Provider, info.Model); n > 0 {
+		ctxWindowSize = n
+	}
 	if cfg.ContextWindow > 0 {
 		ctxWindowSize = cfg.ContextWindow
 	}
@@ -1167,9 +1187,20 @@ func switchContextWindowSize(ctx context.Context, cfg config.Config, info provid
 //
 // Re-adding the prefix is what keeps the name self-sufficient, which is what
 // lets the next switch resolve it without a provider recorded alongside it.
-func switchedModelName(info provider.Info) string {
+func switchedModelName(cfg config.Config, info provider.Info) string {
 	if info.LocalOllama {
 		return "ollama/" + info.Model
+	}
+	// A declared provider (config.json "providers") has no built-in prefix,
+	// and a bare name can never re-resolve onto it — Resolve only returns
+	// built-in providers — so the name is always part of a self-sufficient
+	// spelling. Without this a switch to corp-claude/foo would persist the
+	// bare "foo" and the next switch would land on the built-in provider that
+	// prefix-detects it.
+	if info.Custom && info.Protocol != "" {
+		if _, declared := cfg.Providers[info.Provider]; declared {
+			return info.Provider + "/" + info.Model
+		}
 	}
 	// A bare name that already resolves to this provider needs no prefix, and
 	// adding one would rewrite a spelling the catalog and the user recognize

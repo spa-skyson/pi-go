@@ -345,7 +345,59 @@ func resolveRuntimeModel(cfg config.Config, modelName, providerName string) (pro
 	return resolveRuntimeModelForRole(cfg, modelName, providerName, "")
 }
 
+// namedModelInfo resolves a model that belongs to a user-declared provider —
+// an entry in config.json's "providers" section. Either the model name itself
+// carries the provider prefix ("corp-claude/claude-opus-5", which is also the
+// spelling a switched session persists, so a resumed model matches it too) or
+// the role names such a provider for a bare model. ok is false when neither
+// applies and the built-in resolution should run.
+//
+// The declared provider's endpoint is used unless --url overrides it, and the
+// key comes from the provider entry (literal or env). internal/config and
+// internal/provider must not import each other, so the type→protocol mapping
+// lives on config.ProviderConfig and the Info is assembled here, at the one
+// seam that touches both packages.
+func namedModelInfo(cfg config.Config, modelName, providerName string) (info provider.Info, apiKey, baseURL string, ok bool) {
+	name, rest, prefixed := cfg.NamedProviderPrefix(modelName)
+	if !prefixed {
+		// A role naming a declared provider only claims a bare model: an
+		// explicit built-in prefix on the name is the stronger statement,
+		// same rule the ProviderFromPrefix guard applies to role providers.
+		if _, _, builtin := provider.ProviderFromPrefix(modelName); builtin {
+			return provider.Info{}, "", "", false
+		}
+		if _, declared := cfg.Providers[providerName]; declared {
+			name, rest = providerName, modelName
+		} else {
+			return provider.Info{}, "", "", false
+		}
+	}
+	pc := cfg.Providers[name]
+	baseURL = flagURL
+	if baseURL == "" {
+		baseURL = pc.BaseURL
+	}
+	info = provider.Info{
+		Provider: name,
+		Model:    rest,
+		Custom:   true,
+		Protocol: pc.Protocol(),
+		BaseURL:  baseURL,
+	}
+	return info, cfg.ResolveAPIKeys()[name], baseURL, true
+}
+
 func resolveRuntimeModelForRole(cfg config.Config, modelName, providerName, activeRole string) (provider.Info, string, error) {
+	// A model served by a declared provider routes by its name alone — before
+	// the built-in prefix machinery and before the role's provider can
+	// overwrite it. A resumed session's model persists the prefixed spelling,
+	// so the same detect covers resume.
+	if info, _, baseURL, ok := namedModelInfo(cfg, modelName, providerName); ok {
+		if err := provider.ValidateModel(info); err != nil {
+			return provider.Info{}, "", fmt.Errorf("model validation: %w", err)
+		}
+		return info, baseURL, nil
+	}
 	baseURL := flagURL
 	resumedProvider := ""
 	if baseURL == "" && flagSession != "" && flagModel == "" && activeRole == "default" {
@@ -469,7 +521,9 @@ func buildRootRuntime(ctx context.Context, args []string) (rootRuntime, error) {
 	}
 	info.BaseURL = baseURL
 
-	keys := config.APIKeys()
+	// ResolveAPIKeys covers the built-in env vars and each declared provider's
+	// key, so a named provider reaches its endpoint with its own credential.
+	keys := cfg.ResolveAPIKeys()
 	apiKey := keys[info.Provider]
 	if err := requireRuntimeAPIKey(info, apiKey, baseURL); err != nil {
 		return rootRuntime{}, err
@@ -1949,6 +2003,23 @@ func buildCommitMsgFunc(ctx context.Context, cfg config.Config) func(context.Con
 		}
 	}
 
+	// A model served by a declared provider resolves through its own endpoint
+	// and key; provider.Resolve below only knows the built-in names and would
+	// fail — or worse, mis-route a bare name — for one of these.
+	if info, apiKey, baseURL, ok := namedModelInfo(cfg, commitModel, commitProvider); ok {
+		if err := provider.ValidateModel(info); err != nil {
+			return nil
+		}
+		llm, err := provider.NewLLM(ctx, info, apiKey, baseURL, "none", &provider.LLMOptions{
+			ExtraHeaders:    cfg.ExtraHeaders,
+			InsecureSkipTLS: cfg.InsecureSkipTLS,
+		})
+		if err != nil {
+			return nil
+		}
+		return tui.GenerateCommitMsgFunc(llm)
+	}
+
 	info, err := provider.Resolve(commitModel)
 	if err != nil {
 		return nil
@@ -1960,7 +2031,7 @@ func buildCommitMsgFunc(ctx context.Context, cfg config.Config) func(context.Con
 		return nil
 	}
 
-	keys := config.APIKeys()
+	keys := cfg.ResolveAPIKeys()
 	apiKey := keys[info.Provider]
 	// Resolve base URL: --url flag takes precedence over env var, then Ollama default.
 	baseURL := flagURL

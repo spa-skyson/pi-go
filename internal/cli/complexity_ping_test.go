@@ -794,7 +794,7 @@ func TestResolvePingCredentials(t *testing.T) {
 			for k, v := range tt.env {
 				t.Setenv(k, v)
 			}
-			gotURL, _, gotCodex := resolvePingCredentials(tt.info, tt.baseURL, tt.explicit)
+			gotURL, _, gotCodex := resolvePingCredentials(config.Config{}, tt.info, tt.baseURL, tt.explicit)
 			if gotURL != tt.wantBaseURL {
 				t.Errorf("baseURL = %q, want %q", gotURL, tt.wantBaseURL)
 			}
@@ -1084,7 +1084,7 @@ func TestSelectModelListProviders(t *testing.T) {
 			}
 
 			var out strings.Builder
-			got, err := selectModelListProviders(&out, tt.args, keys, baseURLs)
+			got, err := selectModelListProviders(&out, tt.args, keys, baseURLs, nil)
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("err = %v, want it to mention %q", err, tt.wantErr)
@@ -1094,8 +1094,12 @@ func TestSelectModelListProviders(t *testing.T) {
 			if err != nil {
 				t.Fatalf("selectModelListProviders: %v", err)
 			}
-			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
-				t.Errorf("providers = %v, want %v", got, tt.want)
+			gotNames := make([]string, len(got))
+			for i, p := range got {
+				gotNames[i] = p.name
+			}
+			if strings.Join(gotNames, ",") != strings.Join(tt.want, ",") {
+				t.Errorf("providers = %v, want %v", gotNames, tt.want)
 			}
 			if tt.wantPrinted != "" && !strings.Contains(out.String(), tt.wantPrinted) {
 				t.Errorf("expected %q in the printed output, got:\n%s", tt.wantPrinted, out.String())
@@ -1122,14 +1126,14 @@ func TestSelectModelListProvidersNothingConfigured(t *testing.T) {
 	allProviders = []string{"anthropic"}
 
 	var out strings.Builder
-	if _, err := selectModelListProviders(&out, nil, map[string]string{}, map[string]string{}); err == nil ||
+	if _, err := selectModelListProviders(&out, nil, map[string]string{}, map[string]string{}, nil); err == nil ||
 		!strings.Contains(err.Error(), "no providers configured") {
 		t.Fatalf("err = %v, want a no-providers-configured error", err)
 	}
 
 	t.Setenv("AZURE_OPENAI_ENDPOINT", "https://unit.openai.azure.com")
 	var out2 strings.Builder
-	got, err := selectModelListProviders(&out2, nil, map[string]string{}, map[string]string{})
+	got, err := selectModelListProviders(&out2, nil, map[string]string{}, map[string]string{}, nil)
 	if err != nil {
 		t.Fatalf("a configured azure must not be an error: %v", err)
 	}

@@ -164,13 +164,18 @@ type Config struct {
 	ContextWindow int64 `json:"contextWindow,omitempty"`
 	// RateLimits paces outbound requests, keyed by provider name ("gemini",
 	// "agentgateway", …) with "*" as the fallback for the rest.
-	RateLimits  map[string]RateLimitConfig `json:"rateLimits,omitempty"`
-	Compactor   *CompactorConfig           `json:"compactor,omitempty"`
-	AutoCompact *AutoCompactConfig         `json:"autoCompact,omitempty"`
-	Memory      *MemoryConfig              `json:"memory,omitempty"`
-	Palace      *PalaceConfig              `json:"palace,omitempty"`
-	A2A         *A2AConfig                 `json:"a2a,omitempty"`
-	LLMS        *LLMSConfig                `json:"llms,omitempty"`
+	RateLimits map[string]RateLimitConfig `json:"rateLimits,omitempty"`
+	// Providers declares user-defined providers (internal/config/providers.go
+	// for the schema and validation). The key becomes a model-name prefix:
+	// "corp-claude" serves "corp-claude/claude-opus-5" at that entry's
+	// endpoint, with its key, speaking the protocol its type names.
+	Providers   map[string]ProviderConfig `json:"providers,omitempty"`
+	Compactor   *CompactorConfig          `json:"compactor,omitempty"`
+	AutoCompact *AutoCompactConfig        `json:"autoCompact,omitempty"`
+	Memory      *MemoryConfig             `json:"memory,omitempty"`
+	Palace      *PalaceConfig             `json:"palace,omitempty"`
+	A2A         *A2AConfig                `json:"a2a,omitempty"`
+	LLMS        *LLMSConfig               `json:"llms,omitempty"`
 	// ReroutedLLMS names the MCP servers whose URL is an llms.txt index and
 	// which were therefore given a fetch_docs source during load.
 	ReroutedLLMS []string `json:"-"`
@@ -325,7 +330,15 @@ func (c *Config) ResolveRole(role string) (model string, prov string, advisorMod
 	}
 
 	prov = rc.Provider
-	if prov == "" {
+	// A model named with a declared-provider prefix routes to that provider,
+	// whatever the role or the default says: the prefix is the explicit
+	// statement, the role's provider is only a fallback for a bare name.
+	// Without this, DefaultProvider below would overwrite the name and the
+	// runtime resolvers would send a declared-provider model to a built-in
+	// endpoint.
+	if name, _, ok := c.NamedProviderPrefix(rc.Model); ok {
+		prov = name
+	} else if prov == "" {
 		prov = autoDetectProvider(rc.Model)
 		if prov == "" {
 			prov = c.DefaultProvider
@@ -406,6 +419,15 @@ func LoadFrom(cwd string) (Config, error) {
 	cfg.ReroutedLLMS = registerLLMSDocsSources(&cfg)
 
 	migrateDefaultModelRoles(&cfg)
+
+	// Declared providers expand their ${VAR} references first, then validate:
+	// validation sees the values a request would actually use, so a variable
+	// that expands to an empty baseURL is rejected here rather than at the
+	// first request.
+	substituteProviderEnv(&cfg, cwd)
+	if err := validateProviders(&cfg); err != nil {
+		return cfg, err
+	}
 
 	return cfg, nil
 }
@@ -778,10 +800,19 @@ func BaseURLs() map[string]string {
 // requiring a shell export, while keeping the env vars usable as a per-shell
 // or CI override. An empty env var does not mask a configured value.
 func (c *Config) ResolveBaseURLs() map[string]string {
-	urls := make(map[string]string, len(c.BaseURLs))
+	urls := make(map[string]string, len(c.BaseURLs)+len(c.Providers))
 	for provider, url := range c.BaseURLs {
 		if url != "" {
 			urls[provider] = url
+		}
+	}
+	// Declared providers carry their endpoint in the entry itself, expanded
+	// at load. The env sweep below cannot shadow these: a declared name is
+	// rejected at load when it collides with a built-in provider, and env
+	// vars are keyed by built-in names only.
+	for name, p := range c.Providers {
+		if p.BaseURL != "" {
+			urls[name] = p.BaseURL
 		}
 	}
 	for provider, url := range BaseURLs() {
