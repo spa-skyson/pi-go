@@ -419,9 +419,15 @@ func sidebarModelLines(in SidebarRenderInput, innerW int, st sidebarStyles) []st
 			Render("  "+truncateLabel(line, innerW)))
 	}
 	if in.TodoState != nil && in.TodoState.Total > 0 {
-		line := fmt.Sprintf("☑ %d/%d", in.TodoState.Done, in.TodoState.Total)
-		if in.TodoState.InProgress != "" {
-			line += " · " + truncateLabel(in.TodoState.InProgress, max(innerW-10, 6))
+		var line string
+		if in.TodoState.Done >= in.TodoState.Total {
+			// Match the PM-agent summary format: no glyph, a trailing "done".
+			line = fmt.Sprintf("Plan — %d/%d done", in.TodoState.Done, in.TodoState.Total)
+		} else {
+			line = fmt.Sprintf("Plan — %d/%d", in.TodoState.Done, in.TodoState.Total)
+			if in.TodoState.InProgress != "" {
+				line += " · " + truncateLabel(in.TodoState.InProgress, max(innerW-10, 6))
+			}
 		}
 		lines = append(lines, st.green.
 			Render("  "+truncateLabel(line, innerW)))
