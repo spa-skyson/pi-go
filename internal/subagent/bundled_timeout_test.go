@@ -3,6 +3,8 @@ package subagent
 import (
 	"testing"
 	"time"
+
+	"github.com/dimetron/pi-go/internal/testenv"
 )
 
 // TestBundledAgentTimeoutsAreSane walks every shipped agent definition and
@@ -14,6 +16,10 @@ import (
 // The value reads perfectly reasonable if you assume seconds, which is exactly
 // why a person reviewing the file did not catch it.
 func TestBundledAgentTimeoutsAreSane(t *testing.T) {
+	// DiscoverAgents always loads the real home's user dir; isolate HOME so a
+	// broken user agent file cannot fail this bundled-only check.
+	testenv.SetHome(t, t.TempDir())
+
 	res, err := DiscoverAgents(t.TempDir(), ScopeBundled)
 	if err != nil {
 		t.Fatalf("DiscoverAgents: %v", err)
@@ -40,6 +46,8 @@ func TestBundledAgentTimeoutsAreSane(t *testing.T) {
 }
 
 func TestMemoryCompressorHasAWorkableTimeout(t *testing.T) {
+	testenv.SetHome(t, t.TempDir()) // keep the real home's user dir out of discovery
+
 	res, err := DiscoverAgents(t.TempDir(), ScopeBundled)
 	if err != nil {
 		t.Fatalf("DiscoverAgents: %v", err)
