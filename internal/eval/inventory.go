@@ -64,7 +64,10 @@ func Inventory(dir string) ([]ToolInfo, error) {
 	// can exist, and web_search is opt-in in a real session. Omitting it here
 	// would make the tool invisible to the coverage check, so the suite would
 	// stop noticing that it has neither a scenario nor an exclusion.
-	core, err := tools.CoreTools(sb, tools.WithBashSupervisor(sup), tools.WithWebSearch())
+	// WithSessionID works the same way: the todo tools register only when a
+	// session ID is configured (registry.go), and they can exist in every
+	// interactive session, so the inventory must see them.
+	core, err := tools.CoreTools(sb, tools.WithBashSupervisor(sup), tools.WithWebSearch(), tools.WithSessionID("eval-inventory"))
 	if err != nil {
 		return nil, fmt.Errorf("inventory core tools: %w", err)
 	}

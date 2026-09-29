@@ -21,6 +21,7 @@ import (
 	"github.com/dimetron/pi-go/internal/logger"
 	"github.com/dimetron/pi-go/internal/otel"
 	"github.com/dimetron/pi-go/internal/retry"
+	"github.com/dimetron/pi-go/internal/tools"
 )
 
 const (
@@ -797,6 +798,24 @@ func waitForSystemNotice(ch <-chan string) tea.Cmd {
 			return nil
 		}
 		return systemNoticeMsg{text: text}
+	}
+}
+
+type todoUpdateMsg struct{ state tools.TodoState }
+
+// waitForTodoUpdate blocks on the todo channel and delivers the next state.
+// Re-armed after each delivery: the TUI keeps the latest state and re-reads
+// the channel for the next update.
+func waitForTodoUpdate(ch <-chan tools.TodoState) tea.Cmd {
+	if ch == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		state, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return todoUpdateMsg{state: state}
 	}
 }
 

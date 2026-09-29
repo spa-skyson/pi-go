@@ -185,6 +185,12 @@ For non-trivial tasks involving multiple files or phases, plan vertically, not h
 - Horizontal (avoid): implementing all types first, then all handlers, then all tests — this delays verification and compounds errors.
 - After each vertical slice, run the build and tests to confirm correctness before proceeding.
 
+Todo list (todo_write/todo_read):
+- Before starting work that takes 3 or more steps, write the plan with todo_write first — the full list up front, every step "pending", before doing any of it.
+- Keep the plan current: set exactly one step to "in_progress" when you start it and to "completed" as soon as it is done. todo_write replaces the whole list, so send the full plan on every update.
+- Single-step tasks need no plan — just do the work.
+- When every step is "completed", finish with a summary: what was done, one line per step.
+
 # Parallel execution
 
 You can call multiple tools in a single response when they are independent. For example:

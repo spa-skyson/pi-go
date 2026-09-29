@@ -20,6 +20,13 @@ func (m *model) handleSlashCommand(input string) (tea.Model, tea.Cmd) {
 	parts := strings.Fields(input)
 	cmd := strings.ToLower(parts[0])
 
+	// /todos opens the plan popup. Handled here to avoid an init cycle:
+	// slashCommandSpecs → handler → newSearchPopup → allSearchCandidates → slashCommands → slashCommandSpecs.
+	if cmd == "/todos" {
+		m.newSearchPopup(searchModeTodos)
+		return m, nil
+	}
+
 	// Log all slash commands.
 	if m.cfg.Logger != nil {
 		m.cfg.Logger.UserMessage(input)
@@ -982,6 +989,7 @@ func (m *model) formatHelp() string {
 	b.WriteString("| Command | Description |\n")
 	b.WriteString("|---------|-------------|\n")
 	b.WriteString("| `/subagents` | Monitor running subagents |\n")
+	b.WriteString("| `/todos` | Show todo/plan list |\n")
 	b.WriteString("| `/rtk` | Output compaction stats |\n")
 	b.WriteString("| `/mcp` | List MCP servers and tool status |\n")
 	b.WriteString("| `/login <provider>` | Configure API keys |\n")

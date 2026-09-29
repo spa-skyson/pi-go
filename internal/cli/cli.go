@@ -784,7 +784,7 @@ type nonInteractiveRuntime struct {
 	bashSup      *tools.BashSupervisor
 }
 
-func initNonInteractiveRuntime(ctx context.Context, cfg *config.Config, cwd, sandboxRoot, worktreeDir string) (*nonInteractiveRuntime, error) {
+func initNonInteractiveRuntime(ctx context.Context, cfg *config.Config, cwd, sandboxRoot, worktreeDir, headerSessionID string) (*nonInteractiveRuntime, error) {
 	sandbox, err := tools.NewSandbox(sandboxRoot, worktreeDir)
 	if err != nil {
 		return nil, fmt.Errorf("creating sandbox: %w", err)
@@ -797,7 +797,7 @@ func initNonInteractiveRuntime(ctx context.Context, cfg *config.Config, cwd, san
 	}
 
 	bashSup := tools.NewBashSupervisor()
-	coreTools, err := tools.CoreTools(sandbox, coreToolOptions(bashSup)...)
+	coreTools, err := tools.CoreTools(sandbox, coreToolOptions(bashSup, headerSessionID, nil)...)
 	if err != nil {
 		_ = sandbox.Close()
 		return nil, fmt.Errorf("creating core tools: %w", err)
@@ -886,7 +886,7 @@ func runNonInteractive(
 	cwd, sandboxRoot, worktreeDir, mode, prompt string,
 	headerSessionID string,
 ) error {
-	runtime, err := initNonInteractiveRuntime(parentCtx, &cfg, cwd, sandboxRoot, worktreeDir)
+	runtime, err := initNonInteractiveRuntime(parentCtx, &cfg, cwd, sandboxRoot, worktreeDir, headerSessionID)
 	if err != nil {
 		return err
 	}
@@ -1370,10 +1370,19 @@ func palaceIsEnabled(cfg config.Config) bool {
 // instead, because internal/acp/server builds the same tool set and cannot
 // import this package — a gate that lived only here would leave ACP without the
 // tool its session asked for.
-func coreToolOptions(sup *tools.BashSupervisor) []tools.CoreOption {
+//
+// sessionID, when non-empty, registers todo_write/todo_read tools. todoNotifier
+// is called after each successful todo_write. Pass nil when not needed.
+func coreToolOptions(sup *tools.BashSupervisor, sessionID string, todoNotifier func(tools.TodoState)) []tools.CoreOption {
 	opts := []tools.CoreOption{tools.WithBashSupervisor(sup)}
 	if flagWebSearch {
 		opts = append(opts, tools.WithWebSearch())
+	}
+	if sessionID != "" {
+		opts = append(opts, tools.WithSessionID(sessionID))
+		if todoNotifier != nil {
+			opts = append(opts, tools.WithTodoNotifier(todoNotifier))
+		}
 	}
 	return opts
 }
