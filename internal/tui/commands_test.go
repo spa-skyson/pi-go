@@ -902,8 +902,13 @@ func TestFormatModelInfo_DefaultRole(t *testing.T) {
 	if strings.Contains(result, "(role: default)") {
 		t.Error("should not show '(role: default)' for default role")
 	}
-	// But should show star marker.
-	if !strings.Contains(result, "* **default**") {
+	// The active role is marked, and the marker follows the entry rather than
+	// preceding the name: a "*" straight after the "- " bullet is emphasis to
+	// a markdown renderer, which drops the name onto its own line.
+	if !strings.Contains(result, "- **default**") {
+		t.Errorf("expected the role name on the bullet, got %q", result)
+	}
+	if !strings.Contains(result, "←") {
 		t.Errorf("expected active marker on default role, got %q", result)
 	}
 }

@@ -197,6 +197,12 @@ type Info struct {
 	// cloud-looking tag on such a name from routing to api.ollama.com.
 	LocalOllama bool
 	Custom      bool // true when using an explicit custom OpenAI-compatible endpoint
+	// Protocol names the wire protocol a configurable provider speaks:
+	// "openai" or "anthropic". Set only for user-declared providers (the
+	// providers section of config.json), whose names NewLLM does not know;
+	// built-in providers are chosen by the provider name itself and leave
+	// this empty.
+	Protocol string
 	// BaseURL is the endpoint finally selected for this model, recorded so a
 	// session transcript identifies the backend and not just the model name.
 	// The same name served by ollama, by a gateway, and by a vendor API behaves
@@ -323,6 +329,50 @@ var KnownProviderPrefixes = []string{
 	"azure/",
 	"opencode/",
 	"openrouter/",
+}
+
+// prefixProviders maps a model-name prefix to the provider it names outright.
+// Only prefixes that ARE a provider belong here: KnownProviderPrefixes also
+// lists vendor prefixes a gateway wraps around a name ("google/", "grok/"),
+// which say who built the model rather than who serves it.
+var prefixProviders = map[string]string{
+	"ollama/":       "ollama",
+	"azure/":        "azure",
+	"openai/":       "openai",
+	"opencode/":     "opencode",
+	"openrouter/":   "openrouter",
+	"agentgateway/": "agentgateway",
+	"mistral/":      "mistral",
+	"anthropic/":    "anthropic",
+}
+
+// ProviderFromPrefix reports the provider a model name names explicitly, plus
+// the name with that prefix removed. ok is false for a bare name.
+//
+// This is the seam that makes an explicit spelling beat a configured default:
+// a caller holding both a role's provider and a prefixed model name has to
+// know which the user actually asked for, and the prefix is the only one of
+// the two that was typed for this request.
+func ProviderFromPrefix(modelName string) (prov, rest string, ok bool) {
+	lower := strings.ToLower(modelName)
+	for prefix, p := range prefixProviders {
+		if strings.HasPrefix(lower, prefix) {
+			return p, modelName[len(prefix):], true
+		}
+	}
+	return "", modelName, false
+}
+
+// PrefixFor returns the model-name prefix that routes to providerName, and
+// whether one exists. Not every provider has one: a gemini or xai model is
+// recognized by the model name itself.
+func PrefixFor(providerName string) (string, bool) {
+	for prefix, p := range prefixProviders {
+		if p == providerName {
+			return prefix, true
+		}
+	}
+	return "", false
 }
 
 // StripKnownProviderPrefixes removes known provider prefix wrappers from a
@@ -497,57 +547,15 @@ func Resolve(modelName string) (Info, error) {
 		return Info{}, fmt.Errorf("no model specified")
 	}
 
-	// Detect ollama/ prefix → native Ollama provider.
-	// The prefix is stripped; the remainder is the Ollama model name.
-	if strings.HasPrefix(strings.ToLower(modelName), "ollama/") {
-		return Info{Provider: "ollama", Model: modelName[len("ollama/"):], Ollama: true, LocalOllama: true}, nil
-	}
-
-	// Detect azure/ prefix → Azure OpenAI provider.
-	// The prefix is stripped; the remainder is the Azure deployment name.
-	if strings.HasPrefix(strings.ToLower(modelName), "azure/") {
-		return Info{Provider: "azure", Model: modelName[len("azure/"):]}, nil
-	}
-
-	// Detect openai/ prefix → native OpenAI provider.
-	// The prefix is stripped; the remainder is the bare model ID. This is the
-	// vendor prefix of the OpenAI catalog entries ("openai/gpt-6-luna"), and it
-	// is listed in KnownProviderPrefixes, so Resolve has to honor it rather
-	// than fail on a name the rest of the codebase already accepts.
-	if strings.HasPrefix(strings.ToLower(modelName), "openai/") {
-		return Info{Provider: "openai", Model: modelName[len("openai/"):]}, nil
-	}
-
-	// Detect opencode/ prefix → OpenCode Go provider.
-	// The prefix is stripped; the remainder is the bare model ID.
-	if strings.HasPrefix(strings.ToLower(modelName), "opencode/") {
-		return Info{Provider: "opencode", Model: modelName[len("opencode/"):]}, nil
-	}
-
-	// Detect openrouter/ prefix → OpenRouter provider.
-	// The prefix is stripped; the remainder is the bare model ID.
-	if strings.HasPrefix(strings.ToLower(modelName), "openrouter/") {
-		return Info{Provider: "openrouter", Model: modelName[len("openrouter/"):]}, nil
-	}
-
-	// Detect agentgateway/ prefix → agentgateway provider. Checked before the
-	// :cloud/-cloud suffix check below: agentgateway model IDs carry a
-	// "-cloud" tag (e.g. deepseek-v4-flash:0731-cloud) that would otherwise
-	// route them to Ollama.
-	if strings.HasPrefix(strings.ToLower(modelName), "agentgateway/") {
-		return Info{Provider: "agentgateway", Model: modelName[len("agentgateway/"):]}, nil
-	}
-
-	// Detect mistral/ prefix → native Mistral provider.
-	// The prefix is stripped; the remainder is the Mistral model name.
-	if strings.HasPrefix(strings.ToLower(modelName), "mistral/") {
-		return Info{Provider: "mistral", Model: modelName[len("mistral/"):]}, nil
-	}
-
-	// Detect anthropic/ prefix → native Anthropic provider.
-	// The prefix is stripped; the remainder is the Anthropic model name.
-	if strings.HasPrefix(strings.ToLower(modelName), "anthropic/") {
-		return Info{Provider: "anthropic", Model: modelName[len("anthropic/"):]}, nil
+	// A prefix that names its provider outright wins, and is stripped. This is
+	// checked before the :cloud/-cloud suffix below because agentgateway model
+	// IDs carry a "-cloud" tag (e.g. deepseek-v4-flash:0731-cloud) that would
+	// otherwise route them to Ollama.
+	if prov, rest, ok := ProviderFromPrefix(modelName); ok {
+		if prov == "ollama" {
+			return Info{Provider: "ollama", Model: rest, Ollama: true, LocalOllama: true}, nil
+		}
+		return Info{Provider: prov, Model: rest}, nil
 	}
 
 	// Detect :cloud or -cloud suffix → native Ollama provider.
@@ -771,6 +779,18 @@ func NewLLM(ctx context.Context, info Info, apiKey, baseURL, thinkingLevel strin
 	case "agentgateway":
 		return NewAgentGateway(ctx, info.Model, apiKey, baseURL, opts)
 	default:
+		// A user-declared provider (config.json "providers") routes by its
+		// declared wire protocol onto the matching built-in client. The
+		// --url path also yields Custom, but with Provider "openai" and no
+		// Protocol — it is handled by the case above and stays unchanged.
+		if info.Custom && info.Protocol != "" {
+			switch info.Protocol {
+			case "anthropic":
+				return NewAnthropic(ctx, info.Model, apiKey, baseURL, thinkingLevel, opts)
+			default:
+				return NewOpenAI(ctx, info.Model, apiKey, baseURL, opts)
+			}
+		}
 		return nil, fmt.Errorf("unsupported provider: %s", info.Provider)
 	}
 }

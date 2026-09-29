@@ -222,7 +222,7 @@ func resolvePingTarget(cfg config.Config) (*pingTarget, error) {
 		return nil, err
 	}
 
-	baseURL, apiKey, codexBackend := resolvePingCredentials(info, baseURL, explicitBaseURL)
+	baseURL, apiKey, codexBackend := resolvePingCredentials(cfg, info, baseURL, explicitBaseURL)
 	endpoint, fallbacks := pingProbePaths(info, baseURL, codexBackend)
 
 	opts := &provider.LLMOptions{
@@ -269,6 +269,16 @@ func resolvePingModelInfo(cfg config.Config, activeRole string) (provider.Info, 
 		return provider.Info{}, "", false, fmt.Errorf("resolving model role: %w", err)
 	}
 
+	// A model served by a declared provider (config.json "providers") probes
+	// the endpoint the provider declares; that URL is configured, not
+	// defaulted, which is what explicitBaseURL reports onward.
+	if info, _, baseURL, ok := namedModelInfo(cfg, modelName, providerName); ok {
+		if err := provider.ValidateModel(info); err != nil {
+			return provider.Info{}, "", false, fmt.Errorf("model validation: %w", err)
+		}
+		return info, baseURL, true, nil
+	}
+
 	baseURL := flagURL
 	explicitBaseURL := baseURL != ""
 	if baseURL == "" && providerName != "" {
@@ -292,8 +302,11 @@ func resolvePingModelInfo(cfg config.Config, activeRole string) (provider.Info, 
 
 // resolvePingCredentials settles the base URL and API key the probe uses, and
 // reports whether the run has to go through the ChatGPT codex backend.
-func resolvePingCredentials(info provider.Info, baseURL string, explicitBaseURL bool) (string, string, bool) {
-	apiKey := config.APIKeys()[info.Provider]
+func resolvePingCredentials(cfg config.Config, info provider.Info, baseURL string, explicitBaseURL bool) (string, string, bool) {
+	// ResolveAPIKeys covers the built-in env vars and each declared provider's
+	// key, so a declared provider's probe authenticates with its own
+	// credential rather than an env var that happens to share a name.
+	apiKey := cfg.ResolveAPIKeys()[info.Provider]
 	if info.Ollama {
 		baseURL = provider.ResolveOllamaEndpoint(provider.OllamaRouting{
 			Model:      info.Model,

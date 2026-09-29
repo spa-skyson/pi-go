@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -73,6 +75,27 @@ Examples:
 // allProviders is the fixed list of providers supporting model listing.
 var allProviders = []string{"anthropic", "openai", "gemini", "mistral", "xai", "ollama", "openrouter", "agentgateway"}
 
+// modelListProvider is one entry the listing loop queries: the name shown in
+// the output, and the built-in provider whose listing endpoint actually
+// serves it. A declared provider (config.json "providers") lists through
+// "openai" or "anthropic" — whichever its type selects — but reports its own
+// name; the two fields differ only for those.
+type modelListProvider struct {
+	name   string
+	listAs string
+}
+
+// namedListProviders builds the model-list entries for config.json's
+// "providers" section, sorted by name so the sweep order is stable.
+func namedListProviders(cfg config.Config) []modelListProvider {
+	names := slices.Sorted(maps.Keys(cfg.Providers))
+	out := make([]modelListProvider, 0, len(names))
+	for _, name := range names {
+		out = append(out, modelListProvider{name: name, listAs: cfg.Providers[name].Protocol()})
+	}
+	return out
+}
+
 // flagModelListOutput is the --output flag value for `pi model list`.
 var flagModelListOutput string
 
@@ -86,16 +109,19 @@ type modelListJSONDoc struct {
 func runModelList(cmd *cobra.Command, args []string) error {
 	loadDotEnv()
 
-	keys := config.APIKeys()
 	// A broken or absent config must not stop model listing — fall back to
 	// env-only base URLs, which is what this command did before baseURLs existed.
 	cfg, err := config.Load()
 	if err != nil {
 		cfg = config.Defaults()
 	}
+	// ResolveAPIKeys/ResolveBaseURLs cover the built-in env vars plus each
+	// declared provider's endpoint and key, so the loop below reaches a
+	// declared provider without knowing it is anything but a provider.
+	keys := cfg.ResolveAPIKeys()
 	baseURLs := cfg.ResolveBaseURLs()
 
-	providers, err := selectModelListProviders(cmd.OutOrStdout(), args, keys, baseURLs)
+	providers, err := selectModelListProviders(cmd.OutOrStdout(), args, keys, baseURLs, namedListProviders(cfg))
 	if err != nil {
 		return err
 	}
@@ -108,32 +134,32 @@ func runModelList(cmd *cobra.Command, args []string) error {
 	exitCode := 0
 	for _, p := range providers {
 		opts := provider.ListModelsOptions{
-			APIKey:   keys[p],
+			APIKey:   keys[p.name],
 			Insecure: flagInsecure,
-			BaseURL:  modelListBaseURL(p, baseURLs),
+			BaseURL:  modelListBaseURL(p.name, baseURLs),
 		}
 
 		ctx, cancel := context.WithTimeout(cmd.Context(), 60*time.Second)
-		models, err := provider.ListModels(ctx, p, opts)
+		models, err := provider.ListModels(ctx, p.listAs, opts)
 		cancel()
 
 		if err != nil {
 			// Ollama is a local daemon that is often simply not running.
 			// Treat it as absent rather than as a failure: skip it silently
 			// so `model list` still succeeds for the providers that are up.
-			if p == "ollama" {
+			if p.name == "ollama" {
 				continue
 			}
-			fmt.Fprintf(os.Stderr, "%s: %v\n", p, err)
+			fmt.Fprintf(os.Stderr, "%s: %v\n", p.name, err)
 			exitCode = 1
 			continue
 		}
 
-		models = enrichAndFilterModels(p, models)
+		models = enrichAndFilterModels(p.name, models)
 
 		if flagModelListOutput == "json" {
 			doc := modelListJSONDoc{
-				Provider:  p,
+				Provider:  p.name,
 				FetchedAt: time.Now().UTC().Format(time.RFC3339),
 				Models:    models,
 			}
@@ -152,7 +178,7 @@ func runModelList(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		printProviderModels(p, models)
+		printProviderModels(p.name, models)
 	}
 
 	if exitCode != 0 {
@@ -185,15 +211,17 @@ func enrichAndFilterModels(providerName string, models []provider.ModelInfo) []p
 }
 
 // selectModelListProviders decides which providers `model list` queries: the
-// one named as an argument, or every configured one. An empty result with a nil
-// error means there is nothing left to query because the command has already
-// printed all it had to say.
-func selectModelListProviders(out io.Writer, args []string, keys, baseURLs map[string]string) ([]string, error) {
+// one named as an argument, or every configured one. named carries the
+// providers declared in config.json, which join the sweep and are also
+// accepted as the argument. An empty result with a nil error means there is
+// nothing left to query because the command has already printed all it had
+// to say.
+func selectModelListProviders(out io.Writer, args []string, keys, baseURLs map[string]string, named []modelListProvider) ([]modelListProvider, error) {
 	if len(args) == 1 {
 		p := strings.ToLower(args[0])
 		switch p {
 		case "anthropic", "openai", "gemini", "mistral", "xai", "ollama", "openrouter", "agentgateway":
-			return []string{p}, nil
+			return []modelListProvider{{name: p, listAs: p}}, nil
 		case "azure":
 			// Not a live query: enumerating deployments needs ARM credentials
 			// and the resource ID, not the inference API key, so there is
@@ -203,21 +231,31 @@ func selectModelListProviders(out io.Writer, args []string, keys, baseURLs map[s
 			printAzureDeployments(out)
 			return nil, nil
 		default:
-			return nil, fmt.Errorf("unknown provider %q; valid: anthropic, openai, azure, gemini, mistral, xai, ollama, openrouter, agentgateway", args[0])
+			// A declared provider lists through the endpoint its type selects,
+			// under its own name.
+			for _, n := range named {
+				if strings.ToLower(n.name) == p {
+					return []modelListProvider{n}, nil
+				}
+			}
+			return nil, fmt.Errorf("unknown provider %q; valid: anthropic, openai, azure, gemini, mistral, xai, ollama, openrouter, agentgateway, or a provider declared in config.json", args[0])
 		}
 	}
 
 	// Query all providers that have credentials or a base URL configured.
-	var providers []string
+	var providers []modelListProvider
 	for _, p := range allProviders {
 		if p == "ollama" {
-			providers = append(providers, p)
+			providers = append(providers, modelListProvider{name: p, listAs: p})
 			continue
 		}
 		if keys[p] != "" || baseURLs[p] != "" || flagURL != "" {
-			providers = append(providers, p)
+			providers = append(providers, modelListProvider{name: p, listAs: p})
 		}
 	}
+	// Declared providers always join the sweep: their baseURL is required at
+	// load, so each one has somewhere to query. They are pre-sorted by name.
+	providers = append(providers, named...)
 	// Azure is not in allProviders because it has nothing to query, but a
 	// configured Azure user asking for "every provider" should still see
 	// their deployments rather than have them silently omitted. In JSON

@@ -47,6 +47,22 @@ func TestMain(m *testing.M) {
 	// cannot write to the developer's real ~/.pi-go.
 	lastSessionFile = filepath.Join(dir, ".pi-go", "last-session.json")
 
+	// Isolating HOME is not enough: loadDotEnv also looks for .pi-go/.env by
+	// walking from the working directory up to the filesystem root, which does
+	// not consult the home directory at all. Run from a directory with no
+	// .pi-go above it, so that walk finds nothing.
+	//
+	// Whether it finds anything depends on where the checkout sits. A CI
+	// runner's workspace has no .pi-go on the path to the root and every test
+	// passes; a developer's checkout under ~ reaches the real ~/.pi-go/.env,
+	// and loadDotEnv exports its contents with os.Setenv — process-wide, past
+	// the end of the test that triggered it. Four unrelated tests in this
+	// package then fail on that machine alone.
+	if err := os.Chdir(dir); err != nil {
+		fmt.Fprintf(os.Stderr, "isolating the working directory: %v\n", err)
+		os.Exit(1)
+	}
+
 	code := m.Run()
 
 	os.RemoveAll(dir)
