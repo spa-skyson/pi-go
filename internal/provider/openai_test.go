@@ -527,7 +527,7 @@ func TestOaiContentsToMessagesEdgeCases(t *testing.T) {
 		}
 
 		msgs, _ := oaiContentsToMessages(contents, nil)
-		// user + assistant(tool_calls) + tool_response (with default "No response available")
+		// user + assistant(tool_calls) + tool_response (with cancellation placeholder)
 		if len(msgs) != 3 {
 			t.Fatalf("expected 3 messages, got %d", len(msgs))
 		}
@@ -705,7 +705,7 @@ func TestOpenAIGenerateContentWithModelOverride(t *testing.T) {
 }
 
 // TestOaiContentsToMessagesFunctionCallNoMatchingResponse exercises the
-// "No response available" fallback when a function call has no matching
+// cancellation placeholder when a function call has no matching
 // response ID in the function-responses map.
 func TestOaiContentsToMessagesFunctionCallNoMatchingResponse(t *testing.T) {
 	fc := genai.NewPartFromFunctionCall("my_tool", map[string]any{"x": 1})

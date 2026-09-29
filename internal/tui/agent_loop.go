@@ -835,13 +835,31 @@ func (m *model) cancelAgent() tea.Cmd {
 		m.agentCancel = nil
 	}
 	m.running = false
-	m.steering = false
 	m.statusModel.ActiveTool = ""
 	m.statusModel.ActiveTools = nil
 	m.chatModel.Streaming = ""
 	m.chatModel.Thinking = ""
 	if m.face != nil {
 		m.face.SetMood(MoodIdle)
+	}
+	// Notice about cancelled subagents. Only from SubagentStatuses; nil means
+	// the feature is not wired and we do not guess.
+	if m.cfg.SubagentStatuses != nil {
+		var n int
+		for _, st := range m.cfg.SubagentStatuses() {
+			if st.Status == "running" {
+				n++
+			}
+		}
+		if n > 0 {
+			// Plural/singular: "N running subagents" vs "1 running subagent".
+			label := "subagents"
+			if n == 1 {
+				label = "subagent"
+			}
+			m.chatModel.AppendNotice(fmt.Sprintf(
+				"turn cancelled; stopped %d running %s — their sessions are saved and may hold partial reports (see /subagents)", n, label))
+		}
 	}
 	if m.agentCh != nil {
 		go func(ch chan agentMsg) {
@@ -934,34 +952,6 @@ func (m *model) handleRetry() (tea.Model, tea.Cmd) {
 	return m.enqueuePrompt(m.lastPrompt, m.lastMentions)
 }
 
-// steerPrompt hands a submitted prompt to the running turn as a steer: it
-// cancels the turn's context so the model stops, and queues the text so the
-// canceled turn's own agentDoneMsg starts it as the next turn.
-//
-// Canceling without draining is the whole trick. cancelAgent (Esc) tears the
-// turn down from the UI side — it clears m.running and drains the channel, so
-// nothing that loop sends can land. Steering needs the opposite: the running
-// loop must stay the one that reports "done", because that report is what
-// starts the replacement through startNextPrompt. Draining here instead would
-// strand the replacement: it would have no signal left to start it.
-func (m *model) steerPrompt(text string, mentions []string) (tea.Model, tea.Cmd) {
-	// A full queue cannot take the replacement, so canceling would leave the
-	// user with a stopped turn and nowhere for the text to go. Refuse the
-	// steer and let the turn run on instead.
-	if len(m.pendingPrompts) >= maxPendingPrompts {
-		m.flash = "Prompt queue full"
-		return m, nil
-	}
-	// Cancel only the turn context. m.agentCancel is left set so a later Esc
-	// still reaches this loop; handleAgentDone clears it when the turn ends.
-	if m.agentCancel != nil {
-		m.agentCancel()
-		m.agentCancel = nil
-	}
-	m.steering = true
-	return m.enqueuePrompt(text, mentions)
-}
-
 func (m *model) enqueuePrompt(text string, mentions []string) (tea.Model, tea.Cmd) {
 	if len(m.pendingPrompts) >= maxPendingPrompts {
 		m.flash = "Prompt queue full"
@@ -971,16 +961,13 @@ func (m *model) enqueuePrompt(text string, mentions []string) (tea.Model, tea.Cm
 	return m.startNextPrompt()
 }
 
-// startNextPrompt begins the oldest queued prompt, if the UI is idle. The steer
-// flag is cleared here rather than in submitPrompt so a queued turn always
-// starts unsteered, however it was reached.
+// startNextPrompt begins the oldest queued prompt, if the UI is idle.
 func (m *model) startNextPrompt() (tea.Model, tea.Cmd) {
 	if m.running || len(m.pendingPrompts) == 0 {
 		return m, nil
 	}
 	next := m.pendingPrompts[0]
 	m.pendingPrompts = m.pendingPrompts[1:]
-	m.steering = false
 	return m.submitPrompt(next.text, next.mentions)
 }
 
@@ -2006,16 +1993,6 @@ func (m *model) handleAgentDone(msg agentDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.err == nil && m.mode == "plan" && m.planWorktree != nil {
 		if err := m.finishPlanWorktree(); err != nil {
 			msg.err = fmt.Errorf("finalize PDD worktree: %w", err)
-		}
-	}
-	if msg.err != nil {
-		// A steer cancels the turn, and cancellation can only report
-		// context.Canceled. That is the steered turn ending as intended, not a
-		// failure: printing it as an error would put "Error: context canceled"
-		// above the replacement's answer, and the retry offer would invite the
-		// user to re-run the prompt they just replaced.
-		if m.steering && errors.Is(msg.err, context.Canceled) {
-			msg.err = nil
 		}
 	}
 	if msg.err != nil {
