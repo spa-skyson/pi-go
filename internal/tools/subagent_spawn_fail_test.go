@@ -35,7 +35,7 @@ func noRoleOrchestrator(t *testing.T, names ...string) *subagent.Orchestrator {
 func TestSubagentSingleMode_SpawnFailureIsReportedNotReturned(t *testing.T) {
 	orch := noRoleOrchestrator(t, "explore")
 
-	out, err := subagentHandler(nil, orch, SubagentInput{Agent: "explore", Task: "look around"}, nil)
+	out, err := subagentHandler(nil, orch, SubagentInput{Agent: "explore", Task: "look around"}, nil, nil)
 	if err != nil {
 		t.Fatalf("a spawn failure must be reported in the result, not returned as an error: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestSubagentParallelMode_SpawnFailureIsReportedPerTask(t *testing.T) {
 	out, err := subagentHandler(nil, orch, SubagentInput{Tasks: []TaskItem{
 		{Agent: "explore", Task: "a"},
 		{Agent: "review", Task: "b"},
-	}}, nil)
+	}}, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestSubagentParallelMode_RejectsTooManyTasks(t *testing.T) {
 		tasks[i] = TaskItem{Agent: "explore", Task: "x"}
 	}
 
-	out, err := subagentHandler(nil, orch, SubagentInput{Tasks: tasks}, nil)
+	out, err := subagentHandler(nil, orch, SubagentInput{Tasks: tasks}, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestSubagentChainMode_SpawnFailureStopsTheChain(t *testing.T) {
 	out, err := subagentHandler(nil, orch, SubagentInput{Chain: []ChainItem{
 		{Agent: "explore", Task: "first"},
 		{Agent: "review", Task: "second"},
-	}}, nil)
+	}}, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestSubagentChainMode_UnknownAgentIsRejectedUpfront(t *testing.T) {
 
 	out, err := subagentHandler(nil, orch, SubagentInput{Chain: []ChainItem{
 		{Agent: "nonexistent", Task: "first"},
-	}}, nil)
+	}}, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestSubagentEventsAreEmittedForFailedSpawn(t *testing.T) {
 		kinds = append(kinds, ev.Kind)
 	}
 
-	if _, err := subagentHandler(nil, orch, SubagentInput{Agent: "explore", Task: "x"}, onEvent); err != nil {
+	if _, err := subagentHandler(nil, orch, SubagentInput{Agent: "explore", Task: "x"}, onEvent, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

@@ -14,6 +14,8 @@ type AgentEventCallback func(agentID, eventType, content string)
 // The optional onEvent callback is invoked for each subagent event.
 func AgentTools(orch *subagent.Orchestrator, onEvent AgentEventCallback) ([]tool.Tool, error) {
 	// Wrap the legacy callback into the new SubagentEventCallback.
+	// Background flag from SubagentEvent is not forwarded through the
+	// deprecated callback — use SubagentTools for full event data.
 	var cb SubagentEventCallback
 	if onEvent != nil {
 		cb = func(ev SubagentEvent) {

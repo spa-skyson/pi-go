@@ -476,7 +476,7 @@ func TestCogASubagentPipelineLimits(t *testing.T) {
 		for i := range tasks {
 			tasks[i] = TaskItem{Agent: "explore", Task: "t"}
 		}
-		out, err := subagentHandler(nil, orch, SubagentInput{Tasks: tasks}, nil)
+		out, err := subagentHandler(nil, orch, SubagentInput{Tasks: tasks}, nil, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -506,7 +506,7 @@ func TestCogASubagentPipelineLimits(t *testing.T) {
 		for i := range steps {
 			steps[i] = ChainItem{Agent: "explore", Task: "t"}
 		}
-		out, err := subagentHandler(nil, orch, SubagentInput{Chain: steps}, nil)
+		out, err := subagentHandler(nil, orch, SubagentInput{Chain: steps}, nil, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -559,7 +559,7 @@ func TestCogASubagentUnknownAgentStopsBeforeSpawning(t *testing.T) {
 	t.Run("parallel", func(t *testing.T) {
 		out, err := subagentHandler(nil, orch, SubagentInput{Tasks: []TaskItem{
 			{Agent: "explore", Task: "a"}, {Agent: "ghost", Task: "b"},
-		}}, nil)
+		}}, nil, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -569,7 +569,7 @@ func TestCogASubagentUnknownAgentStopsBeforeSpawning(t *testing.T) {
 	t.Run("chain", func(t *testing.T) {
 		out, err := subagentHandler(nil, orch, SubagentInput{Chain: []ChainItem{
 			{Agent: "explore", Task: "a"}, {Agent: "ghost", Task: "b"},
-		}}, nil)
+		}}, nil, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -605,7 +605,7 @@ func TestCogASubagentSpawnFailureGolden(t *testing.T) {
 		orch := noRoleOrchestrator(t, "explore", "review")
 		out, err := subagentHandler(nil, orch, SubagentInput{Tasks: []TaskItem{
 			{Agent: "explore", Task: "a"}, {Agent: "review", Task: "b"},
-		}}, nil)
+		}}, nil, nil)
 		if err != nil {
 			t.Fatalf("a spawn failure must be reported, not returned: %v", err)
 		}
@@ -633,7 +633,7 @@ func TestCogASubagentSpawnFailureGolden(t *testing.T) {
 		orch := noRoleOrchestrator(t, "explore", "review")
 		out, err := subagentHandler(nil, orch, SubagentInput{Chain: []ChainItem{
 			{Agent: "explore", Task: "a"}, {Agent: "review", Task: "b {previous}"},
-		}}, nil)
+		}}, nil, nil)
 		if err != nil {
 			t.Fatalf("a spawn failure must be reported, not returned: %v", err)
 		}

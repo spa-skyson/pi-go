@@ -821,13 +821,22 @@ func initNonInteractiveRuntime(ctx context.Context, cfg *config.Config, cwd, san
 	orch.SetProviderOptions(flagURL, flagInsecure, flagHeaders)
 
 	agentEventCh := make(chan tui.AgentSubEvent, 128)
-	agentEventCB := func(agentID, eventType, content string) {
+	agentEventCB := func(ev tools.SubagentEvent) {
 		select {
-		case agentEventCh <- tui.AgentSubEvent{AgentID: agentID, Kind: eventType, Content: content}:
+		case agentEventCh <- tui.AgentSubEvent{
+			AgentID:    ev.AgentID,
+			Kind:       ev.Kind,
+			Content:    ev.Content,
+			PipelineID: ev.PipelineID,
+			Mode:       ev.Mode,
+			Step:       ev.Step,
+			Total:      ev.Total,
+			Background: ev.Background,
+		}:
 		default:
 		}
 	}
-	agentTools, err := tools.AgentTools(orch, agentEventCB)
+	agentTools, err := tools.SubagentTools(orch, agentEventCB)
 	if err != nil {
 		orch.Shutdown()
 		_ = sandbox.Close()
@@ -836,7 +845,7 @@ func initNonInteractiveRuntime(ctx context.Context, cfg *config.Config, cwd, san
 	coreTools = append(coreTools, agentTools...)
 
 	bashSup.SetSink(func(execID, kind, content string) {
-		agentEventCB(execID, tui.BashEventKind(kind), content)
+		agentEventCB(tools.SubagentEvent{AgentID: execID, Kind: tui.BashEventKind(kind), Content: content})
 	})
 
 	return &nonInteractiveRuntime{

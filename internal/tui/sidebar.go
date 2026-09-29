@@ -82,6 +82,7 @@ type SidebarRenderInput struct {
 	MemoryStatus   *palace.PalaceStatus     // memory palace status; nil = hidden
 	Artifacts      []ArtifactEntry          // artifacts section; nil/empty = hidden
 	Palette        Palette                  // resolved theme palette; zero = dark default
+	BgRunning      int                      // number of running background subagents, shown next to agent name
 }
 
 // A2AAgentEntry is one row in the A2A Agents sidebar section.
@@ -377,8 +378,12 @@ func sidebarModelLines(in SidebarRenderInput, innerW int, st sidebarStyles) []st
 			Render("  "+truncateLabel("◆ "+level, innerW)))
 	}
 	if in.AgentName != "" {
+		line := "⚡ " + in.AgentName
+		if in.BgRunning > 0 {
+			line += " ⧗ bg:" + fmt.Sprint(in.BgRunning)
+		}
 		lines = append(lines, st.text.
-			Render("  "+truncateLabel("⚡ "+in.AgentName, innerW)))
+			Render("  "+truncateLabel(line, innerW)))
 	}
 	return append(lines, "")
 }

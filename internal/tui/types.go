@@ -261,4 +261,5 @@ type AgentSubEvent struct {
 	Mode       string // "single", "parallel", "chain"
 	Step       int    // 1-based position in pipeline
 	Total      int    // total agents in pipeline
+	Background bool   // true for spawn/done of a background agent
 }
