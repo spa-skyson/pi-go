@@ -21,6 +21,7 @@ import (
 	"github.com/dimetron/pi-go/internal/agent"
 	"github.com/dimetron/pi-go/internal/autocompact"
 	"github.com/dimetron/pi-go/internal/config"
+	"github.com/dimetron/pi-go/internal/ctxwindow"
 	"github.com/dimetron/pi-go/internal/extension"
 	"github.com/dimetron/pi-go/internal/guardrail"
 	"github.com/dimetron/pi-go/internal/httplog"
@@ -201,9 +202,10 @@ func runInteractive(
 		// AgentSwitcher fires only after deferred init has filled res (the
 		// InitEvent send is the happens-before edge): it rebuilds the
 		// session's callback chains from the shared inputs and builds the
-		// target agent's LLM from its frontmatter.
-		AgentSwitcher: func(switchCtx context.Context, agentName string) (tui.AgentSwitch, error) {
-			return agentSwitch(switchCtx, cfg, tokenTracker, headerSessionID, &res.cbIn, res.agentConfigs, agentName)
+		// target agent's LLM from its frontmatter, or from the modelOverride
+		// the TUI recorded for it via /model.
+		AgentSwitcher: func(switchCtx context.Context, agentName string, modelOverride string) (tui.AgentSwitch, error) {
+			return agentSwitch(switchCtx, cfg, tokenTracker, headerSessionID, &res.cbIn, res.agentConfigs, agentName, modelOverride)
 		},
 		A2A: cfg.A2A,
 	})
@@ -340,7 +342,7 @@ func deferredInit(
 			instructionParts.Base = ac.Instruction
 			cbs = cbIn.build(permission.Merge(globalPermissionRules(cfg), ac.Permission), effectiveAgentSteps(ac.Steps))
 			if flagModel == "" {
-				if swLLM, swName, swProvider, err := agentSwitchLLM(ctx, cfg, tokenTracker, headerSessionID, &ac); err != nil {
+				if swLLM, swName, swProvider, err := agentSwitchLLM(ctx, cfg, tokenTracker, headerSessionID, &ac, ""); err != nil {
 					softNotice(noticeCh, fmt.Sprintf("model for agent %q unavailable (%v); keeping the startup model", ac.Name, err))
 				} else if swLLM != nil {
 					llm = swLLM
@@ -1273,8 +1275,10 @@ func buildSwitchedLLMWith(ctx context.Context, cfg config.Config, tokenTracker *
 // agentSwitch builds the tui.AgentSwitch that moves the main session onto a
 // primary agent (name "" = the built-in default): the system prompt, the
 // callback chains rebuilt over the agent's permission rules and step budget,
-// and the agent's LLM when its `model:`/`role:` names one — nil LLM means
-// "keep the model that is running".
+// and the agent's LLM when its `model:`/`role:` — or modelOverride — names
+// one. A non-empty modelOverride (a /model typed while the agent was active)
+// beats the agent's own model; a nil LLM means "keep the model that is
+// running".
 func agentSwitch(
 	ctx context.Context,
 	cfg config.Config,
@@ -1283,6 +1287,7 @@ func agentSwitch(
 	in *callbackInputs,
 	configs []subagent.AgentConfig,
 	name string,
+	modelOverride string,
 ) (tui.AgentSwitch, error) {
 	var ac *subagent.AgentConfig
 	if name != "" {
@@ -1309,7 +1314,7 @@ func agentSwitch(
 	cbs := in.build(rules, steps)
 	sw.BeforeTool, sw.AfterTool = cbs.beforeTool, cbs.afterTool
 
-	llm, modelName, providerName, err := agentSwitchLLM(ctx, cfg, tokenTracker, headerSessionID, ac)
+	llm, modelName, providerName, err := agentSwitchLLM(ctx, cfg, tokenTracker, headerSessionID, ac, modelOverride)
 	if err != nil {
 		return tui.AgentSwitch{}, err
 	}
@@ -1317,22 +1322,28 @@ func agentSwitch(
 	return sw, nil
 }
 
-// agentSwitchLLM resolves the model a switch target runs on: the agent's
-// `model:` or its `role:`'s model, with the agent's temperature and
-// reasoningEffort overriding the flag/config defaults. ac nil (the default
-// target) resolves the default role. No model specification returns a nil
-// LLM — the caller keeps whatever is running.
-func agentSwitchLLM(ctx context.Context, cfg config.Config, tokenTracker *guardrail.Tracker, headerSessionID string, ac *subagent.AgentConfig) (adkmodel.LLM, string, string, error) {
-	modelName := ""
-	if ac != nil {
+// agentSwitchLLM resolves the model a switch target runs on: modelOverride
+// (a session /model typed while the agent was active) when set, otherwise the
+// agent's `model:` or its `role:`'s model, otherwise — for the default target
+// — the default role. The agent's temperature and reasoningEffort override
+// the flag/config defaults either way. Nothing resolvable returns a nil LLM —
+// the caller keeps whatever is running.
+func agentSwitchLLM(ctx context.Context, cfg config.Config, tokenTracker *guardrail.Tracker, headerSessionID string, ac *subagent.AgentConfig, modelOverride string) (adkmodel.LLM, string, string, error) {
+	var modelName string
+	switch {
+	case modelOverride != "":
+		modelName = modelOverride
+	case ac != nil:
 		modelName = ac.Model
 		if modelName == "" && ac.Role != "" {
 			if rc, ok := cfg.Roles[ac.Role]; ok {
 				modelName = rc.Model
 			}
 		}
-	} else if rc, ok := cfg.Roles["default"]; ok {
-		modelName = rc.Model
+	default:
+		if rc, ok := cfg.Roles["default"]; ok {
+			modelName = rc.Model
+		}
 	}
 	if modelName == "" {
 		return nil, "", "", nil
@@ -1481,32 +1492,11 @@ func resolveSwitchedModel(cfg config.Config, modelName, providerName string) (pr
 }
 
 // switchContextWindowSize determines the context window for the switched
-// model: embedded catalog first, then live queries for Ollama and OpenRouter,
-// then an explicit config value wins over both.
+// model. The rules live in ctxwindow.Resolve — the same resolution the
+// startup model gets — so a /model or agent switch and a restart can never
+// disagree about one model's window.
 func switchContextWindowSize(ctx context.Context, cfg config.Config, info provider.Info, baseURL string) int64 {
-	ctxWindowSize := provider.ContextWindowSizeFor(info.Provider, info.Model)
-	if info.Ollama {
-		if n := provider.OllamaContextWindowSize(ctx, baseURL, info.Model); n > 0 {
-			ctxWindowSize = n
-		}
-	}
-	if info.Provider == "openrouter" {
-		if n := provider.OpenRouterContextWindowSize(ctx, baseURL, info.Model); n > 0 {
-			ctxWindowSize = n
-		}
-	}
-	// An explicit config value wins: the embedded catalog does not cover every
-	// provider's models, and auto-compaction needs a real window to work from.
-	// A window declared per model on a declared provider (config.json
-	// "providers") also beats the catalog — those models are not in it — while
-	// the global contextWindow stays the top override.
-	if n := cfg.ContextWindowFor(info.Provider, info.Model); n > 0 {
-		ctxWindowSize = n
-	}
-	if cfg.ContextWindow > 0 {
-		ctxWindowSize = cfg.ContextWindow
-	}
-	return ctxWindowSize
+	return ctxwindow.Resolve(ctx, cfg, info, baseURL)
 }
 
 // switchedModelName hands back a name that re-resolves to the same endpoint.

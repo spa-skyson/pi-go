@@ -583,6 +583,24 @@ func (m *model) handleModelCommand(args []string) (tea.Model, tea.Cmd) {
 	m.cfg.LLM = newLLM
 	m.cfg.ModelName = newName
 	m.cfg.ProviderName = newProvider
+
+	var sb strings.Builder
+	if m.activeAgent != "" {
+		// Session-only override for the active primary agent: the model
+		// belongs to this agent, not to the default role. Persisting here
+		// would rewrite the default role behind the user's back, so the
+		// choice lives in memory and re-applies on every switch back to the
+		// agent.
+		m.setAgentModelOverride(m.activeAgent, newName)
+		fmt.Fprintf(&sb, "Model for agent **%s** switched to **%s** (provider: %s).",
+			m.activeAgent, newName, newProvider)
+		m.chatModel.Messages = append(m.chatModel.Messages, message{
+			role:    "assistant",
+			content: sb.String(),
+		})
+		return m, nil
+	}
+
 	if roleName != "" {
 		m.cfg.ActiveRole = roleName
 	} else {
@@ -597,7 +615,6 @@ func (m *model) handleModelCommand(args []string) (tea.Model, tea.Cmd) {
 		saveModelToConfig(newName)
 	}
 
-	var sb strings.Builder
 	fmt.Fprintf(&sb, "Switched model to **%s** (provider: %s).", newName, newProvider)
 	if roleName != "" && roleName != "default" {
 		fmt.Fprintf(&sb, " Role: `%s`.", roleName)

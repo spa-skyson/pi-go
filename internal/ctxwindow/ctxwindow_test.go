@@ -21,17 +21,36 @@ func TestResolve(t *testing.T) {
 	tests := []struct {
 		name string
 		cfg  config.Config
+		info provider.Info
 		want int64
 	}{
-		{name: "catalog size when config says nothing", cfg: config.Config{}, want: catalog},
-		{name: "explicit config value wins", cfg: config.Config{ContextWindow: 4242}, want: 4242},
-		{name: "zero config value does not override", cfg: config.Config{ContextWindow: 0}, want: catalog},
+		{name: "catalog size when config says nothing", cfg: config.Config{}, info: info, want: catalog},
+		{name: "explicit config value wins", cfg: config.Config{ContextWindow: 4242}, info: info, want: 4242},
+		{name: "zero config value does not override", cfg: config.Config{ContextWindow: 0}, info: info, want: catalog},
+		// A per-model declaration on a declared provider is the most specific
+		// answer and outranks the global value — the case that pins the fix
+		// for the stale gauge: switching to a declared model must move the
+		// window even with a global contextWindow set.
+		{
+			name: "declared per-model window beats the global",
+			cfg: config.Config{
+				ContextWindow: 1111,
+				Providers: map[string]config.ProviderConfig{
+					"corp": {
+						BaseURL: "https://corp.example/v1",
+						Models:  map[string]config.ProviderModelConfig{"m1": {ContextWindow: 424242}},
+					},
+				},
+			},
+			info: provider.Info{Provider: "corp", Model: "m1"},
+			want: 424242,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := Resolve(context.Background(), tt.cfg, info, "")
+			got := Resolve(context.Background(), tt.cfg, tt.info, "")
 			if got != tt.want {
 				t.Errorf("Resolve = %d, want %d", got, tt.want)
 			}

@@ -171,7 +171,9 @@ type Config struct {
 	// ContextWindow overrides the model's context window in tokens. Needed for
 	// models absent from the embedded catalog (notably the opencode ones):
 	// auto-compaction measures a percentage of the window, so it stays off
-	// rather than guess at an unknown budget.
+	// rather than guess at an unknown budget. A window declared per model on a
+	// declared provider (providers.<name>.models.<model>.contextWindow) is the
+	// more specific answer and wins over this global value.
 	ContextWindow int64 `json:"contextWindow,omitempty"`
 	// RateLimits paces outbound requests, keyed by provider name ("gemini",
 	// "agentgateway", …) with "*" as the fallback for the rest.

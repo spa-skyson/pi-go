@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/dimetron/pi-go/internal/config"
+	"github.com/dimetron/pi-go/internal/guardrail"
 	"github.com/dimetron/pi-go/internal/permission"
 	"github.com/dimetron/pi-go/internal/subagent"
 	"github.com/dimetron/pi-go/internal/tools"
@@ -56,11 +57,97 @@ func TestResolveDefaultAgent(t *testing.T) {
 // the TUI can show a notice and stay put.
 func TestAgentSwitchRejectsUnusableTargets(t *testing.T) {
 	in := &callbackInputs{}
-	if _, err := agentSwitch(context.Background(), config.Config{}, nil, "", in, switchTestConfigs(), "ghost"); err == nil {
+	if _, err := agentSwitch(context.Background(), config.Config{}, nil, "", in, switchTestConfigs(), "ghost", ""); err == nil {
 		t.Error("unknown agent: expected an error")
 	}
-	if _, err := agentSwitch(context.Background(), config.Config{}, nil, "", in, switchTestConfigs(), "helper"); err == nil {
+	if _, err := agentSwitch(context.Background(), config.Config{}, nil, "", in, switchTestConfigs(), "helper", ""); err == nil {
 		t.Error("subagent-only agent: expected an error")
+	}
+}
+
+// TestAgentSwitchUpdatesContextWindow pins the fix for the stale context
+// gauge: a switch that changes the model must also move the tracker's
+// window. A declared-provider model (zai-coding-plan/glm-5.3, declared 1M)
+// landing on a tracker preset with the startup model's 200k must end at 1M
+// even with a global contextWindow that used to pin every switch to it.
+func TestAgentSwitchUpdatesContextWindow(t *testing.T) {
+	resetResolveFlags(t)
+
+	cfg := config.Config{
+		// The user's global override — it must not pin the declared model.
+		ContextWindow: 200000,
+		Providers: map[string]config.ProviderConfig{
+			"zai-coding-plan": {
+				Type:    "openai-compatible",
+				BaseURL: "https://zai.example/v1",
+				APIKey:  "sk-zai",
+				Models:  map[string]config.ProviderModelConfig{"glm-5.3": {ContextWindow: 1_000_000}},
+			},
+		},
+	}
+	configs := []subagent.AgentConfig{
+		{Name: "build", Instruction: "Build it.", Mode: subagent.ModePrimary, Model: "zai-coding-plan/glm-5.3"},
+	}
+	tracker := guardrail.New(0)
+	tracker.SetContextWindowSize(200000) // the startup model's window
+
+	in := &callbackInputs{cfg: cfg, deduper: tools.NewResultDeduper(), compactMetrics: tools.NewCompactMetrics()}
+	sw, err := agentSwitch(context.Background(), cfg, tracker, "", in, configs, "build", "")
+	if err != nil {
+		t.Fatalf("agentSwitch: %v", err)
+	}
+	if sw.LLM == nil {
+		t.Fatal("agentSwitch returned a nil LLM for an agent with a model")
+	}
+	if got := tracker.ContextWindowSize(); got != 1_000_000 {
+		t.Errorf("tracker window after switch = %d, want the declared 1000000", got)
+	}
+}
+
+// TestAgentSwitchLLM_Override pins the session-override precedence: a
+// non-empty modelOverride beats the agent's own model: (and its window), an
+// empty one leaves the agent's model standing.
+func TestAgentSwitchLLM_Override(t *testing.T) {
+	resetResolveFlags(t)
+
+	cfg := config.Config{
+		Providers: map[string]config.ProviderConfig{
+			"zai-coding-plan": {
+				Type:    "openai-compatible",
+				BaseURL: "https://zai.example/v1",
+				APIKey:  "sk-zai",
+				Models: map[string]config.ProviderModelConfig{
+					"glm-5.2": {ContextWindow: 500_000},
+					"glm-5.3": {ContextWindow: 1_000_000},
+				},
+			},
+		},
+	}
+	ac := &subagent.AgentConfig{Name: "build", Mode: subagent.ModePrimary, Model: "zai-coding-plan/glm-5.2"}
+	tracker := guardrail.New(0)
+
+	llm, modelName, providerName, err := agentSwitchLLM(context.Background(), cfg, tracker, "", ac, "zai-coding-plan/glm-5.3")
+	if err != nil {
+		t.Fatalf("agentSwitchLLM(override): %v", err)
+	}
+	if llm == nil || modelName != "zai-coding-plan/glm-5.3" || providerName != "zai-coding-plan" {
+		t.Errorf("override switch = (%v, %q, %q), want the override model", llm != nil, modelName, providerName)
+	}
+	if got := tracker.ContextWindowSize(); got != 1_000_000 {
+		t.Errorf("tracker window = %d, want the override's 1000000", got)
+	}
+
+	// Empty override: the agent's own model stands.
+	tracker2 := guardrail.New(0)
+	_, modelName, _, err = agentSwitchLLM(context.Background(), cfg, tracker2, "", ac, "")
+	if err != nil {
+		t.Fatalf("agentSwitchLLM(no override): %v", err)
+	}
+	if modelName != "zai-coding-plan/glm-5.2" {
+		t.Errorf("model = %q, want the agent's zai-coding-plan/glm-5.2", modelName)
+	}
+	if got := tracker2.ContextWindowSize(); got != 500_000 {
+		t.Errorf("tracker window = %d, want the agent model's 500000", got)
 	}
 }
 
