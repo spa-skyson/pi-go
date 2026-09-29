@@ -109,6 +109,14 @@ type Config struct {
 	// background refresh.
 	ModelCandidatesRefresh func(ctx context.Context) []SearchItem
 
+	// SubagentStatuses, when non-nil, returns the orchestrator's view of the
+	// session's subagents for the /subagents monitor popup: who is running,
+	// who finished, and for how long. The cli closes over Orchestrator.List().
+	// The stream itself comes from the transcript cards, stitched to these
+	// statuses by agentID; nil degrades the monitor to cards only, with
+	// statuses inferred from the cards' results.
+	SubagentStatuses func() []subagent.AgentStatus
+
 	// PrimaryAgents lists the agents the main session can switch into
 	// (frontmatter `mode: primary` or `all`), sorted by name. Filled by
 	// deferred init; empty until then and when no agent declares a mode.

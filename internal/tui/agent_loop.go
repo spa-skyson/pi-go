@@ -1711,6 +1711,9 @@ func (m *model) handleAgentToolResult(msg agentToolResultMsg) (tea.Model, tea.Cm
 				m.chatModel.Messages[i].toolIn = header
 			}
 		}
+		// An agent card just got its result: its monitor row flips from
+		// running to done. No-op with the popup closed or on another mode.
+		m.refreshSubagentsPopup()
 	}
 	m.refreshDiffStats()
 	return m, waitForAgent(m.agentCh)
@@ -1965,6 +1968,10 @@ func (m *model) handleAgentSubEvent(msg agentSubEventMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	}
+	// An open monitor follows the change it just mirrored into the card: a
+	// fresh spawn stitches a row, later events advance durations. No-op when
+	// the popup is closed or showing another mode.
+	m.refreshSubagentsPopup()
 	m.chatModel.Scroll = 0
 	return m, waitForSubEvent(m.cfg.AgentEventCh)
 }

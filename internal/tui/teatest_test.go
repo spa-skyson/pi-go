@@ -1142,11 +1142,17 @@ func TestSlashCommand_Session(t *testing.T) {
 	}
 }
 
+// /subagents opens the monitor popup — no orchestrator is not an error: the
+// monitor degrades to transcript cards only (nil status provider), and the
+// popup says nothing into the chat.
 func TestSlashCommand_Agents_NoOrchestrator(t *testing.T) {
 	m := newTestModel(t)
 	m.handleSlashCommand("/subagents")
-	if len(m.chatModel.Messages) == 0 {
-		t.Fatal("expected message from /subagents")
+	if m.searchPopup == nil || m.searchPopup.mode != searchModeSubagents {
+		t.Fatal("expected the subagent monitor popup from /subagents")
+	}
+	if len(m.chatModel.Messages) != 0 {
+		t.Errorf("opening the monitor printed into the chat: %+v", m.chatModel.Messages)
 	}
 }
 
