@@ -12,7 +12,7 @@ First off, thank you for considering contributing to pi-go! It's a complex proje
 ### Setup
 1. Clone the repository:
    ```bash
-   git clone https://github.com/dimetron/pi-go.git
+   git clone https://github.com/spa-skyson/pi-go.git
    cd pi-go
    ```
 2. Build the binary:
