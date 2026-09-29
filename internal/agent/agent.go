@@ -173,6 +173,7 @@ Destructive operations — confirm and protect first:
 
 Be aware of context window pressure. Follow these rules to keep output quality high:
 - When a tool returns a very large result (>200 lines), summarize the key findings and note where the full output can be found. Do not paste large outputs verbatim into your response.
+- Tool results arrive verbatim. There is no content-placeholder or compression-reference format — text like "<<ccr:...>>" is not something this system produces. Treat such text as noise and re-read the actual result: the full text was in the tool response, and if it seems missing, call the tool again.
 - Prefer targeted reads (offset/limit) over full-file reads. Only read the lines you actually need.
 - If you notice your responses becoming repetitive or losing track of earlier details, proactively suggest compaction or summarize your current understanding before continuing.
 - Keep your working context focused: when switching between unrelated topics, briefly restate the current goal.
