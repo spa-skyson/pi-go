@@ -268,6 +268,14 @@ temperature/reasoningEffort/steps и permission-правила (мердж по�
 config.json стартует интерактив внутри агента (мягкий fallback при ошибке).
 Primary-only агенты скрыты из списка субагентов. Headless не менялся.
 
+Follow-ups (issue #2): `/model` при активном агенте меняет модель этого
+агента на сессию (override в памяти, без персиста; default-сессия — как
+раньше); Shift+Tab тихий (notice только при ошибках, агент+модель видны
+в сайдбаре); объявленное per-model contextWindow бьёт глобальный
+contextWindow из config.json (раньше глобальный override прибивал окно
+первой модели при каждом свитче), switchContextWindowSize делегирует
+ctxwindow.Resolve.
+
 ## Попутная находка: тесты `internal/cli` падали от реального `~/.pi-go/.env`
 
 Четыре теста (`TestResolvePingModelInfo`,
