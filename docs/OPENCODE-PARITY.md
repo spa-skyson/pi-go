@@ -254,6 +254,20 @@ ADK-агент (approval → инструмент выполняется; зап
 сессии) и блокировать before-tool колбэк до ответа. Паттерн — модальные
 состояния TUI (образец: commit.go phase "confirming").
 
+## Вариант В: primary-агенты
+
+### В1. Переключение основной сессии между агентами
+**Статус:** сделано
+
+`mode: primary|subagent|all` во frontmatter (пусто = subagent). Shift+Tab
+циклит default → primary-агенты → default; `/agent [имя]` — прямой выбор и
+список; индикатор активного агента в сайдбаре. Свитч применяет промпт
+агента (секции Rules/Skills переживают), его модель (без персиста),
+temperature/reasoningEffort/steps и permission-правила (мердж поверх
+глобальных); возврат на default всё восстанавливает. `defaultAgent` в
+config.json стартует интерактив внутри агента (мягкий fallback при ошибке).
+Primary-only агенты скрыты из списка субагентов. Headless не менялся.
+
 ## Попутная находка: тесты `internal/cli` падали от реального `~/.pi-go/.env`
 
 Четыре теста (`TestResolvePingModelInfo`,
