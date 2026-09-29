@@ -558,6 +558,14 @@ func buildRootRuntime(ctx context.Context, args []string) (rootRuntime, error) {
 	if headerSessionID == "" && headersNeedSessionID(cfg, info.Provider) {
 		headerSessionID = pisession.GenerateSessionID()
 	}
+	// The ID is no longer only for ${SESSION_ID} headers: the session-scoped
+	// tools (todo_write/todo_read) register through it in every mode, and
+	// resolveSessionID below creates the session under this same ID. Without
+	// this, a print/json run with no such headers would silently lose the
+	// todo tools.
+	if headerSessionID == "" {
+		headerSessionID = pisession.GenerateSessionID()
+	}
 
 	llmOpts := &provider.LLMOptions{
 		ExtraHeaders:   providerExtraHeaders(cfg, info.Provider, headerSessionID, flagHeaders),
