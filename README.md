@@ -1,13 +1,17 @@
 # pi-go
 
-[![CI](https://github.com/dimetron/pi-go/actions/workflows/ci.yml/badge.svg)](https://github.com/dimetron/pi-go/actions/workflows/ci.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/dimetron/pi-go.svg)](https://pkg.go.dev/github.com/dimetron/pi-go)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/dimetron/pi-go)](go.mod)
-[![License](https://img.shields.io/github/license/dimetron/pi-go)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/dimetron/pi-go?logo=github&label=latest)](https://github.com/dimetron/pi-go/releases)
-[![codecov](https://codecov.io/gh/dimetron/pi-go/graph/badge.svg)](https://codecov.io/gh/dimetron/pi-go)
-[![GitHub stars](https://img.shields.io/github/stars/dimetron/pi-go?style=social)](https://github.com/dimetron/pi-go)
-[![GitHub issues](https://img.shields.io/github/issues/dimetron/pi-go)](https://github.com/dimetron/pi-go/issues)
+> **Fork notice.** This is a fork of [dimetron/pi-go](https://github.com/dimetron/pi-go),
+> developed independently; upstream commits are cherry-picked as needed. It extends the
+> upstream with declared providers in `config.json`, per-agent model/tools/sampling
+> frontmatter, the permission subsystem, and primary-agent switching — see
+> [docs/OPENCODE-PARITY.md](docs/OPENCODE-PARITY.md) for details.
+
+[![CI](https://github.com/spa-skyson/pi-go/actions/workflows/ci.yml/badge.svg)](https://github.com/spa-skyson/pi-go/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/spa-skyson/pi-go)](go.mod)
+[![License](https://img.shields.io/github/license/spa-skyson/pi-go)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/spa-skyson/pi-go?logo=github&label=latest)](https://github.com/spa-skyson/pi-go/releases)
+[![GitHub stars](https://img.shields.io/github/stars/spa-skyson/pi-go?style=social)](https://github.com/spa-skyson/pi-go)
+[![GitHub issues](https://img.shields.io/github/issues/spa-skyson/pi-go)](https://github.com/spa-skyson/pi-go/issues)
 
 A terminal-based coding agent built on [Google ADK Go](https://adk.dev/). It connects to multiple LLM providers, runs
 sandboxed tools, integrates LSP, and ships with a process-based subagent system.
@@ -70,15 +74,17 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation.
 **macOS / Linux**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dimetron/pi-go/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/spa-skyson/pi-go/main/scripts/install.sh | bash
 ```
 
 This script detects your OS/arch, downloads the latest release binary, and installs it to `/usr/local/bin` (or `~/.local/bin` if needed).
 
+> **Note:** the shell installer falls back to building from source while the fork has no releases.
+
 **Windows**
 
 ```powershell
-powershell -NoProfile -Command "iwr https://raw.githubusercontent.com/dimetron/pi-go/main/scripts/install.ps1 -UseBasicParsing | iex"
+powershell -NoProfile -Command "iwr https://raw.githubusercontent.com/spa-skyson/pi-go/main/scripts/install.ps1 -UseBasicParsing | iex"
 ```
 
 Or, from a checkout:
@@ -114,7 +120,7 @@ input:
 ```nix
 # flake.nix
 {
-  inputs.pi-go.url = "github:dimetron/pi-go";
+  inputs.pi-go.url = "github:spa-skyson/pi-go";
 
   outputs = { self, nixpkgs, pi-go, ... }: {
     nixosConfigurations.my-host = nixpkgs.lib.nixosSystem {
@@ -135,13 +141,22 @@ Enable it in `configuration.nix`:
 ```
 
 Then rebuild with `sudo nixos-rebuild switch --flake .`. For a one-off use,
-run `nix run github:dimetron/pi-go` or install it into a profile with
-`nix profile install github:dimetron/pi-go`.
+run `nix run github:spa-skyson/pi-go` or install it into a profile with
+`nix profile install github:spa-skyson/pi-go`.
 
 ### go install
 
+The module path stays `github.com/dimetron/pi-go`, so `go install` from this fork is not available yet. Use one of these instead:
+
 ```bash
-go install github.com/dimetron/pi-go/cmd/pi@latest
+# 1) Shell installer (falls back to a source build while the fork has no releases)
+curl -fsSL https://raw.githubusercontent.com/spa-skyson/pi-go/main/scripts/install.sh | bash
+
+# 2) Build from source
+git clone https://github.com/spa-skyson/pi-go.git
+cd pi-go
+make build
+make install
 ```
 
 Make sure your `GOPATH/bin` is in your `PATH`. The binary will be installed as `pi`.
@@ -149,14 +164,14 @@ Make sure your `GOPATH/bin` is in your `PATH`. The binary will be installed as `
 ### Build from source
 
 ```bash
-git clone https://github.com/dimetron/pi-go.git
+git clone https://github.com/spa-skyson/pi-go.git
 cd pi-go
 go install ./cmd/pi
 ```
 
 ### Pre-built binaries
 
-Download the latest release for your platform from the [Releases page](https://github.com/dimetron/pi-go/releases).
+Download the latest release for your platform from the [Releases page](https://github.com/spa-skyson/pi-go/releases).
 
 ### Verifying a release
 
@@ -176,18 +191,18 @@ pi verify --sbom > sbom.spdx.json             # print the attested SBOM document
   sha256:abd70659b49183320320426af4abf34555b031e432aff27afbdbf1be39e1ecff
 
   ✓ build provenance
-      repository  github.com/dimetron/pi-go
+      repository  github.com/spa-skyson/pi-go
       workflow    .github/workflows/release.yml@refs/tags/v1.2.3
       commit      4086645aa1f2c3d4e5f60718293a4b5c6d7e8f90
-      run         https://github.com/dimetron/pi-go/actions/runs/1234/attempts/1
-      signer      https://github.com/dimetron/pi-go/.github/workflows/release.yml@refs/tags/v1.2.3
+      run         https://github.com/spa-skyson/pi-go/actions/runs/1234/attempts/1
+      signer      https://github.com/spa-skyson/pi-go/.github/workflows/release.yml@refs/tags/v1.2.3
       signed      2026-08-21T12:00:00Z
 
   ✓ SBOM
       format      SPDX 2.3
       packages    192
       ecosystems  golang 180, github 12
-      signer      https://github.com/dimetron/pi-go/.github/workflows/release.yml@refs/tags/v1.2.3
+      signer      https://github.com/spa-skyson/pi-go/.github/workflows/release.yml@refs/tags/v1.2.3
       signed      2026-08-21T12:00:00Z
 ```
 
@@ -213,10 +228,10 @@ The same attestations are readable by `gh`, if you would rather not trust the
 binary to vouch for itself:
 
 ```bash
-gh attestation verify ./pi --repo dimetron/pi-go
+gh attestation verify ./pi --repo spa-skyson/pi-go
 
 # SBOM attestation. The predicate type carries the SPDX version syft emitted.
-gh attestation verify ./pi --repo dimetron/pi-go \
+gh attestation verify ./pi --repo spa-skyson/pi-go \
   --predicate-type https://spdx.dev/Document/v2.3
 ```
 
