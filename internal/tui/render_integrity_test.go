@@ -112,11 +112,11 @@ func TestFrameHeightFitsTerminal(t *testing.T) {
 	}
 }
 
-// The sidebar is a fixed-size block flush to the right edge: exactly
-// SidebarWidth columns wide and exactly as tall as the top section (messages +
-// sidebar). The status bar and input rows below span the full width without a
-// sidebar. A line wider than the sidebar would push the frame past the screen;
-// a taller block would leave a gap under the prompt.
+// The sidebar is an adaptive-width block flush to the right edge: exactly
+// sidebarWidth(width) columns wide and exactly as tall as the top section
+// (messages + sidebar). The status bar and input rows below span the full width
+// without a sidebar. A line wider than the sidebar would push the frame past
+// the screen; a taller block would leave a gap under the prompt.
 func TestSidebarIsFixedSizeAndRightAligned(t *testing.T) {
 	for _, dim := range [][2]int{{172, 48}, {120, 40}, {100, 30}} {
 		width, height := dim[0], dim[1]
@@ -128,6 +128,7 @@ func TestSidebarIsFixedSizeAndRightAligned(t *testing.T) {
 		rows := strings.Split(m.View().Content, "\n")
 		sidebarStart := m.mainWidth() // the column the sidebar begins at
 		topRows := m.topSectionRows()
+		expectSW := sidebarWidth(width)
 
 		for row, line := range rows {
 			// Every row is exactly the terminal width.
@@ -135,11 +136,11 @@ func TestSidebarIsFixedSizeAndRightAligned(t *testing.T) {
 				t.Fatalf("%dx%d row %d: width %d, want %d — the frame is not flush right",
 					width, height, row, got, width)
 			}
-			// In the top section, the sidebar occupies the last SidebarWidth columns.
+			// In the top section, the sidebar occupies the last expectSW columns.
 			if row < topRows {
-				if got := width - sidebarStart; got != SidebarWidth {
-					t.Fatalf("%dx%d: sidebar is %d columns, want the fixed %d",
-						width, height, got, SidebarWidth)
+				if got := width - sidebarStart; got != expectSW {
+					t.Fatalf("%dx%d: sidebar is %d columns, want %d",
+						width, height, got, expectSW)
 				}
 			}
 		}

@@ -1741,8 +1741,8 @@ func (m *model) View() tea.View {
 		mainWidth = m.mainWidth()
 	}
 	bodyWidth := m.chatWidth()
-	sidebarWidth := m.width - mainWidth
-	showSidebar := sidebarWidth > 0
+	sideW := m.width - mainWidth
+	showSidebar := sideW > 0
 
 	// Render components.
 	m.inputModel.SetWidth(max(0, m.width-3))
@@ -1841,8 +1841,8 @@ func (m *model) View() tea.View {
 
 	var topSection string
 	if showSidebar {
-		sidebar := RenderSidebar(m.sidebarRenderInput(sidebarWidth, panelRows))
-		topSection = joinPanelSidebar(leftPanel, sidebar, mainWidth, sidebarWidth)
+		sidebar := RenderSidebar(m.sidebarRenderInput(sideW, panelRows))
+		topSection = joinPanelSidebar(leftPanel, sidebar, mainWidth, sideW)
 	} else {
 		topSection = padLinesTo(leftPanel, m.width)
 	}
@@ -2330,11 +2330,13 @@ func (m *model) mainWidth() int {
 	if m.width <= 0 {
 		return 1
 	}
-	if m.width > 80 {
-		w := m.width - SidebarWidth
-		if w > 0 {
-			return w
-		}
+	sw := sidebarWidth(m.width)
+	chatW := m.width - sw
+	// Show the sidebar only when the chat panel has at least 60 columns — wide
+	// enough for readable message text. Below that threshold the sidebar is
+	// hidden and the full terminal width belongs to the chat.
+	if chatW >= 60 {
+		return chatW
 	}
 	return m.width
 }

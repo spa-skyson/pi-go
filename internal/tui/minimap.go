@@ -361,7 +361,7 @@ func padLinesTo(s string, width int) string {
 // the columns are still there, they are just past the right edge. Clamping each
 // row to leftWidth here means the sidebar always begins at the same column and
 // always keeps all sidebarWidth of them, whatever the chat put on the row.
-func joinPanelSidebar(left, sidebar string, leftWidth, sidebarWidth int) string {
+func joinPanelSidebar(left, sidebar string, leftWidth, sideW int) string {
 	leftRows := strings.Split(left, "\n")
 	sideRows := strings.Split(sidebar, "\n")
 	rows := max(len(leftRows), len(sideRows))
@@ -375,7 +375,7 @@ func joinPanelSidebar(left, sidebar string, leftWidth, sidebarWidth int) string 
 		if i < len(sideRows) {
 			s = sideRows[i]
 		}
-		out[i] = padLine(l, leftWidth) + padLine(s, sidebarWidth)
+		out[i] = padLine(l, leftWidth) + padLine(s, sideW)
 	}
 	return strings.Join(out, "\n")
 }

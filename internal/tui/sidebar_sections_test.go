@@ -594,7 +594,7 @@ func TestSidebarModelLinesThinkingLevel(t *testing.T) {
 func TestRenderSidebarThinkingLevelVisible(t *testing.T) {
 	t.Parallel()
 	out := ansi.Strip(RenderSidebar(SidebarRenderInput{
-		Width:         SidebarWidth,
+		Width:         sidebarWidth(120),
 		Height:        40,
 		ProviderName:  "anthropic",
 		ModelName:     "claude-opus-4-7",

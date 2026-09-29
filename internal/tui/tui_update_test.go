@@ -116,9 +116,10 @@ func TestUpdateWindowSizeWide(t *testing.T) {
 	if mm.height != 24 {
 		t.Errorf("expected height 24, got %d", mm.height)
 	}
-	// When width > 80 the panel is width - SidebarWidth, and everything inside it
-	// is sized to that minus the rail, which owns the last column. The status bar
-	// spans the full terminal width (it sits below the sidebar, not beside it).
+	// When the terminal is wide enough the panel is width - sidebarWidth(120),
+	// and everything inside it is sized to that minus the rail, which owns the
+	// last column. The status bar spans the full terminal width (it sits below
+	// the sidebar, not beside it).
 	expectedStatusWidth := 120
 	if mm.statusModel.Width != expectedStatusWidth {
 		t.Errorf("expected statusModel.Width %d, got %d", expectedStatusWidth, mm.statusModel.Width)
