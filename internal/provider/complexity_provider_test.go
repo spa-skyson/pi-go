@@ -591,7 +591,7 @@ func TestAntToolUseMessages_UnmatchedCallGetsPlaceholderResult(t *testing.T) {
     {
       "content": [
         {
-          "text": "No response available for this function call.",
+          "text": "This tool call was cancelled before it returned; if it was a subagent, its own session may hold a partial report.",
           "type": "text"
         }
       ],

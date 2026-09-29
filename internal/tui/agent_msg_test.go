@@ -8,6 +8,7 @@ import (
 
 	"github.com/dimetron/pi-go/internal/agent"
 	pisession "github.com/dimetron/pi-go/internal/session"
+	"github.com/dimetron/pi-go/internal/subagent"
 
 	"google.golang.org/adk/v2/session"
 )
@@ -373,6 +374,122 @@ func TestCancelAgent_WithChannel(t *testing.T) {
 	}
 	if m.agentCh != nil {
 		t.Error("expected agentCh to be nil after cancel")
+	}
+}
+
+// --- cancelAgent subagent notice tests ---
+
+func TestCancelAgent_SubagentNoticeWithRunningSubagents(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	m := &model{
+		ctx:    ctx,
+		cancel: cancel,
+		cfg: Config{
+			SubagentStatuses: func() []subagent.AgentStatus {
+				return []subagent.AgentStatus{
+					{AgentID: "s1", Type: "explore", Status: "running"},
+					{AgentID: "s2", Type: "task", Status: "running"},
+					{AgentID: "s3", Type: "plan", Status: "completed"},
+				}
+			},
+		},
+		chatModel:   ChatModel{Messages: make([]message, 0)},
+		running:     true,
+		agentCancel: func() {},
+	}
+
+	m.cancelAgent()
+
+	// Should have one notice with N=2 running subagents.
+	var noticeFound bool
+	for _, msg := range m.chatModel.Messages {
+		if msg.role == "assistant" && msg.isNotice && strings.Contains(msg.content, "2 running subagents") {
+			noticeFound = true
+		}
+	}
+	if !noticeFound {
+		t.Error("expected notice about 2 running subagents after cancel, got messages:", len(m.chatModel.Messages))
+		for _, msg := range m.chatModel.Messages {
+			t.Logf("  role=%q content=%q isNotice=%v", msg.role, msg.content, msg.isNotice)
+		}
+	}
+}
+
+func TestCancelAgent_SubagentNoticeZeroRunning(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	m := &model{
+		ctx:    ctx,
+		cancel: cancel,
+		cfg: Config{
+			SubagentStatuses: func() []subagent.AgentStatus {
+				return []subagent.AgentStatus{
+					{AgentID: "s1", Type: "explore", Status: "completed"},
+				}
+			},
+		},
+		chatModel:   ChatModel{Messages: make([]message, 0)},
+		running:     true,
+		agentCancel: func() {},
+	}
+
+	m.cancelAgent()
+
+	for _, msg := range m.chatModel.Messages {
+		if msg.isNotice && strings.Contains(msg.content, "running subagent") {
+			t.Error("unexpected notice about running subagents when none are running")
+		}
+	}
+}
+
+func TestCancelAgent_SubagentNoticeNilProvider(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	m := &model{
+		ctx:    ctx,
+		cancel: cancel,
+		cfg: Config{
+			SubagentStatuses: nil,
+		},
+		chatModel:   ChatModel{Messages: make([]message, 0)},
+		running:     true,
+		agentCancel: func() {},
+	}
+
+	m.cancelAgent()
+
+	for _, msg := range m.chatModel.Messages {
+		if msg.isNotice && strings.Contains(msg.content, "running subagent") {
+			t.Error("unexpected notice about running subagents when SubagentStatuses is nil")
+		}
+	}
+}
+
+func TestCancelAgent_SubagentNoticeSingleRunning(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	m := &model{
+		ctx:    ctx,
+		cancel: cancel,
+		cfg: Config{
+			SubagentStatuses: func() []subagent.AgentStatus {
+				return []subagent.AgentStatus{
+					{AgentID: "s1", Type: "explore", Status: "running"},
+				}
+			},
+		},
+		chatModel:   ChatModel{Messages: make([]message, 0)},
+		running:     true,
+		agentCancel: func() {},
+	}
+
+	m.cancelAgent()
+
+	var noticeFound bool
+	for _, msg := range m.chatModel.Messages {
+		if msg.role == "assistant" && msg.isNotice && strings.Contains(msg.content, "1 running subagent") {
+			noticeFound = true
+		}
+	}
+	if !noticeFound {
+		t.Error("expected notice about 1 running subagent after cancel")
 	}
 }
 
