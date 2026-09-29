@@ -9,7 +9,18 @@
 ## Задачи
 
 ### 1. Именованные провайдеры в config.json
-**Статус:** не начато
+**Статус:** сделано
+
+Секция `providers` в `~/.pi-go/config.json`; имя записи — префикс модели
+(`corp-claude/claude-opus-5`). Типы: `openai-compatible` (по умолчанию) и
+`anthropic`. Ключ: `apiKey` (литерал, поддерживает `${VAR}` как MCP-URL) или
+`apiKeyEnv`. Опционально `models` с `contextWindow` на модель. Валидация на
+загрузке: коллизия со встроенным именем, пустой baseURL, кривой type — ошибка.
+
+Проверено живым прогоном: `pi --mode print --model corp-claude/claude-opus-5`
+ответил через `https://api-llm.tradedealer.xyz/v1`; лог сессии:
+`provider: corp-claude`, `backend: corp-claude-custom`. `pi model list
+corp-claude` листит 21 модель шлюза.
 
 Сейчас: 10 жёстко вшитых слотов провайдеров; ключ и baseURL берутся по имени
 провайдера из env (`ANTHROPIC_API_KEY`, `OPENAI_BASE_URL`...). Два своих
