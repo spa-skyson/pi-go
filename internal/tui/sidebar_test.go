@@ -702,8 +702,13 @@ func TestRenderSidebar_PlanChecklist(t *testing.T) {
 	}
 }
 
-// Plan checklist lines carry their state's colour on the entire row, not just
+// Plan-checklist lines carry their state's colour on the entire row, not just
 // the marker. A done phase must not render as default overlay text.
+//
+// The test inspects raw (unstripped) ANSI output: each checklist row must start
+// with a CSI colour sequence, and the byte immediately after the marker prefix
+// must be the first byte of the title, not a style-reset escape. A reset there
+// would mean only the marker was coloured and the title is plain text.
 func TestRenderSidebar_PlanChecklistFullRowStyle(t *testing.T) {
 	result := RenderSidebar(SidebarRenderInput{
 		Width:  40,
@@ -714,18 +719,61 @@ func TestRenderSidebar_PlanChecklistFullRowStyle(t *testing.T) {
 			{Name: "Requirements", Done: false},
 		},
 	})
+
 	stripped := ansi.Strip(result)
 	if !strings.Contains(stripped, "[x] Idea") {
-		t.Errorf("done phase missing in plan checklist:\n%s", stripped)
+		t.Fatalf("done phase missing in plan checklist:\n%s", stripped)
 	}
 	if !strings.Contains(stripped, "▶ Requirements") {
-		t.Errorf("current phase missing in plan checklist:\n%s", stripped)
+		t.Fatalf("current phase missing in plan checklist:\n%s", stripped)
 	}
-	// The stripped output must contain the full title word on the
-	// same line as its marker — not truncated with "…".
-	if strings.Contains(stripped, "…") {
-		t.Errorf("plan phases should not be truncated with ellipsis:\n%s", stripped)
+
+	// Check that the title follows the marker text directly (no reset between).
+	for _, rawRow := range strings.Split(result, "\n") {
+		row := ansi.Strip(rawRow)
+		// Skip non-checklist rows.
+		if !strings.Contains(row, "[x]") && !strings.Contains(row, "[ ]") && !strings.Contains(row, "▶") {
+			continue
+		}
+		// Must start with a CSI colour sequence.
+		if !strings.HasPrefix(rawRow, "\x1b[") {
+			t.Errorf("checklist row %q does not start with CSI colour sequence", row)
+			continue
+		}
+		// Find the marker text in the raw row.
+		markerPlain := findMarkerPlain(row)
+		if markerPlain == "" {
+			t.Errorf("checklist row %q: cannot find marker", row)
+			continue
+		}
+		idx := strings.Index(rawRow, markerPlain)
+		if idx < 0 {
+			t.Errorf("checklist row %q: marker %q not found in raw row", row, markerPlain)
+			continue
+		}
+		// The byte right after the marker prefix must NOT be ESC (\x1b).
+		// If it is, a style reset sits between marker and title — only the
+		// marker was coloured.
+		afterMarker := rawRow[idx+len(markerPlain):]
+		if len(afterMarker) == 0 {
+			continue // continuation line with only indent
+		}
+		if afterMarker[0] == '\x1b' {
+			t.Errorf("checklist row %q: escape code (style reset) after marker — title is not styled\n  raw: %q",
+				row, rawRow)
+		}
 	}
+}
+
+// findMarkerPlain returns the plain-text marker prefix found in stripped row s,
+// or "" if none is present.
+func findMarkerPlain(s string) string {
+	for _, m := range []string{"  [x] ", "  ▶ ", "  [ ] "} {
+		if strings.Contains(s, m) {
+			return m
+		}
+	}
+	return ""
 }
 
 func TestRenderSidebar_NoPlanSection(t *testing.T) {
