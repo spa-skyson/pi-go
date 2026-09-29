@@ -1,9 +1,11 @@
 package tools
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/dimetron/pi-go/internal/config"
 	"github.com/dimetron/pi-go/internal/subagent"
@@ -81,7 +83,7 @@ func TestSubagentSingleMode_UnknownAgent(t *testing.T) {
 	orch := subagent.NewOrchestrator(defaultConfigPtr(), "", agents)
 
 	input := SubagentInput{Agent: "nonexistent", Task: "find main.go"}
-	output, err := subagentHandler(nil, orch, input, nil)
+	output, err := subagentHandler(nil, orch, input, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -107,7 +109,7 @@ func TestSubagentSingleMode_NoModeDetected(t *testing.T) {
 	orch := subagent.NewOrchestrator(defaultConfigPtr(), "", nil)
 
 	input := SubagentInput{} // empty — no mode
-	_, err := subagentHandler(nil, orch, input, nil)
+	_, err := subagentHandler(nil, orch, input, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for empty input")
 	}
@@ -125,7 +127,7 @@ func TestSubagentParallelMode_UnknownAgent(t *testing.T) {
 		{Agent: "explore", Task: "a"},
 		{Agent: "nonexistent", Task: "b"},
 	}}
-	output, err := subagentHandler(nil, orch, input, nil)
+	output, err := subagentHandler(nil, orch, input, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -151,7 +153,7 @@ func TestSubagentParallelMode_TooManyTasks(t *testing.T) {
 		tasks[i] = TaskItem{Agent: "explore", Task: "a"}
 	}
 	input := SubagentInput{Tasks: tasks}
-	output, err := subagentHandler(nil, orch, input, nil)
+	output, err := subagentHandler(nil, orch, input, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -177,7 +179,7 @@ func TestSubagentParallelMode_AllUnknownAgents(t *testing.T) {
 		{Agent: "unknown1", Task: "a"},
 		{Agent: "unknown2", Task: "b"},
 	}}
-	output, err := subagentHandler(nil, orch, input, nil)
+	output, err := subagentHandler(nil, orch, input, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -204,7 +206,7 @@ func TestSubagentChainMode_UnknownAgent(t *testing.T) {
 		{Agent: "explore", Task: "step 1"},
 		{Agent: "nonexistent", Task: "step 2"},
 	}}
-	output, err := subagentHandler(nil, orch, input, nil)
+	output, err := subagentHandler(nil, orch, input, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -230,7 +232,7 @@ func TestSubagentChainMode_TooManySteps(t *testing.T) {
 		chain[i] = ChainItem{Agent: "explore", Task: "a"}
 	}
 	input := SubagentInput{Chain: chain}
-	output, err := subagentHandler(nil, orch, input, nil)
+	output, err := subagentHandler(nil, orch, input, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -255,7 +257,7 @@ func TestSubagentChainMode_AllUnknownAgents(t *testing.T) {
 		{Agent: "unknown1", Task: "step 1"},
 		{Agent: "unknown2", Task: "step 2"},
 	}}
-	output, err := subagentHandler(nil, orch, input, nil)
+	output, err := subagentHandler(nil, orch, input, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -433,11 +435,14 @@ func TestSubagentTools_Registration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SubagentTools: %v", err)
 	}
-	if len(tools) != 1 {
-		t.Fatalf("expected 1 tool, got %d", len(tools))
+	if len(tools) != 2 {
+		t.Fatalf("expected 2 tools, got %d", len(tools))
 	}
 	if tools[0].Name() != "subagent" {
-		t.Errorf("expected tool name 'subagent', got %q", tools[0].Name())
+		t.Errorf("expected tool[0] name 'subagent', got %q", tools[0].Name())
+	}
+	if tools[1].Name() != "agent_result" {
+		t.Errorf("expected tool[1] name 'agent_result', got %q", tools[1].Name())
 	}
 }
 
@@ -562,7 +567,7 @@ func TestNewSubagentTool(t *testing.T) {
 	}
 	orch := subagent.NewOrchestrator(defaultConfigPtr(), "", agents)
 
-	tool, err := NewSubagentTool(orch, nil)
+	tool, err := NewSubagentTool(orch, nil, newBackgroundRegistry())
 	if err != nil {
 		t.Fatalf("NewSubagentTool() error = %v", err)
 	}
@@ -736,9 +741,291 @@ func TestSubagentHandler_AmbiguousInput(t *testing.T) {
 		Agent: "someagent",
 		Tasks: []TaskItem{{Agent: "a", Task: "b"}},
 	}
-	_, err := subagentHandler(nil, orch, input, nil)
+	_, err := subagentHandler(nil, orch, input, nil, nil)
 	// This should error for unknown agent "someagent" (in parallel validation)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// --- Background mode tests ---
+
+func TestSubagentHandler_BackgroundSingle(t *testing.T) {
+	agents := []subagent.AgentConfig{
+		{Name: "explore", Description: "test", Role: "default"},
+	}
+	orch := subagent.NewOrchestrator(defaultConfigPtr(), "", agents)
+	bg := newBackgroundRegistry()
+
+	// Background single mode should return immediately with agent_id.
+	input := SubagentInput{Agent: "explore", Task: "do something", Background: true}
+	output, err := subagentHandler(nil, orch, input, nil, bg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if output.Mode != "single" {
+		t.Errorf("mode = %q, want 'single'", output.Mode)
+	}
+	if len(output.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(output.Results))
+	}
+	r := output.Results[0]
+	if r.Status != "background" {
+		t.Errorf("status = %q, want 'background'", r.Status)
+	}
+	if r.AgentID == "" {
+		t.Error("expected non-empty agent_id")
+	}
+	if !strings.Contains(output.Summary, "agent_result") {
+		t.Error("summary should mention agent_result")
+	}
+}
+
+func TestSubagentHandler_BackgroundRejectsParallel(t *testing.T) {
+	orch := subagent.NewOrchestrator(defaultConfigPtr(), "", nil)
+	bg := newBackgroundRegistry()
+
+	input := SubagentInput{
+		Background: true,
+		Tasks:      []TaskItem{{Agent: "explore", Task: "a"}},
+	}
+	output, err := subagentHandler(nil, orch, input, nil, bg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if output.Mode != "parallel" {
+		t.Errorf("mode = %q, want 'parallel'", output.Mode)
+	}
+	if len(output.Results) != 1 || output.Results[0].Status != "failed" {
+		t.Fatalf("expected failed result, got %+v", output.Results)
+	}
+	if !strings.Contains(output.Results[0].Error, "single-mode") {
+		t.Errorf("error should mention single-mode: %q", output.Results[0].Error)
+	}
+}
+
+func TestSubagentHandler_BackgroundRejectsChain(t *testing.T) {
+	orch := subagent.NewOrchestrator(defaultConfigPtr(), "", nil)
+	bg := newBackgroundRegistry()
+
+	input := SubagentInput{
+		Background: true,
+		Chain:      []ChainItem{{Agent: "explore", Task: "a"}},
+	}
+	output, err := subagentHandler(nil, orch, input, nil, bg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if output.Results[0].Status != "failed" {
+		t.Fatalf("expected failed result, got %+v", output.Results)
+	}
+}
+
+func TestSubagentHandler_BackgroundUnknownAgent(t *testing.T) {
+	agents := []subagent.AgentConfig{
+		{Name: "explore", Description: "test", Role: "default"},
+	}
+	orch := subagent.NewOrchestrator(defaultConfigPtr(), "", agents)
+	bg := newBackgroundRegistry()
+
+	input := SubagentInput{Agent: "nonexistent", Task: "do something", Background: true}
+	output, err := subagentHandler(nil, orch, input, nil, bg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if output.Results[0].Status != "failed" {
+		t.Errorf("status = %q, want 'failed'", output.Results[0].Status)
+	}
+}
+
+// --- Background registry tests ---
+
+func TestBackgroundRegistry_StartFinishGet(t *testing.T) {
+	bg := newBackgroundRegistry()
+
+	_ = bg.start("agent-1", "explore")
+
+	// Verify running state.
+	status, result, errMsg, done, ok := bg.get("agent-1")
+	if !ok {
+		t.Fatal("get returned not found")
+	}
+	if status != "running" {
+		t.Errorf("status = %q, want 'running'", status)
+	}
+
+	// Finish with success.
+	bg.finish("agent-1", "completed", "analysis result", "")
+	status, result, errMsg, done, ok = bg.get("agent-1")
+	if !ok {
+		t.Fatal("get returned not found after finish")
+	}
+	if status != "completed" {
+		t.Errorf("status = %q, want 'completed'", status)
+	}
+	if result != "analysis result" {
+		t.Errorf("result = %q", result)
+	}
+	if errMsg != "" {
+		t.Errorf("error = %q, want empty", errMsg)
+	}
+
+	// done channel should be closed after finish.
+	select {
+	case <-done:
+	default:
+		t.Error("done channel should be closed")
+	}
+}
+
+func TestBackgroundRegistry_FinishWithError(t *testing.T) {
+	bg := newBackgroundRegistry()
+
+	bg.start("agent-2", "task")
+	bg.finish("agent-2", "failed", "", "timeout")
+	status, _, errMsg, _, ok := bg.get("agent-2")
+	if !ok {
+		t.Fatal("get returned not found")
+	}
+	if status != "failed" {
+		t.Errorf("status = %q, want 'failed'", status)
+	}
+	if errMsg != "timeout" {
+		t.Errorf("error = %q, want 'timeout'", errMsg)
+	}
+}
+
+func TestBackgroundRegistry_FinishUnknown(t *testing.T) {
+	bg := newBackgroundRegistry()
+	// Must not panic.
+	bg.finish("nonexistent", "completed", "", "")
+}
+
+func TestBackgroundRegistry_GetUnknown(t *testing.T) {
+	bg := newBackgroundRegistry()
+	_, _, _, _, ok := bg.get("nonexistent")
+	if ok {
+		t.Error("expected not found")
+	}
+}
+
+func TestBackgroundRegistry_List(t *testing.T) {
+	bg := newBackgroundRegistry()
+	bg.start("a-1", "explore")
+	bg.start("a-2", "task")
+
+	ids := bg.list()
+	if len(ids) != 2 {
+		t.Fatalf("expected 2 IDs, got %d: %v", len(ids), ids)
+	}
+}
+
+// --- agent_result tool tests ---
+
+func TestAgentResult_UnknownID(t *testing.T) {
+	bg := newBackgroundRegistry()
+
+	out, err := agentResultHandler(bg, agentResultInput{AgentID: "nonexistent"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Status != "unknown" {
+		t.Errorf("status = %q, want 'unknown'", out.Status)
+	}
+	if !strings.Contains(out.Summary, "nonexistent") {
+		t.Error("summary should mention the unknown ID")
+	}
+}
+
+func TestAgentResult_RunningNoWait(t *testing.T) {
+	bg := newBackgroundRegistry()
+	bg.start("r-1", "explore")
+
+	out, err := agentResultHandler(bg, agentResultInput{AgentID: "r-1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Status != "running" {
+		t.Errorf("status = %q, want 'running'", out.Status)
+	}
+	if out.Hint == "" {
+		t.Error("expected hint for running agent with no wait")
+	}
+}
+
+func TestAgentResult_RunningWithWait(t *testing.T) {
+	bg := newBackgroundRegistry()
+	bg.start("rw-1", "explore")
+
+	// With wait_seconds=0.1 and fast completion in a goroutine.
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		bg.finish("rw-1", "completed", "done", "")
+	}()
+
+	out, err := agentResultHandler(bg, agentResultInput{AgentID: "rw-1", WaitSeconds: 1})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Status != "completed" {
+		t.Errorf("status = %q, want 'completed'", out.Status)
+	}
+	if out.Result != "done" {
+		t.Errorf("result = %q, want 'done'", out.Result)
+	}
+}
+
+func TestAgentResult_Done(t *testing.T) {
+	bg := newBackgroundRegistry()
+	bg.start("d-1", "explore")
+	bg.finish("d-1", "completed", "full result text", "")
+
+	out, err := agentResultHandler(bg, agentResultInput{AgentID: "d-1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Status != "completed" {
+		t.Errorf("status = %q, want 'completed'", out.Status)
+	}
+	if out.Result != "full result text" {
+		t.Errorf("result = %q", out.Result)
+	}
+}
+
+func TestAgentResult_WaitTimeout(t *testing.T) {
+	bg := newBackgroundRegistry()
+	bg.start("wt-1", "explore")
+
+	// Very short wait, agent never finishes.
+	out, err := agentResultHandler(bg, agentResultInput{AgentID: "wt-1", WaitSeconds: 0.05})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Status != "running" {
+		t.Errorf("status = %q, want 'running' (timed out)", out.Status)
+	}
+}
+
+// --- Concurrent registry tests ---
+
+func TestBackgroundRegistry_ConcurrentAccess(t *testing.T) {
+	bg := newBackgroundRegistry()
+	var wg sync.WaitGroup
+
+	for i := range 10 {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			id := fmt.Sprintf("c-%d", n)
+			bg.start(id, "explore")
+			bg.finish(id, "completed", "result", "")
+			bg.get(id)
+		}(i)
+	}
+	wg.Wait()
+
+	ids := bg.list()
+	if len(ids) != 10 {
+		t.Errorf("expected 10 IDs, got %d", len(ids))
 	}
 }

@@ -672,6 +672,7 @@ type agentSubEventMsg struct {
 	pipelineMode  string // "single", "parallel", "chain"
 	pipelineStep  int    // 1-based position
 	pipelineTotal int    // total agents in pipeline
+	background    bool   // true for spawn/done of background agent
 }
 
 func (agentTextMsg) agentMsg()       {}
@@ -816,6 +817,7 @@ func waitForSubEvent(ch <-chan AgentSubEvent) tea.Cmd {
 			pipelineMode:  ev.Mode,
 			pipelineStep:  ev.Step,
 			pipelineTotal: ev.Total,
+			background:    ev.Background,
 		}
 	}
 }
@@ -1933,6 +1935,10 @@ func (m *model) handleAgentSubEvent(msg agentSubEventMsg) (tea.Model, tea.Cmd) {
 	}
 	m.matrix.feed(msg.kind+msg.content, m.mainWidth())
 	if msg.kind == "spawn" {
+		// Track background spawns.
+		if msg.background {
+			m.bgRunning++
+		}
 		// Agent IDs from the orchestrator are "<agent-name>-<unix-nano>".
 		// Prefer matching the spawn to an unassigned card whose agentType
 		// matches the name prefix; fall back to the first unassigned card
@@ -1946,6 +1952,11 @@ func (m *model) handleAgentSubEvent(msg agentSubEventMsg) (tea.Model, tea.Cmd) {
 			m.chatModel.Messages[idx].pipelineTotal = msg.pipelineTotal
 		}
 	} else {
+		if msg.kind == "done" && msg.background {
+			m.bgRunning--
+			// Add a notice when a background agent finishes.
+			m.chatModel.AppendNotice(fmt.Sprintf("✓ background %s finished — collect result: agent_result(%q)", msg.content, msg.agentID))
+		}
 		for i := len(m.chatModel.Messages) - 1; i >= 0; i-- {
 			if (m.chatModel.Messages[i].tool == "agent" || m.chatModel.Messages[i].tool == "subagent") && m.chatModel.Messages[i].agentID == msg.agentID {
 				evKind := msg.kind

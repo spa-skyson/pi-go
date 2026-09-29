@@ -94,6 +94,11 @@ type model struct {
 	// override.
 	agentModelOverrides map[string]string
 
+	// bgRunning counts how many background subagents are currently running.
+	// Incremented on spawn+bg, decremented on done+bg; rendered in the sidebar
+	// next to the agent name.
+	bgRunning int
+
 	// steering marks the current turn as replaced by a steer rather than
 	// stopped. The turn still ends with context.Canceled — that is the only
 	// thing cancellation can produce — but a steer is not a failure, so the
@@ -1949,6 +1954,7 @@ func (m *model) sidebarRenderInput(sidebarWidth, panelRows int) SidebarRenderInp
 		MemoryStatus:  m.memoryStatus,
 		Artifacts:     m.artifactList(),
 		Palette:       m.palette,
+		BgRunning:     m.bgRunning,
 	}
 	if m.run != nil && m.run.phase != "" {
 		in.RunChecklist = m.run.checklist

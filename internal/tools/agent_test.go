@@ -19,11 +19,14 @@ func TestAgentTool_Registration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AgentTools: %v", err)
 	}
-	if len(tools) != 1 {
-		t.Fatalf("expected 1 tool, got %d", len(tools))
+	if len(tools) != 2 {
+		t.Fatalf("expected 2 tools, got %d", len(tools))
 	}
 	if tools[0].Name() != "subagent" {
-		t.Errorf("expected tool name 'subagent', got %q", tools[0].Name())
+		t.Errorf("expected tool[0] name 'subagent', got %q", tools[0].Name())
+	}
+	if tools[1].Name() != "agent_result" {
+		t.Errorf("expected tool[1] name 'agent_result', got %q", tools[1].Name())
 	}
 }
 
@@ -41,8 +44,8 @@ func TestAgentTools_LegacyCallbackWrapping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AgentTools: %v", err)
 	}
-	if len(tools) != 1 {
-		t.Fatalf("expected 1 tool, got %d", len(tools))
+	if len(tools) != 2 {
+		t.Fatalf("expected 2 tools, got %d", len(tools))
 	}
 
 	// Verify the tool was created (we can't easily invoke it without a real orchestrator,

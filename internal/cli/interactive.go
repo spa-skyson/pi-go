@@ -295,20 +295,29 @@ func deferredInit(
 
 	// Build agent event channel and tools.
 	agentEventCh := make(chan tui.AgentSubEvent, 128)
-	agentEventCB := func(agentID, eventType, content string) {
+	agentEventCB := func(ev tools.SubagentEvent) {
 		select {
-		case agentEventCh <- tui.AgentSubEvent{AgentID: agentID, Kind: eventType, Content: content}:
+		case agentEventCh <- tui.AgentSubEvent{
+			AgentID:    ev.AgentID,
+			Kind:       ev.Kind,
+			Content:    ev.Content,
+			PipelineID: ev.PipelineID,
+			Mode:       ev.Mode,
+			Step:       ev.Step,
+			Total:      ev.Total,
+			Background: ev.Background,
+		}:
 		default:
 		}
 	}
-	agentTools, _ := tools.AgentTools(orch, agentEventCB)
+	agentTools, _ := tools.SubagentTools(orch, agentEventCB)
 	coreTools = append(coreTools, agentTools...)
 
 	// Stream live shell output to the same channel the subagent cards use. The
 	// prefix keeps the two streams apart; the non-blocking send in agentEventCB
 	// is what keeps a slow UI from stalling a running command.
 	bashSup.SetSink(func(execID, kind, content string) {
-		agentEventCB(execID, tui.BashEventKind(kind), content)
+		agentEventCB(tools.SubagentEvent{AgentID: execID, Kind: tui.BashEventKind(kind), Content: content})
 	})
 
 	// Append LSP tools.
