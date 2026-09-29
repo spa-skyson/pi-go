@@ -887,6 +887,22 @@ func (o *Orchestrator) Cancel(agentID string) error {
 	return nil
 }
 
+// Steer sends text to a running subagent as a follow-up message. The child
+// queues it and runs it as an extra turn in its session once the current turn
+// finishes; see Process.Steer. Works for background agents too — they are the
+// same Process.
+func (o *Orchestrator) Steer(agentID, text string) error {
+	o.mu.Lock()
+	state, ok := o.agents[agentID]
+	o.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("agent %q not found", agentID)
+	}
+	// The write happens outside o.mu: Steer writes to a pipe, and a child
+	// wedged with a full pipe must not block the orchestrator's other calls.
+	return state.Process.Steer(text)
+}
+
 // Concurrency reports how many subagents this process may run at once. It is
 // the pool size, which is what actually gates a spawn — not maxParallelTasks,
 // which only caps how many tasks one call may name. A batch larger than this

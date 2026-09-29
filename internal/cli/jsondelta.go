@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"google.golang.org/adk/v2/session"
 
@@ -39,6 +40,11 @@ type jsonEmitter struct {
 	// raw disables grouping: every delta becomes its own event.
 	raw bool
 
+	// mu guards enc. The turn loop is the only writer of the text buffer, but
+	// the steer scanner (runJSON) emits steer_queued from its own goroutine,
+	// so every encoder write goes through the locked emit.
+	mu sync.Mutex
+
 	// Pending streamed text. A run is broken by a change of event type or
 	// agent: reasoning and reply text stream from the same agent back to back,
 	// and merging them would emit a model's thinking as its answer.
@@ -53,8 +59,12 @@ func newJSONEmitter(enc *json.Encoder, log *logger.Logger, raw bool) *jsonEmitte
 
 // emit writes one event. Errors are ignored deliberately, exactly as before:
 // stdout is a pipe or a terminal, and a write failure there is not something
-// the event stream can report on itself.
-func (e *jsonEmitter) emit(ev jsonEvent) { _ = e.enc.Encode(ev) }
+// the event stream can report on itself. Safe for concurrent callers — see mu.
+func (e *jsonEmitter) emit(ev jsonEvent) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	_ = e.enc.Encode(ev)
+}
 
 // text records streamed text or reasoning.
 //

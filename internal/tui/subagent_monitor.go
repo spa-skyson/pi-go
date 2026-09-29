@@ -204,6 +204,95 @@ func (m *model) refreshSubagentsPopup() {
 	m.refreshSearchPopupHeight()
 }
 
+// --- Steer (follow-up message to a running subagent) ---
+
+// subagentSteerState is the monitor's mini-input for steering a running
+// subagent. Opened with `s` on a running row; Enter sends, Esc cancels.
+type subagentSteerState struct {
+	agentID string
+	label   string // row title (or type), for the input line and the notices
+	text    string
+}
+
+// label is the human name of a monitor row: the card title when there is one,
+// otherwise the agent type.
+func (r subagentRow) label() string {
+	if r.title != "" {
+		return r.title
+	}
+	return r.typ
+}
+
+// tryOpenSubagentSteer opens the steer input for the row the monitor has
+// selected. Only an explicit running status from the orchestrator qualifies —
+// a card whose status was inferred (no orchestrator entry) is not steerable,
+// because there is nothing behind it to receive the message. Every outcome
+// other than opening explains itself via a notice.
+func (m *model) tryOpenSubagentSteer() {
+	sp := m.searchPopup
+	if sp == nil || sp.selected < 0 || sp.selected >= len(sp.filtered) {
+		return
+	}
+	agentID := sp.filtered[sp.selected].ID
+
+	var row subagentRow
+	found := false
+	for _, r := range m.subagentRows() {
+		if r.agentID == agentID {
+			row, found = r, true
+			break
+		}
+	}
+
+	switch {
+	case m.cfg.SteerSubagent == nil:
+		m.chatModel.AppendNotice("Steering is not available in this context.")
+	case !found:
+		m.chatModel.AppendNotice("Agent has no orchestrator status — cannot steer.")
+	case row.status != "running":
+		m.chatModel.AppendNotice(fmt.Sprintf("%s is %s — only running agents can be steered.",
+			agentTitleFit(row.label(), 40), row.status))
+	default:
+		m.steerInput = &subagentSteerState{agentID: agentID, label: row.label()}
+	}
+}
+
+// handleSubagentSteerKey drives the open steer input: printable characters
+// append, Backspace deletes, Enter sends, Esc cancels. The monitor popup stays
+// open underneath, so the steer_queued marker landing on the card is visible
+// immediately.
+func (m *model) handleSubagentSteerKey(key tea.Key) tea.Cmd {
+	si := m.steerInput
+	if si == nil {
+		return nil
+	}
+	switch {
+	case key.Code == tea.KeyEsc:
+		m.steerInput = nil
+	case key.Code == tea.KeyEnter:
+		m.steerInput = nil
+		text := strings.TrimSpace(si.text)
+		if text == "" {
+			return nil // nothing to send
+		}
+		if err := m.cfg.SteerSubagent(si.agentID, text); err != nil {
+			m.chatModel.AppendNotice(fmt.Sprintf("Steer failed: %v", err))
+			return nil
+		}
+		m.chatModel.AppendNotice(fmt.Sprintf("⏎ steer queued → %s", agentTitleFit(si.label, 40)))
+	case key.Code == tea.KeyBackspace:
+		if r := []rune(si.text); len(r) > 0 {
+			si.text = string(r[:len(r)-1])
+		}
+	default:
+		// Same guard as the popup filter: one printable character, no chord.
+		if len(key.Text) == 1 && key.Mod == 0 {
+			si.text += key.Text
+		}
+	}
+	return nil
+}
+
 // --- Fullscreen stream viewer ---
 
 // subagentViewerState is the fullscreen view of one subagent card's full
