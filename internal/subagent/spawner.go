@@ -61,7 +61,7 @@ type SpawnOpts struct {
 	// caller's default; see AgentConfig.Temperature for the 0-means-unset tie.
 	Temperature float64
 	// ThinkingLevel is the child's reasoning effort (passed as --thinking),
-	// already normalized by normalizeReasoningEffort. Empty leaves the flag
+	// already normalized by NormalizeReasoningEffort. Empty leaves the flag
 	// off and the child on its configured default.
 	ThinkingLevel string
 	// Steps caps the child's tool-call iterations (passed as --steps). Zero

@@ -215,7 +215,11 @@ func TestWorktree_MergeBack(t *testing.T) {
 	}
 }
 
-func TestWorktree_MergeConflict(t *testing.T) {
+// runMergeConflictScenario builds a repo whose main branch and a subagent
+// worktree branch both changed conflict.txt, then calls MergeBack. It returns
+// the repo path (for repo-state assertions) and the MergeBack error.
+func runMergeConflictScenario(t *testing.T) (string, error) {
+	t.Helper()
 	repo := initTestRepo(t)
 	mgr := NewWorktreeManager(repo)
 
@@ -273,14 +277,21 @@ func TestWorktree_MergeConflict(t *testing.T) {
 		}
 	}
 
-	// MergeBack should fail with conflict and abort the merge so the
-	// main repo is left clean.
+	// MergeBack should fail with a conflict.
 	_, err = mgr.MergeBack("conflict-test")
+	return repo, err
+}
+
+// assertMergeConflictAborted checks the MergeBack error names the conflict
+// (callers rely on that message to keep the worktree for manual resolution)
+// and that the merge was aborted, leaving the main repo clean.
+func assertMergeConflictAborted(t *testing.T, repo string, err error) {
+	t.Helper()
 	if err == nil {
 		t.Fatal("expected merge conflict error")
 	}
-	if !strings.Contains(err.Error(), "merge conflict") && !strings.Contains(err.Error(), "merge failed") {
-		t.Errorf("unexpected error: %v", err)
+	if !strings.Contains(err.Error(), "merge conflict") {
+		t.Errorf("expected a \"merge conflict\" error, got: %v", err)
 	}
 
 	// Verify the main repo was left clean (MergeBack aborts on conflict).
@@ -290,6 +301,28 @@ func TestWorktree_MergeConflict(t *testing.T) {
 	if strings.Contains(string(out), "conflict.txt") {
 		t.Errorf("main repo left dirty after merge abort:\n%s", out)
 	}
+}
+
+// TestWorktree_MergeConflict pins the callers' contract: a conflicting merge
+// is reported as "merge conflict" (not a generic failure) and aborted, so the
+// main repo stays clean.
+func TestWorktree_MergeConflict(t *testing.T) {
+	repo, err := runMergeConflictScenario(t)
+	assertMergeConflictAborted(t, repo, err)
+}
+
+// TestWorktree_MergeConflict_RussianLocale runs the same scenario under a
+// fully Russian locale. Without the LC_ALL=C pin in runGit, git localizes its
+// output to «КОНФЛИКТ …», MergeBack's conflict matching never fires, the merge
+// is not aborted and the error degrades to a generic "merge failed". With the
+// pin, git's output is English regardless of the process locale.
+func TestWorktree_MergeConflict_RussianLocale(t *testing.T) {
+	t.Setenv("LANG", "ru_RU.UTF-8")
+	t.Setenv("LC_ALL", "ru_RU.UTF-8")
+	t.Setenv("LANGUAGE", "ru")
+
+	repo, err := runMergeConflictScenario(t)
+	assertMergeConflictAborted(t, repo, err)
 }
 
 func TestWorktree_CleanupAll(t *testing.T) {

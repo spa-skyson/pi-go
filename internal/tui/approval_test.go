@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/dimetron/pi-go/internal/permission"
 )
@@ -14,7 +15,9 @@ import (
 // test can read the answer after the key handler returns.
 func newApprovalModel(t *testing.T) (*model, *permission.ApprovalRequest) {
 	t.Helper()
-	m := &model{width: 100, height: 30}
+	// Wide enough that the default approval line renders with the full
+	// command; the narrow-budget fallback is pinned separately below.
+	m := &model{width: 140, height: 30}
 	m.agentCh = make(chan agentMsg, 8)
 	// The bridge channel, so the handler's re-arm produces a real command.
 	m.cfg.ApprovalCh = make(chan permission.ApprovalRequest, 1)
@@ -41,11 +44,38 @@ func TestApprovalRequest_ShowsDialogAndRenders(t *testing.T) {
 		t.Fatalf("approval state not set: %+v", m.approval)
 	}
 
-	view := m.renderApprovalDialog(m.chatWidth())
-	for _, want := range []string{"bash", "git *", "git push --force origin main", "approval", "y allow"} {
-		if !strings.Contains(strings.ToLower(view), strings.ToLower(want)) {
-			t.Errorf("dialog view missing %q; got:\n%s", want, view)
+	width := m.chatWidth()
+	view := m.renderApprovalDialog(width)
+	if strings.Contains(view, "Tool approval required") {
+		t.Errorf("compact panel must not carry the old bold title; got:\n%s", view)
+	}
+	for _, want := range []string{"⚠ approval: bash", "git push --force origin main", `rule "git *"`, "[y] allow", "[a] always", "[n] deny"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("approval view missing %q; got:\n%s", want, view)
 		}
+	}
+	// One status-hint line: no border block, no wrapping past the panel.
+	if got := strings.Count(view, "\n"); got != 0 {
+		t.Errorf("approval view must be a single line, got %d newlines:\n%s", got, view)
+	}
+	if got := lipgloss.Width(view); got > width {
+		t.Errorf("approval view is %d cells wide, panel is %d:\n%s", got, width, view)
+	}
+
+	// Narrow panel: the command is cut first, then the rule; tool + keys stay.
+	narrow := m.renderApprovalDialog(55)
+	for _, gone := range []string{"git push", `rule "git *"`} {
+		if strings.Contains(narrow, gone) {
+			t.Errorf("narrow view must drop %q; got:\n%s", gone, narrow)
+		}
+	}
+	for _, want := range []string{"bash", "[y] allow", "[n] deny"} {
+		if !strings.Contains(narrow, want) {
+			t.Errorf("narrow view must keep %q; got:\n%s", want, narrow)
+		}
+	}
+	if got := lipgloss.Width(narrow); got > 55 {
+		t.Errorf("narrow view is %d cells wide, budget is 55:\n%s", got, narrow)
 	}
 }
 

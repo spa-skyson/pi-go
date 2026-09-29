@@ -580,6 +580,39 @@ func (a *Agent) RebuildWithModel(llm model.LLM) error {
 	return nil
 }
 
+// RebuildWithSession swaps the pieces that change when the main session moves
+// to a primary agent — the system instruction, optionally the LLM, and the
+// tool-callback chains (permission rules, step budget) — while reusing the
+// session service so the conversation survives the switch. A nil llm keeps
+// the current model. instruction must not be empty; beforeTool/afterTool are
+// assigned as given (nil clears them).
+func (a *Agent) RebuildWithSession(instruction string, llm model.LLM, beforeTool []BeforeToolCallback, afterTool []AfterToolCallback) error {
+	if instruction == "" {
+		return fmt.Errorf("instruction must not be empty")
+	}
+	cfg := a.config
+	cfg.Instruction = instruction
+	if llm != nil {
+		cfg.Model = llm
+	}
+	cfg.BeforeToolCallbacks = beforeTool
+	cfg.AfterToolCallbacks = afterTool
+
+	// Reconstruct the instruction the same way New() does.
+	if cwd := cfg.workingDir(); cwd != "" {
+		instruction += fmt.Sprintf("\nCurrent working directory: %s\n", cwd)
+	}
+
+	r, err := buildRunner(cfg, instruction, a.sessionService)
+	if err != nil {
+		return fmt.Errorf("rebuilding runner: %w", err)
+	}
+
+	a.runner = r
+	a.config = cfg
+	return nil
+}
+
 // modelNamer is satisfied by session services that can record the model name
 // for an existing session (notably *session.FileService). Sessions backed by
 // services without this capability still get the default "unknown" placeholder

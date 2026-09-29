@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -44,6 +46,15 @@ type initResources struct {
 	sessionLog *logger.Logger
 	sessionID  string // captured for resume hint on exit
 	bashSup    *tools.BashSupervisor
+
+	// cbIn and agentConfigs back the TUI's AgentSwitcher, which fires only
+	// after deferred init has completed — the InitEvent send on the init
+	// channel is the happens-before edge, so plain reads here are race-free.
+	// cbIn carries the shared deduper and compaction metrics, so a switch
+	// rebuild keeps working with the instances the auto-compact hook and the
+	// context gauge already hold.
+	cbIn         callbackInputs
+	agentConfigs []subagent.AgentConfig
 
 	// memSummarizer, with memSessionID and memProject, describes the
 	// end-of-session summary written during cleanup. All three are empty when
@@ -187,6 +198,13 @@ func runInteractive(
 		ModelSwitcher: func(switchCtx context.Context, modelName string) (adkmodel.LLM, string, string, error) {
 			return buildSwitchedLLM(switchCtx, cfg, tokenTracker, modelName, headerSessionID)
 		},
+		// AgentSwitcher fires only after deferred init has filled res (the
+		// InitEvent send is the happens-before edge): it rebuilds the
+		// session's callback chains from the shared inputs and builds the
+		// target agent's LLM from its frontmatter.
+		AgentSwitcher: func(switchCtx context.Context, agentName string) (tui.AgentSwitch, error) {
+			return agentSwitch(switchCtx, cfg, tokenTracker, headerSessionID, &res.cbIn, res.agentConfigs, agentName)
+		},
 		A2A: cfg.A2A,
 	})
 
@@ -284,9 +302,54 @@ func deferredInit(
 	// attribute overhead to each section; composing them here is what keeps the
 	// breakdown honest — instruction is literally parts.String().
 	instructionParts := buildDeferredInstructionParts()
-	instruction := instructionParts.String()
 
-	cbs := buildDeferredCallbacks(cfg, providerName, sandbox, ps.lspMgr, memRecorder, approvalCh)
+	// The callback inputs are shared with the runtime agent switcher: a
+	// /agent switch rebuilds the chains from the same sandbox, LSP manager,
+	// memory recorder, deduper and compaction metrics, changing only the
+	// permission rules and the step budget.
+	cbIn := callbackInputs{
+		cfg:            cfg,
+		providerName:   providerName,
+		sandbox:        sandbox,
+		lspMgr:         ps.lspMgr,
+		memRecorder:    memRecorder,
+		approvalCh:     approvalCh,
+		deduper:        tools.NewResultDeduper(),
+		compactMetrics: tools.NewCompactMetrics(),
+	}
+	res.cbIn = cbIn
+	res.agentConfigs = ps.agentConfigs
+
+	cbs := cbIn.build(globalPermissionRules(cfg), flagSteps)
+
+	// defaultAgent: start the session inside a primary agent (opencode
+	// parity). Unknown or non-primary names are a soft fallback to the
+	// built-in agent; an explicit --model keeps the startup LLM and takes
+	// only the agent's prompt, permission rules and step budget. The
+	// agent's instruction replaces the prompt's base — the rules and skills
+	// sections are session-level and survive the swap.
+	activeAgent := ""
+	agentModel, agentProvider := "", ""
+	if cfg.DefaultAgent != "" {
+		ac, ok, fallback := resolveDefaultAgent(ps.agentConfigs, cfg.DefaultAgent)
+		if fallback != "" {
+			softNotice(noticeCh, fallback)
+		}
+		if ok {
+			activeAgent = ac.Name
+			instructionParts.Base = ac.Instruction
+			cbs = cbIn.build(permission.Merge(globalPermissionRules(cfg), ac.Permission), effectiveAgentSteps(ac.Steps))
+			if flagModel == "" {
+				if swLLM, swName, swProvider, err := agentSwitchLLM(ctx, cfg, tokenTracker, headerSessionID, &ac); err != nil {
+					softNotice(noticeCh, fmt.Sprintf("model for agent %q unavailable (%v); keeping the startup model", ac.Name, err))
+				} else if swLLM != nil {
+					llm = swLLM
+					agentModel, agentProvider = swName, swProvider
+				}
+			}
+		}
+	}
+	instruction := instructionParts.String()
 
 	// Session service.
 	sessionsPath, sessionSvc, err := openSessionService()
@@ -429,6 +492,13 @@ func deferredInit(
 			DiffRemoved:    ps.diffRemoved,
 			MCPToolsets:    ps.mcpToolsets,
 			MCPServers:     buildMCPServerConfigs(cfg),
+			// defaultAgent: reflect the agent's model in the TUI when it
+			// replaced the startup LLM, and hand over the switchable list.
+			LLM:           llm,
+			ModelName:     cmp.Or(agentModel, modelName),
+			ProviderName:  cmp.Or(agentProvider, providerName),
+			ActiveAgent:   activeAgent,
+			PrimaryAgents: primaryAgentsFor(ps.agentConfigs),
 		},
 	}
 
@@ -602,33 +672,48 @@ type deferredCallbacks struct {
 	compactMetrics *tools.CompactMetrics
 }
 
-// buildDeferredCallbacks assembles the tool and model callback chains in the
-// order they must run. approvalCh, when non-nil, upgrades the permission gate
-// from hard ask-denial to the TUI approval dialog.
-func buildDeferredCallbacks(
-	cfg config.Config,
-	providerName string,
-	sandbox *tools.Sandbox,
-	lspMgr *lsp.Manager,
-	memRecorder *deferredMemoryRecorder,
-	approvalCh chan permission.ApprovalRequest,
-) deferredCallbacks {
-	compactorCfg := compactorConfigFrom(cfg)
-	compactMetrics := tools.NewCompactMetrics()
-	compactorCB := tools.BuildCompactorCallback(compactorCfg, compactMetrics)
-	resultDeduper := tools.NewResultDeduper()
+// callbackInputs collects what the interactive callback chains are built
+// against. The same inputs rebuild the chains when the main session moves to
+// a primary agent — only the permission rules and the step budget change —
+// so the deduper and the compaction metrics stay shared across switches: the
+// auto-compact hook and the context gauge hold the original instances.
+type callbackInputs struct {
+	cfg            config.Config
+	providerName   string
+	sandbox        *tools.Sandbox
+	lspMgr         *lsp.Manager
+	memRecorder    *deferredMemoryRecorder
+	approvalCh     chan permission.ApprovalRequest
+	deduper        *tools.ResultDeduper
+	compactMetrics *tools.CompactMetrics
+}
 
-	hooks := convertHooks(cfg.Hooks)
+// build assembles the tool and model callback chains in the order they must
+// run. rules gate tool calls; steps caps iterations (0 = unlimited). When
+// approvalCh is non-nil, ask shows the TUI approval dialog instead of the
+// hard denial.
+func (in callbackInputs) build(rules permission.Rules, steps int) deferredCallbacks {
+	if in.deduper == nil {
+		in.deduper = tools.NewResultDeduper()
+	}
+	if in.compactMetrics == nil {
+		in.compactMetrics = tools.NewCompactMetrics()
+	}
+	compactorCfg := compactorConfigFrom(in.cfg)
+	compactorCB := tools.BuildCompactorCallback(compactorCfg, in.compactMetrics)
+	resultDeduper := in.deduper
+
+	hooks := convertHooks(in.cfg.Hooks)
 	beforeCBs := extension.BuildBeforeToolCallbacks(hooks)
 
-	// Permission rules gate every tool call before execution. The primary
-	// interactive session has no frontmatter of its own — per-agent rules
-	// travel with each subagent's process — so only the global config rules
-	// apply here. With an approval bridge wired, ask shows the TUI dialog
-	// instead of denying; subagent processes keep the hard denial.
-	if rules := globalPermissionRules(cfg); !rules.Empty() {
-		if approvalCh != nil {
-			beforeCBs = append(beforeCBs, agent.NewAskingPermissionCallback(rules, approvalAsker(approvalCh)))
+	// Permission rules gate every tool call before execution. The default
+	// session contributes only the global config rules; a primary agent's
+	// frontmatter rules arrive merged on top of them. With an approval
+	// bridge wired, ask shows the TUI dialog instead of denying; subagent
+	// processes keep the hard denial.
+	if !rules.Empty() {
+		if in.approvalCh != nil {
+			beforeCBs = append(beforeCBs, agent.NewAskingPermissionCallback(rules, approvalAsker(in.approvalCh)))
 		} else {
 			beforeCBs = append(beforeCBs, agent.NewPermissionCallback(rules))
 		}
@@ -639,8 +724,8 @@ func buildDeferredCallbacks(
 	tracingBefore, tracingAfter := extension.BuildTracingCallbacks()
 	beforeCBs = append(beforeCBs, tracingBefore...)
 	afterCBs = append(afterCBs, tracingAfter...)
-	if lspMgr != nil {
-		afterCBs = append(afterCBs, lsp.BuildLSPAfterToolCallback(lspMgr))
+	if in.lspMgr != nil {
+		afterCBs = append(afterCBs, lsp.BuildLSPAfterToolCallback(in.lspMgr))
 	}
 	// Dedup runs BEFORE the compactor: its hash must cover the bytes the tool
 	// produced, not the truncated form. Compaction is lossy, so hashing after it
@@ -650,20 +735,20 @@ func buildDeferredCallbacks(
 	afterCBs = append(afterCBs, tools.BuildDedupCallback(resultDeduper), compactorCB)
 
 	// LLM tracing: before/after model callbacks emit spans per LLM invocation.
-	llmBefore, llmAfter := extension.BuildLLMTracingCallbacks(providerName)
+	llmBefore, llmAfter := extension.BuildLLMTracingCallbacks(in.providerName)
 
 	// Inject image bytes (screenshots) as visible InlineData parts for the model.
-	llmBefore = append(llmBefore, extension.BuildReadImageCallback(sandbox, providerName))
+	llmBefore = append(llmBefore, extension.BuildReadImageCallback(in.sandbox, in.providerName))
 
-	if memRecorder != nil {
-		afterCBs = append(afterCBs, memRecorder.afterTool)
+	if in.memRecorder != nil {
+		afterCBs = append(afterCBs, in.memRecorder.afterTool)
 	}
 
-	// --steps caps the tool-call iterations; 0 (the default) disables it.
-	// Must ride the composed chain below — a separate slice entry would never
-	// run (ADK stops at the first callback that returns a result).
-	if flagSteps > 0 {
-		afterCBs = append(afterCBs, agent.NewStepLimitCallback(flagSteps))
+	// steps caps the tool-call iterations; 0 disables it. Must ride the
+	// composed chain below — a separate slice entry would never run (ADK
+	// stops at the first callback that returns a result).
+	if steps > 0 {
+		afterCBs = append(afterCBs, agent.NewStepLimitCallback(steps))
 	}
 
 	// Fold the after-tool chain into the single callback ADK runs. ADK's
@@ -677,8 +762,30 @@ func buildDeferredCallbacks(
 		beforeModel:    llmBefore,
 		afterModel:     llmAfter,
 		deduper:        resultDeduper,
-		compactMetrics: compactMetrics,
+		compactMetrics: in.compactMetrics,
 	}
+}
+
+// buildDeferredCallbacks assembles the callback chains for the default
+// (built-in agent) session: global permission rules and the --steps budget.
+func buildDeferredCallbacks(
+	cfg config.Config,
+	providerName string,
+	sandbox *tools.Sandbox,
+	lspMgr *lsp.Manager,
+	memRecorder *deferredMemoryRecorder,
+	approvalCh chan permission.ApprovalRequest,
+) deferredCallbacks {
+	return callbackInputs{
+		cfg:            cfg,
+		providerName:   providerName,
+		sandbox:        sandbox,
+		lspMgr:         lspMgr,
+		memRecorder:    memRecorder,
+		approvalCh:     approvalCh,
+		deduper:        tools.NewResultDeduper(),
+		compactMetrics: tools.NewCompactMetrics(),
+	}.build(globalPermissionRules(cfg), flagSteps)
 }
 
 // approvalAsker returns the blocking bridge the permission gate parks on for
@@ -1131,6 +1238,12 @@ func buildMCPServerConfigs(cfg config.Config) []extension.MCPServerConfig {
 // headerSessionID keeps the ${SESSION_ID} headers pointed at the conversation
 // the client was originally built for — /model switches models, not sessions.
 func buildSwitchedLLM(ctx context.Context, cfg config.Config, tokenTracker *guardrail.Tracker, modelName, headerSessionID string) (adkmodel.LLM, string, string, error) {
+	return buildSwitchedLLMWith(ctx, cfg, tokenTracker, modelName, headerSessionID, temperatureFlagOpt(), effectiveThinkingLevel(cfg))
+}
+
+// buildSwitchedLLMWith is buildSwitchedLLM with explicit temperature and
+// thinking level, so a primary agent's frontmatter can override both.
+func buildSwitchedLLMWith(ctx context.Context, cfg config.Config, tokenTracker *guardrail.Tracker, modelName, headerSessionID string, temperature *float64, thinking string) (adkmodel.LLM, string, string, error) {
 	providerName := ""
 	if rc, ok := cfg.Roles["default"]; ok && rc.Provider != "" {
 		providerName = rc.Provider
@@ -1143,10 +1256,10 @@ func buildSwitchedLLM(ctx context.Context, cfg config.Config, tokenTracker *guar
 
 	llmOpts := &provider.LLMOptions{
 		ExtraHeaders: providerExtraHeaders(cfg, info.Provider, headerSessionID, flagHeaders),
-		Temperature:  temperatureFlagOpt(),
+		Temperature:  temperature,
 	}
 	applyTransportOptions(llmOpts, cfg, info)
-	llm, err := provider.NewLLM(ctx, info, apiKey, baseURL, effectiveThinkingLevel(cfg), llmOpts)
+	llm, err := provider.NewLLM(ctx, info, apiKey, baseURL, thinking, llmOpts)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("creating LLM: %w", err)
 	}
@@ -1155,6 +1268,144 @@ func buildSwitchedLLM(ctx context.Context, cfg config.Config, tokenTracker *guar
 	llm = guardrail.WrapModel(llm, tokenTracker)
 
 	return llm, switchedModelName(cfg, info), info.Provider, nil
+}
+
+// agentSwitch builds the tui.AgentSwitch that moves the main session onto a
+// primary agent (name "" = the built-in default): the system prompt, the
+// callback chains rebuilt over the agent's permission rules and step budget,
+// and the agent's LLM when its `model:`/`role:` names one — nil LLM means
+// "keep the model that is running".
+func agentSwitch(
+	ctx context.Context,
+	cfg config.Config,
+	tokenTracker *guardrail.Tracker,
+	headerSessionID string,
+	in *callbackInputs,
+	configs []subagent.AgentConfig,
+	name string,
+) (tui.AgentSwitch, error) {
+	var ac *subagent.AgentConfig
+	if name != "" {
+		found, ok := findAgentConfig(configs, name)
+		if !ok {
+			return tui.AgentSwitch{}, fmt.Errorf("unknown agent %q", name)
+		}
+		if !found.IsPrimary() {
+			return tui.AgentSwitch{}, fmt.Errorf("agent %q is not a primary agent (frontmatter mode: primary)", name)
+		}
+		ac = &found
+	}
+
+	sw := tui.AgentSwitch{}
+	rules := globalPermissionRules(cfg)
+	steps := flagSteps
+	if ac != nil {
+		sw.Instruction = ac.Instruction
+		rules = permission.Merge(rules, ac.Permission)
+		steps = effectiveAgentSteps(ac.Steps)
+	} else {
+		sw.Instruction = buildDeferredInstructionParts().String()
+	}
+	cbs := in.build(rules, steps)
+	sw.BeforeTool, sw.AfterTool = cbs.beforeTool, cbs.afterTool
+
+	llm, modelName, providerName, err := agentSwitchLLM(ctx, cfg, tokenTracker, headerSessionID, ac)
+	if err != nil {
+		return tui.AgentSwitch{}, err
+	}
+	sw.LLM, sw.ModelName, sw.Provider = llm, modelName, providerName
+	return sw, nil
+}
+
+// agentSwitchLLM resolves the model a switch target runs on: the agent's
+// `model:` or its `role:`'s model, with the agent's temperature and
+// reasoningEffort overriding the flag/config defaults. ac nil (the default
+// target) resolves the default role. No model specification returns a nil
+// LLM — the caller keeps whatever is running.
+func agentSwitchLLM(ctx context.Context, cfg config.Config, tokenTracker *guardrail.Tracker, headerSessionID string, ac *subagent.AgentConfig) (adkmodel.LLM, string, string, error) {
+	modelName := ""
+	if ac != nil {
+		modelName = ac.Model
+		if modelName == "" && ac.Role != "" {
+			if rc, ok := cfg.Roles[ac.Role]; ok {
+				modelName = rc.Model
+			}
+		}
+	} else if rc, ok := cfg.Roles["default"]; ok {
+		modelName = rc.Model
+	}
+	if modelName == "" {
+		return nil, "", "", nil
+	}
+
+	temperature := temperatureFlagOpt()
+	thinking := effectiveThinkingLevel(cfg)
+	if ac != nil {
+		if ac.Temperature > 0 {
+			t := ac.Temperature
+			temperature = &t
+		}
+		if th := subagent.NormalizeReasoningEffort(ac.ReasoningEffort); th != "" {
+			thinking = th
+		}
+	}
+	return buildSwitchedLLMWith(ctx, cfg, tokenTracker, modelName, headerSessionID, temperature, thinking)
+}
+
+// findAgentConfig looks up an agent by name in a discovery result slice.
+func findAgentConfig(configs []subagent.AgentConfig, name string) (subagent.AgentConfig, bool) {
+	for _, ac := range configs {
+		if ac.Name == name {
+			return ac, true
+		}
+	}
+	return subagent.AgentConfig{}, false
+}
+
+// resolveDefaultAgent checks config.json's defaultAgent against the
+// discovered agents. ok reports a usable primary agent; notice carries the
+// soft-fallback message for an unknown or non-primary name ("" when ok).
+func resolveDefaultAgent(configs []subagent.AgentConfig, name string) (ac subagent.AgentConfig, ok bool, notice string) {
+	found, foundOk := findAgentConfig(configs, name)
+	if !foundOk {
+		return subagent.AgentConfig{}, false, fmt.Sprintf("defaultAgent %q not found; starting with the default agent", name)
+	}
+	if !found.IsPrimary() {
+		return subagent.AgentConfig{}, false, fmt.Sprintf("defaultAgent %q is not a primary agent (frontmatter mode: primary); starting with the default agent", name)
+	}
+	return found, true, ""
+}
+
+// effectiveAgentSteps resolves the step budget for an agent-driven session:
+// the agent's own cap when set, else the --steps flag.
+func effectiveAgentSteps(agentSteps int) int {
+	if agentSteps > 0 {
+		return agentSteps
+	}
+	return flagSteps
+}
+
+// primaryAgentsFor filters the discovery result down to the switchable
+// agents (frontmatter mode: primary or all), sorted by name.
+func primaryAgentsFor(configs []subagent.AgentConfig) []subagent.AgentConfig {
+	var out []subagent.AgentConfig
+	for _, ac := range configs {
+		if ac.IsPrimary() {
+			out = append(out, ac)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// softNotice routes a non-fatal startup message to the TUI notice channel.
+// Non-blocking: a notice raised while the TUI is busy is dropped rather than
+// stalling startup.
+func softNotice(ch chan<- string, msg string) {
+	select {
+	case ch <- msg:
+	default:
+	}
 }
 
 // resolveSwitchedModel resolves modelName to a validated model info plus the

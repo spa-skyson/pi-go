@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -121,36 +120,48 @@ func approvalFact(req *permission.ApprovalRequest, res permission.ApprovalResult
 	}
 }
 
-// approvalDialogChrome is the dialog's border and padding rows, subtracted
-// from the body width when fitting the command line.
-const approvalDialogChrome = 6
+// approvalGlyph is the warning marker, shared with the transcript's warning
+// notices (assistantWarningBody).
+const approvalGlyph = "⚠"
 
-// renderApprovalDialog renders the pending request as a bordered block above
-// the closing rule of the chat panel — same family as the branch popup.
+// approvalKeys is the key-hint tail of the approval line.
+const approvalKeys = " · [y] allow · [a] always · [n] deny"
+
+// renderApprovalDialog renders the pending request as a single status-hint
+// line in the last slot of the chat panel, above the closing rule — no border
+// or title, Warning foreground like the transcript's warning notices. The
+// line must fit the panel width: the command is truncated first, the rule is
+// dropped next, and the narrowest form — tool + key hint — always renders.
 func (m *model) renderApprovalDialog(width int) string {
 	req := m.approval
 	if req == nil {
 		return ""
 	}
 
-	style := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder(), true).
-		BorderForeground(m.palette.Warning).
-		Padding(0, 1).
-		Width(width)
-
-	lines := []string{
-		style.Foreground(m.palette.Warning).Bold(true).Render("Tool approval required"),
-		style.Foreground(m.palette.Text).Render("tool: " + req.Tool),
-	}
+	head := approvalGlyph + " approval: " + req.Tool
+	rule := ""
 	if req.Rule != "" {
-		lines = append(lines, style.Foreground(m.palette.Text).Render(fmt.Sprintf("rule: %q", req.Rule)))
+		rule = ` · rule "` + req.Rule + `"`
 	}
+
 	if req.Command != "" {
-		cmd := truncateLabel(req.Command, max(20, width-approvalDialogChrome))
-		lines = append(lines, style.Foreground(m.palette.Text).Render("command: "+cmd))
+		// ": " between head and command; cut the command to whatever the rest
+		// of the line leaves, and drop it when that is nothing.
+		if room := width - lipgloss.Width(head+rule+approvalKeys) - 2; room > 0 {
+			return m.approvalLine(head + ": " + truncateLabel(req.Command, room) + rule + approvalKeys)
+		}
 	}
-	lines = append(lines, style.Foreground(m.palette.Dim).
-		Render("y allow · n deny · a always (session) · Esc deny"))
-	return style.Render(strings.Join(lines, "\n"))
+	if lipgloss.Width(head+rule+approvalKeys) <= width {
+		return m.approvalLine(head + rule + approvalKeys)
+	}
+	if lipgloss.Width(head+approvalKeys) <= width {
+		return m.approvalLine(head + approvalKeys)
+	}
+	return m.approvalLine(truncateLabel(head, max(1, width-lipgloss.Width(approvalKeys))) + approvalKeys)
+}
+
+// approvalLine styles one approval line: Warning foreground and nothing else —
+// the weight of a status hint, not a titled dialog.
+func (m *model) approvalLine(s string) string {
+	return lipgloss.NewStyle().Foreground(m.palette.Warning).Render(s)
 }

@@ -82,6 +82,11 @@ type model struct {
 	agentCancel    context.CancelFunc // cancels the active agent response without quitting the TUI
 	pendingPrompts []queuedPrompt     // prompts submitted while a response is active
 
+	// activeAgent names the primary agent the main session runs on
+	// ("" = the built-in default). Set by /agent, Shift+Tab, and startup
+	// defaultAgent; shown in the sidebar next to the model.
+	activeAgent string
+
 	// steering marks the current turn as replaced by a steer rather than
 	// stopped. The turn still ends with context.Canceled — that is the only
 	// thing cancellation can produce — but a steer is not a failure, so the
@@ -1339,6 +1344,14 @@ func (m *model) handleToggleKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 		return m, nil, true
 	}
 
+	// Shift+Tab cycles the main session's agent: default → primary agents
+	// (alphabetical) → default. Checked after the search popup, which owns
+	// Tab/Shift+Tab for list navigation while it is open.
+	if key.Code == tea.KeyTab && key.Mod == tea.ModShift && m.searchPopup == nil {
+		model, cmd := m.cycleAgent()
+		return model, cmd, true
+	}
+
 	// Ctrl+H: open history search popup (reverse-i-search style). With no
 	// history to search the key falls through to the input.
 	//
@@ -1816,6 +1829,7 @@ func (m *model) sidebarRenderInput(sidebarWidth, panelRows int) SidebarRenderInp
 		// fresh keeps a future /thinking command from having to remember to
 		// republish the sidebar input as well.
 		ThinkingLevel: m.cfg.ThinkingLevel,
+		AgentName:     m.activeAgent,
 		GitBranch:     m.statusModel.GitBranch,
 		DiffAdded:     m.diffAdded,
 		DiffRemoved:   m.diffRemoved,
@@ -2455,6 +2469,19 @@ func (m *model) handleInitEvent(msg initEventMsg) (tea.Model, tea.Cmd) {
 		m.diffRemoved = r.DiffRemoved
 		m.cfg.MCPToolsets = r.MCPToolsets
 		m.cfg.MCPServers = r.MCPServers
+		// defaultAgent: deferred init may have restarted the session on the
+		// agent's own model and handed over the switchable-agent list.
+		if r.LLM != nil {
+			m.cfg.LLM = r.LLM
+			if r.ModelName != "" {
+				m.cfg.ModelName = r.ModelName
+				m.cfg.ProviderName = r.ProviderName
+			}
+		}
+		if r.ActiveAgent != "" {
+			m.activeAgent = r.ActiveAgent
+		}
+		m.cfg.PrimaryAgents = r.PrimaryAgents
 
 		// Update input model with loaded skills.
 		m.inputModel.Skills = r.Skills

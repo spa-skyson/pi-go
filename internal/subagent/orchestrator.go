@@ -484,7 +484,7 @@ func (o *Orchestrator) Spawn(ctx context.Context, input SpawnInput) (<-chan Even
 		LSP:           agent.LSP,
 		Tools:         agent.Tools,
 		Temperature:   agent.Temperature,
-		ThinkingLevel: normalizeReasoningEffort(agent.ReasoningEffort),
+		ThinkingLevel: NormalizeReasoningEffort(agent.ReasoningEffort),
 		Steps:         agent.Steps,
 	}
 

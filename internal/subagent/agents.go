@@ -27,11 +27,30 @@ const (
 	ScopeProject AgentScope = "project" // Only user/project agents
 )
 
+// AgentMode classifies where an agent may run, from frontmatter `mode:`.
+// The zero value is the bundled default: subagent-only, so existing agent
+// files keep their current behavior when the key is absent.
+type AgentMode string
+
+const (
+	// ModeSubagent is the default: the agent is spawned as a subagent only.
+	ModeSubagent AgentMode = "subagent"
+	// ModePrimary reserves the agent for the main session (Shift+Tab /
+	// /agent); it is not advertised as a subagent.
+	ModePrimary AgentMode = "primary"
+	// ModeAll allows both: switchable into the main session and spawnable.
+	ModeAll AgentMode = "all"
+)
+
 // AgentConfig represents a parsed agent definition from markdown.
 type AgentConfig struct {
 	Name        string // Agent identifier (e.g., "explore", "plan")
 	Description string // One-line description from frontmatter
 	Role        string // Config role name for model resolution (e.g., "smol", "plan", "slow")
+	// Mode is the raw frontmatter `mode:` value ("primary", "subagent" or
+	// "all"). Empty means ModeSubagent. Use IsPrimary/PrimaryOnly to
+	// classify; the raw value matters only for round-tripping.
+	Mode AgentMode
 	// Model names the model this agent runs on, set via frontmatter `model:`.
 	// It overrides `role:` and may carry a provider prefix — a built-in one
 	// ("openai/gpt-5.6") or a declared provider's name from the config.json
@@ -55,7 +74,7 @@ type AgentConfig struct {
 	Temperature float64
 	// ReasoningEffort is the raw frontmatter `reasoningEffort:` value
 	// (trimmed, lowercased). It is normalized to a thinking level at spawn
-	// time by normalizeReasoningEffort; empty means inherit.
+	// time by NormalizeReasoningEffort; empty means inherit.
 	ReasoningEffort string
 	// Steps caps the child's tool-call iterations (0 = no limit).
 	Steps int
@@ -65,6 +84,20 @@ type AgentConfig struct {
 	// rules. Zero value = no agent-specific rules.
 	Permission permission.Rules
 	Source     string // "bundled", "user", or "project"
+}
+
+// IsPrimary reports whether the agent may be switched into the main session
+// (frontmatter `mode: primary` or `all`). Empty mode — the bundled default —
+// is subagent-only.
+func (c AgentConfig) IsPrimary() bool {
+	return c.Mode == ModePrimary || c.Mode == ModeAll
+}
+
+// PrimaryOnly reports whether the agent is reserved for the main session
+// (`mode: primary`) and must not be advertised as a spawnable subagent.
+// `mode: all` agents are both, so they stay advertised.
+func (c AgentConfig) PrimaryOnly() bool {
+	return c.Mode == ModePrimary
 }
 
 // AgentDiscoveryResult contains all discovered agents.
@@ -87,6 +120,7 @@ type AgentDiscoveryResult struct {
 // temperature: 0.3
 // reasoningEffort: high
 // steps: 150
+// mode: primary
 // ---
 // Markdown instruction body...
 //
@@ -197,6 +231,16 @@ func applyAgentFrontmatterKey(cfg *AgentConfig, key, value string) {
 		}
 	case "reasoningEffort":
 		cfg.ReasoningEffort = strings.ToLower(strings.TrimSpace(value))
+	case "mode":
+		switch v := strings.ToLower(strings.TrimSpace(value)); v {
+		case "":
+			cfg.Mode = ""
+		case string(ModePrimary), string(ModeSubagent), string(ModeAll):
+			cfg.Mode = AgentMode(v)
+		default:
+			slog.Warn("subagent: unknown mode ignored; treating as subagent",
+				"agent", cfg.Name, "mode", value, "known", "primary, subagent, all")
+		}
 	case "steps":
 		if n, ok := parseAgentSteps(cfg.Name, value); ok {
 			cfg.Steps = n
@@ -370,11 +414,11 @@ func parseAgentSteps(agentName, value string) (int, bool) {
 	return n, true
 }
 
-// normalizeReasoningEffort maps a raw `reasoningEffort:` value onto the
+// NormalizeReasoningEffort maps a raw `reasoningEffort:` value onto the
 // thinking levels the provider layer understands. "minimal" is OpenAI's
 // spelling of "none"; everything else passes through lowercased. Unknown
 // values warn and come back empty so the child inherits instead of failing.
-func normalizeReasoningEffort(value string) string {
+func NormalizeReasoningEffort(value string) string {
 	switch v := strings.ToLower(strings.TrimSpace(value)); v {
 	case "":
 		return ""

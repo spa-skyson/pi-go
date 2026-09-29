@@ -96,6 +96,35 @@ type Config struct {
 	// wrapped LLM, resolved model name, and provider. Used by /model <name>.
 	// If nil, model switching via /model is disabled.
 	ModelSwitcher func(ctx context.Context, modelName string) (llmmodel.LLM, string, string, error)
+
+	// PrimaryAgents lists the agents the main session can switch into
+	// (frontmatter `mode: primary` or `all`), sorted by name. Filled by
+	// deferred init; empty until then and when no agent declares a mode.
+	PrimaryAgents []subagent.AgentConfig
+	// AgentSwitcher applies a primary agent ("" = the built-in default) to
+	// the main session: it builds the target's LLM — nil when the target
+	// names no model, meaning "keep the current one" — and returns the
+	// system prompt and the rebuilt tool-callback chains (the agent's
+	// permission rules merged over the global ones, a step limiter for its
+	// budget). Used by /agent and Shift+Tab. If nil, agent switching is
+	// disabled.
+	AgentSwitcher func(ctx context.Context, agentName string) (AgentSwitch, error)
+}
+
+// AgentSwitch is the payload AgentSwitcher returns for one switch target.
+type AgentSwitch struct {
+	// LLM is the model to run the session on. Nil keeps the current one:
+	// the target named no `model:`/`role:` model.
+	LLM       llmmodel.LLM
+	ModelName string
+	Provider  string
+	// Instruction is the system prompt for the target (the session's rules
+	// and skills sections are kept by the CLI when building it).
+	Instruction string
+	// Callback chains rebuilt for the target. Assigned to the agent as
+	// given — nil clears them.
+	BeforeTool []agent.BeforeToolCallback
+	AfterTool  []agent.AfterToolCallback
 }
 
 // InitEvent reports progress from deferred initialization.
@@ -138,6 +167,18 @@ type InitResult struct {
 	MCPToolsets []adktool.Toolset
 	// MCPServers holds the configured MCP server definitions.
 	MCPServers []extension.MCPServerConfig
+	// LLM, when non-nil, replaces the startup LLM: defaultAgent restarted
+	// the session on the agent's own model. ModelName and ProviderName then
+	// describe it; empty names keep the startup values.
+	LLM          llmmodel.LLM
+	ModelName    string
+	ProviderName string
+	// ActiveAgent names the primary agent the session started in via
+	// defaultAgent ("" = the built-in default agent).
+	ActiveAgent string
+	// PrimaryAgents lists the switchable agents (mode: primary or all),
+	// sorted by name, for /agent and Shift+Tab.
+	PrimaryAgents []subagent.AgentConfig
 }
 
 // CompactStatsProvider provides compaction statistics for TUI display.

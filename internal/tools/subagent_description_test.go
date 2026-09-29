@@ -80,3 +80,27 @@ func TestSubagentDescription_MentionsBase(t *testing.T) {
 		}
 	}
 }
+
+// TestSubagentDescription_HidesPrimaryOnlyAgents: `mode: primary` agents
+// belong to the main session (Shift+Tab / /agent) and must not be advertised
+// as spawnable, while `mode: all` agents stay listed.
+func TestSubagentDescription_HidesPrimaryOnlyAgents(t *testing.T) {
+	orch := subagent.NewOrchestrator(&config.Config{}, "", nil)
+	t.Cleanup(orch.Shutdown)
+	orch.RegisterAgents([]subagent.AgentConfig{
+		{Name: "pm", Description: "the orchestrator", Mode: subagent.ModePrimary},
+		{Name: "explore", Description: "read-only scout", Mode: subagent.ModeAll},
+		{Name: "helper", Description: "plain subagent"},
+	})
+
+	desc := buildSubagentDescription(orch)
+
+	if strings.Contains(desc, "- pm") {
+		t.Errorf("primary-only agent pm is advertised as spawnable:\n%s", desc)
+	}
+	for _, want := range []string{"- explore", "- helper"} {
+		if !strings.Contains(desc, want) {
+			t.Errorf("description lost %q; mode: all and default agents must stay listed:\n%s", want, desc)
+		}
+	}
+}

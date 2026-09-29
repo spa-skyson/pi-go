@@ -997,7 +997,9 @@ func TestRenderSlashCommandPopup_UsesWiderWindow(t *testing.T) {
 	const longDesc = "Search, synthesize, verify, and summarize project notes across local workspaces"
 	m := &model{
 		cfg: Config{Skills: []extension.Skill{
-			{Name: "agent", Description: longDesc},
+			// Not "agent": the built-in /agent command would sort ahead of
+			// the skill and its short description would be matched instead.
+			{Name: "notes", Description: longDesc},
 		}},
 		inputModel: NewInputModel(nil, nil, nil, ""),
 		width:      140,
@@ -1013,10 +1015,10 @@ func TestRenderSlashCommandPopup_UsesWiderWindow(t *testing.T) {
 	if len([]rune(firstLine)) < 110 {
 		t.Fatalf("expected popup to use wider window, first line was only %d columns: %q", len([]rune(firstLine)), firstLine)
 	}
-	// Verify /agent line contains the description.
-	line := findLineContaining(out, "/agent")
+	// Verify /notes line contains the description.
+	line := findLineContaining(out, "/notes")
 	if line == "" {
-		t.Fatalf("expected agent line, got %q", out)
+		t.Fatalf("expected notes line, got %q", out)
 	}
 	if !strings.Contains(line, longDesc[:20]) {
 		t.Fatalf("expected long description to fit in wider popup, got line %q", line)
@@ -1028,7 +1030,7 @@ func TestRenderSlashCommandPopup_CutsDescriptionToSeventyPercentWidth(t *testing
 	longDesc := strings.Repeat("abcdefghij", 12)
 	m := &model{
 		cfg: Config{Skills: []extension.Skill{
-			{Name: "agent", Description: longDesc},
+			{Name: "notes", Description: longDesc},
 		}},
 		inputModel: NewInputModel(nil, nil, nil, ""),
 		width:      width,
@@ -1038,11 +1040,11 @@ func TestRenderSlashCommandPopup_CutsDescriptionToSeventyPercentWidth(t *testing
 	m.newSearchPopup(searchModeCommands)
 
 	out := ansi.Strip(m.renderSearchPopup(width))
-	line := findLineContaining(out, "/agent")
+	line := findLineContaining(out, "/notes")
 	if line == "" {
-		t.Fatalf("expected agent line, got %q", out)
+		t.Fatalf("expected notes line, got %q", out)
 	}
-	desc := renderedSlashDescription(line, "/agent")
+	desc := renderedSlashDescription(line, "/notes")
 	if got, want := len([]rune(desc)), width*50/100; got != want {
 		t.Fatalf("rendered description length = %d, want %d: %q from line %q in output %q", got, want, desc, line, out)
 	}
