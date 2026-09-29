@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1478,7 +1479,7 @@ func summarizeSessionAfterDrain(p summarizeParams, drainErr error, modelAvailabl
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), sessionSummaryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), sessionSummaryBudget())
 	defer cancel()
 	if err := p.summarizer.SummarizeSession(ctx, p.sessionID, p.project); err != nil {
 		// Best-effort: a session with no observations, or a provider that did
@@ -2385,14 +2386,36 @@ const gitCmdTimeout = 5 * time.Second
 // recorded.
 const memoryDrainTimeout = 60 * time.Second
 
-// sessionSummaryTimeout bounds the end-of-session summary: one model call.
+// defaultSessionSummaryTimeout bounds the end-of-session summary: one model call.
 //
 // It gets its own budget rather than sharing the drain's, because a summary is
 // work that has not started when the drain finishes. It is a hard bound and not
 // an open wait — this runs on the exit path, so a provider that never answers
 // must not hold the process open. A summary that overruns is logged and
 // abandoned; the observations it would have described are already stored.
-const sessionSummaryTimeout = 20 * time.Second
+const defaultSessionSummaryTimeout = 30 * time.Second
+
+// sessionSummaryBudget returns the per-session-summary timeout: the env var
+// PI_SUMMARY_TIMEOUT_MS when valid and positive, otherwise the default.
+//
+// An env var is used rather than a config field because summary and drain share
+// one lifecycle phase (the shutdown closer) and there is no config object in
+// scope at that point. The PI_ prefix matches the pattern of other execution
+// knobs (PI_SUBAGENT_TIMEOUT_MS, PI_SUBAGENT_CONCURRENCY).
+//
+// A syntactically invalid or non-positive value logs a single warning through
+// slog.Debug and falls back to the default.
+func sessionSummaryBudget() time.Duration {
+	if envMs := os.Getenv("PI_SUMMARY_TIMEOUT_MS"); envMs != "" {
+		ms, err := strconv.Atoi(envMs)
+		if err == nil && ms > 0 {
+			return time.Duration(ms) * time.Millisecond
+		}
+		slog.Debug("memory: invalid PI_SUMMARY_TIMEOUT_MS, using default",
+			"value", envMs, "default", defaultSessionSummaryTimeout)
+	}
+	return defaultSessionSummaryTimeout
+}
 
 // detectGitRoot returns the git repository root for the given directory,
 // or empty string if not inside a git repo.
