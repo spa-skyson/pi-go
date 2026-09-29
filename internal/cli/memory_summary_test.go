@@ -320,9 +320,59 @@ func TestMemoryTimeoutsAreSane(t *testing.T) {
 	if memoryDrainTimeout <= 5*time.Second {
 		t.Errorf("memoryDrainTimeout = %v; the old 5s budget abandoned the session tail", memoryDrainTimeout)
 	}
-	if sessionSummaryTimeout <= 0 {
-		t.Errorf("sessionSummaryTimeout = %v; must be a positive bound", sessionSummaryTimeout)
+	budget := sessionSummaryBudget()
+	if budget != 30*time.Second {
+		t.Errorf("sessionSummaryBudget() = %v; want 30s (default)", budget)
 	}
+}
+
+func TestSessionSummaryBudget(t *testing.T) {
+	t.Run("default is 30s", func(t *testing.T) {
+		budget := sessionSummaryBudget()
+		if budget != 30*time.Second {
+			t.Errorf("sessionSummaryBudget() = %v, want 30s", budget)
+		}
+	})
+
+	t.Run("valid env var overrides default", func(t *testing.T) {
+		t.Setenv("PI_SUMMARY_TIMEOUT_MS", "60000")
+		budget := sessionSummaryBudget()
+		if budget != 60*time.Second {
+			t.Errorf("sessionSummaryBudget() = %v, want 60s", budget)
+		}
+	})
+
+	t.Run("env var less than default is accepted", func(t *testing.T) {
+		t.Setenv("PI_SUMMARY_TIMEOUT_MS", "5000") // 5s, intentionally lower
+		budget := sessionSummaryBudget()
+		if budget != 5*time.Second {
+			t.Errorf("sessionSummaryBudget() = %v, want 5s", budget)
+		}
+	})
+
+	t.Run("non-numeric env var falls back to default", func(t *testing.T) {
+		t.Setenv("PI_SUMMARY_TIMEOUT_MS", "not-a-number")
+		budget := sessionSummaryBudget()
+		if budget != 30*time.Second {
+			t.Errorf("sessionSummaryBudget() = %v, want 30s (fallback on garbage)", budget)
+		}
+	})
+
+	t.Run("zero env var falls back to default", func(t *testing.T) {
+		t.Setenv("PI_SUMMARY_TIMEOUT_MS", "0")
+		budget := sessionSummaryBudget()
+		if budget != 30*time.Second {
+			t.Errorf("sessionSummaryBudget() = %v, want 30s (fallback on zero)", budget)
+		}
+	})
+
+	t.Run("negative env var falls back to default", func(t *testing.T) {
+		t.Setenv("PI_SUMMARY_TIMEOUT_MS", "-5000")
+		budget := sessionSummaryBudget()
+		if budget != 30*time.Second {
+			t.Errorf("sessionSummaryBudget() = %v, want 30s (fallback on negative)", budget)
+		}
+	})
 }
 
 // The summary prompt must name the session's observations, or the model would
