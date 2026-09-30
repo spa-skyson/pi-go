@@ -1,0 +1,20 @@
+{
+  "name": "example",
+  "displayName": "Example Dark",
+  "themeType": "dark",
+  "colors": {
+    "text": "#d6d9e0",
+    "base": "#171a21",
+    "primary": "#5b8def",
+    "tool": "#7fbf9f",
+    "success": "#69c98a",
+    "error": "#e06c75",
+    "secondary": "#8a919e",
+    "info": "#61afef",
+    "warning": "#e5b567",
+    "diffAdded": "#1d3327",
+    "diffRemoved": "#3a1f26",
+    "diffAddedText": "#69c98a",
+    "diffRemovedText": "#e06c75"
+  }
+}

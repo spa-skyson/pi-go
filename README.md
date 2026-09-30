@@ -549,6 +549,25 @@ For editor autocompletion and validation, add:
 }
 ```
 
+### Custom themes
+
+Custom themes are JSON files dropped into `~/.pirate/themes/` (global) or
+`.pirate/themes/` (project — the nearest one up the directory tree wins). The
+file name, lowercased and without the `.json` extension, becomes the theme
+name; pick it with `/theme <name>` like any built-in — custom entries are
+tagged `(custom)` in the `/theme` list, and the choice persists in the config.
+A theme that shares a name with a built-in overrides it; a project file
+overrides a global file of the same name. Partial files are fine: missing
+color roles are filled in from the built-in theme of the same name, or from
+the default theme. [`themes/example.json`](themes/example.json) shows the full
+format. The 13 color roles under `colors`: `text`, `base` and `secondary`
+paint body text, background and muted text; `primary`, `info`, `warning`,
+`error` and `success` color prompts, notices and statuses; `tool` names tool
+calls; `diffAdded`/`diffRemoved` tint added and removed diff lines and
+`diffAddedText`/`diffRemovedText` the text on them. A file that is not valid
+JSON or declares no color roles is reported and skipped; the running theme is
+never affected.
+
 ### Provider base URLs
 
 Self-hosted or LAN endpoints can be declared in config instead of exported in every shell:

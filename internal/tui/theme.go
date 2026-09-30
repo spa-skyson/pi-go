@@ -58,12 +58,21 @@ type Theme struct {
 	DisplayName string      `json:"displayName"`
 	ThemeType   string      `json:"themeType"`
 	Colors      ThemeColors `json:"colors"`
+	// Custom marks a theme loaded from a themes directory rather than the
+	// embedded set; used only for the "(custom)" tag in the /theme list.
+	Custom bool `json:"-"`
 }
 
 // ThemeManager manages theme loading, selection, and color access.
 type ThemeManager struct {
 	themes  map[string]Theme
 	current string
+	// embedded snapshots the built-in themes at construction, so a partial
+	// custom theme can be completed from the built-in it overrides even after
+	// that built-in has been replaced in themes. customNames tracks which
+	// entries a custom-directory scan loaded, so a re-scan can drop them.
+	embedded    map[string]Theme
+	customNames map[string]struct{}
 }
 
 // DefaultThemeName is the default theme when none is configured.
@@ -79,6 +88,7 @@ func NewThemeManager() *ThemeManager {
 	if err := tm.loadFromJSON(themesJSON); err != nil {
 		tm.loadFallback()
 	}
+	tm.snapshotEmbedded()
 
 	tm.current = DefaultThemeName
 	if _, ok := tm.themes[tm.current]; !ok {
@@ -103,6 +113,7 @@ func NewThemeManagerFromJSON(data []byte) (*ThemeManager, error) {
 	if err := tm.loadFromJSON(data); err != nil {
 		return nil, err
 	}
+	tm.snapshotEmbedded()
 	if len(tm.themes) > 0 {
 		tm.current = DefaultThemeName
 		if _, ok := tm.themes[tm.current]; !ok {
@@ -146,6 +157,15 @@ func (tm *ThemeManager) loadFallback() {
 			DiffAddedText:   "#5faf5f",
 			DiffRemovedText: "#ff5f5f",
 		},
+	}
+}
+
+// snapshotEmbedded copies the current theme set as the merge base for custom
+// themes. Called once from the constructors, before any custom theme loads.
+func (tm *ThemeManager) snapshotEmbedded() {
+	tm.embedded = make(map[string]Theme, len(tm.themes))
+	for name, theme := range tm.themes {
+		tm.embedded[name] = theme
 	}
 }
 
