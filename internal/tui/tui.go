@@ -129,8 +129,8 @@ type model struct {
 	// reached from Update, so the lazy init needs no lock.
 	hookQueue chan func()
 
-	// Matrix rain animation state for sidebar.
-	matrix matrixState
+	// Sea scene animation state for the top bar while a turn runs.
+	sea seaState
 
 	// Mouse text selection. lastFrame is the frame the selection's coordinates
 	// refer to — pi selects text itself (see selection.go), so it needs the
@@ -145,14 +145,14 @@ type model struct {
 	sessionTitle string
 	// titleSpin is the phase of the animated title prefix ("π Pi-rate ⠋",
 	// "π Pi-rate ⠙", …) shown while a turn runs. It is advanced in Update from the
-	// matrix tick, next to ToolDisplay.BlinkOn, so View stays a pure
+	// sea tick, next to ToolDisplay.BlinkOn, so View stays a pure
 	// function of model state.
 	titleSpin int
 	// topSectionRows is the number of rows in the top section (messages + sidebar)
 	// before the full-width status bar. The rail and sidebar only cover these rows.
 	topSectionRowsVal int
 	// The selectable rows: the message viewport, half-open. Everything else in
-	// the panel is chrome — the matrix rain, the rules, the status bar, the
+	// the panel is chrome — the sea scene, the rules, the status bar, the
 	// prompt — and selecting it yields nothing anyone wants on their clipboard.
 	msgTop, msgBottom int
 
@@ -825,7 +825,7 @@ func (m *model) syncPalette() {
 	m.chatModel.Palette = m.palette
 	m.chatModel.ToolDisplay.Palette = m.palette
 	m.inputModel.Palette = m.palette
-	m.matrix.palette = m.palette
+	m.sea.palette = m.palette
 }
 
 // applyTheme fans out a theme change: it repaints the lipgloss chrome via
@@ -1086,8 +1086,8 @@ func (m *model) updateTerminal(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case loadingTickMsg:
 		return m.handleLoadingTick()
 
-	case matrixTickMsg:
-		return m.handleMatrixTick()
+	case seaTickMsg:
+		return m.handleSeaTick()
 	}
 	return nil, nil, false
 }
@@ -1151,22 +1151,22 @@ func (m *model) handleLoadingTick() (tea.Model, tea.Cmd, bool) {
 	return m, tea.Tick(300*time.Millisecond, func(time.Time) tea.Msg { return loadingTickMsg{} }), true
 }
 
-// handleMatrixTick advances the matrix rain and the animations that ride on it.
-func (m *model) handleMatrixTick() (tea.Model, tea.Cmd, bool) {
+// handleSeaTick advances the sea scene and the animations that ride on it.
+func (m *model) handleSeaTick() (tea.Model, tea.Cmd, bool) {
 	if !m.running {
 		return m, nil, true
 	}
-	m.matrix.tick(m.mainWidth())
+	m.sea.tick(m.mainWidth())
 	// The pending-tool bullet blinks on a ~1s cycle. The phase advances
 	// here, in Update, so View stays a pure function of model state —
-	// the matrix tick (150ms while running) re-renders often enough to
+	// the sea tick (150ms while running) re-renders often enough to
 	// animate it.
 	now := time.Now()
 	m.chatModel.ToolDisplay.BlinkOn = now.UnixMilli()/500%2 == 0
 	// Same idea one level out: the tab title's prefix symbol rotates so
 	// a backgrounded session still shows it is working.
 	m.titleSpin = terminalTitleSpinIndex(now)
-	return m, matrixTickCmd(), true
+	return m, seaTickCmd(), true
 }
 
 // handleWindowSize re-lays out the frame. It does not touch the agent listener:
@@ -1333,7 +1333,7 @@ func (m *model) handlePingDone(msg pingDoneMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if msg.reply != "" {
-		m.matrix.feed(msg.reply, m.mainWidth())
+		m.sea.feed(msg.reply, m.mainWidth())
 	}
 	return m, nil
 }
@@ -1455,7 +1455,7 @@ func (m *model) clampToChat(x, y int) (int, int) {
 	x = min(max(x, 0), max(0, m.chatWidth()-1))
 
 	// Rows are clamped to the message viewport, so a drag that strays into the
-	// matrix rain above or the status bar and prompt below pins to the nearest
+	// sea scene above or the status bar and prompt below pins to the nearest
 	// message row instead of copying chrome. Clamping rather than refusing keeps
 	// a drag that overshoots by a row from doing nothing at all.
 	top, bottom := m.msgTop, m.msgBottom
@@ -2024,8 +2024,8 @@ func (m *model) View() tea.View {
 	// Note: width constraint is handled by glamour's WithWordWrap(contentWidth) in chatModel.UpdateRenderer.
 	// lipgloss.Width() counts raw bytes including invisible ANSI codes, causing wrapping issues.
 
-	// Render matrix rain as full-width top bar (when active).
-	matrixBar := m.matrix.render()
+	// Render the sea scene as a full-width top bar (when active).
+	seaBar := m.sea.render()
 
 	// Horizontal rule for separating sections. The panel hr is bodyWidth; the
 	// full-width hr spans the entire terminal (used below the sidebar).
@@ -2034,10 +2034,10 @@ func (m *model) View() tea.View {
 	fullHr := hrStyle.Render(strings.Repeat("─", m.width))
 
 	var b strings.Builder
-	if matrixBar != "" {
+	if seaBar != "" {
 		b.WriteString(hr)
 		b.WriteString("\n")
-		b.WriteString(matrixBar)
+		b.WriteString(seaBar)
 		b.WriteString("\n")
 		b.WriteString(hr)
 		b.WriteString("\n")
@@ -2273,7 +2273,7 @@ func (m *model) sidebarRenderInput(sidebarWidth, panelRows int) SidebarRenderInp
 		Messages:      m.chatModel.Messages,
 		ActiveTool:    m.statusModel.ActiveTool,
 		LoadingItems:  m.loadingItems,
-		MatrixLines:   "",
+		SeaLines:      "",
 		StatusLine:    "",
 		Orchestrator:  m.cfg.Orchestrator,
 		MCPTools:      extension.BuildMCPToolEntries(m.cfg.MCPToolsets),
@@ -2396,6 +2396,25 @@ func drainTerminalResponses() {
 
 const startupProgressBarWidth = 8
 
+// matrixChars is the braille tape of the startup line's wave — the last
+// surviving use of the old matrix rain's tape (the sidebar animation is now
+// the sea scene in sea.go).
+//
+// Braille only, and that is a hard requirement rather than a style choice. The
+// tape rides on a row whose columns matter, so any glyph that renders at the
+// wrong advance width shifts every column after it. Braille (U+2800–U+28FF) is
+// East Asian Neutral — one cell in every width table — and is fully covered by
+// the monospace fonts pi ships against, so it never falls back to another font
+// with a different advance. The earlier tape mixed in ⌒ ⌣ ⌁ ∿ ⊹ ˖ and friends:
+// some are East Asian Ambiguous (two cells wherever the terminal is configured
+// for CJK), and several are missing from JetBrains Mono entirely, which is
+// what drew the "???" clusters over the rules. TestMatrixTapeIsWidthSafe pins
+// this.
+const matrixChars = "⠀⠀⠁⠂⠄⠠⡀⢀⣀⣠⣤⣶⣷⣿⣿⣿⣷⣶⣤⣠⣀⢀⡀⠠⠄⠂⠁⠃⠇⡇⣇⣧⣷⣿⣷⣧⣇⡇⠇⠃⠐⠈⠈⠐⠠⢀⣠⣴⣶⣷⣾⣿⣿⣾⣷⣶⣴⣠⢀⠠⠐⠈⠀⠁⠉⠙⠹⢹⣹⣽⣿⣽⣹⢹⠹⠙⠉⠁⠀⠁⠂⠄⡀⢀⣀⣠⣤⣶⣿⣶⣤⣠⣀⢀⡀⠄⠂⠁⠀"
+
+// matrixRunes is the precomputed rune slice from matrixChars.
+var matrixRunes = []rune(matrixChars)
+
 func renderStartupMatrixLine(phase int, appVersion string, loadingItems map[string]bool, loadingTotal int, p Palette) string {
 	versionSuffix := ""
 	if appVersion != "" {
@@ -2506,14 +2525,15 @@ func (m *model) applyResize() {
 		m.chatModel.UpdateRenderer(chatWidth)
 	}
 	m.clampScroll()
-	// Pre-render or reflow matrix bar so width changes are visible immediately.
-	// It sits inside the panel body, so it is sized like everything else there.
-	if !m.matrix.active {
-		m.matrix.feed("pi-go", chatWidth)
+	// Pre-render or reflow the sea scene so width changes are visible
+	// immediately. It sits in the top bar, sized to the panel like everything
+	// else there.
+	if !m.sea.active {
+		m.sea.feed("ahoy", chatWidth)
 	} else {
-		m.matrix.tick(chatWidth)
+		m.sea.tick(chatWidth)
 	}
-	// Matrix height can affect the message viewport, so clamp again after it updates.
+	// Scene height can affect the message viewport, so clamp again after it updates.
 	m.clampScroll()
 	// The search popup exposes a fixed number of item rows.  Recompute that
 	// here so a resize keeps the highlighted row inside the new window —
@@ -2546,12 +2566,12 @@ func (m *model) messageViewportHeight() int {
 	// the panel one row taller than the terminal, so the terminal scrolled the
 	// frame and tore the panel away from the sidebar.
 	availableHeight := m.height - statusLines - inputLines - 3 - 2
-	if m.matrix.visible() {
-		// The matrix bar adds three rows above the messages (rule, bar, rule).
-		// visible() answers the same question as render() != "" without building
-		// the bar: render() assembled the whole animation purely for this check,
-		// and View renders it again a few lines later.
-		availableHeight -= 3
+	if m.sea.visible() {
+		// The sea scene adds six rows above the messages (rule, 4 scene rows,
+		// rule). visible() answers the same question as render() != "" without
+		// building the scene: render() assembled the whole animation purely
+		// for this check, and View renders it again a few lines later.
+		availableHeight -= 6
 	}
 	if m.branchPopup != nil {
 		availableHeight -= m.branchPopup.height + 6

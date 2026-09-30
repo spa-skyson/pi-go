@@ -25,7 +25,7 @@ func (m *model) handleAgentCommand(args []string) (tea.Model, tea.Cmd) {
 	return m.applyAgent(name)
 }
 
-// cycleAgent advances the Shift+Tab cycle: default (the built-in pi-go
+// cycleAgent advances the Shift+Tab cycle: default (the built-in Pi-rate
 // agent) → primary agents alphabetically → back to default.
 func (m *model) cycleAgent() (tea.Model, tea.Cmd) {
 	return m.applyAgent(nextAgentName(m.activeAgent, primaryAgentNames(m.cfg.PrimaryAgents)))
@@ -141,7 +141,7 @@ func (m *model) agentSearchItems() []SearchItem {
 	}
 
 	items := make([]SearchItem, 0, len(m.cfg.PrimaryAgents)+1)
-	items = append(items, SearchItem{Text: "default", Description: "built-in pi-go agent" + mark("default")})
+	items = append(items, SearchItem{Text: "default", Description: "built-in pirate agent" + mark("default")})
 	for _, name := range primaryAgentNames(m.cfg.PrimaryAgents) {
 		ac := cfgs[name]
 		desc := ac.Description

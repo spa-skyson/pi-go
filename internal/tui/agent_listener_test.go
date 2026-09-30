@@ -66,44 +66,32 @@ func TestWindowSizeDoesNotArmAgentListener(t *testing.T) {
 	}
 }
 
-// TestMatrixVisibleMatchesRender pins matrixState.visible to render's own notion
-// of emptiness. messageViewportHeight reserves three rows on visible() while View
-// draws them on render() != "", so the two disagreeing would mis-size the frame.
-func TestMatrixVisibleMatchesRender(t *testing.T) {
+// TestSeaVisibleMatchesRender pins seaState.visible to render's own notion
+// of emptiness. messageViewportHeight reserves the scene's rows on visible()
+// while View draws them on render() != "", so the two disagreeing would
+// mis-size the frame.
+func TestSeaVisibleMatchesRender(t *testing.T) {
 	cases := []struct {
 		name  string
-		setup func(ms *matrixState)
+		setup func(s *seaState)
 	}{
-		{"inactive", func(*matrixState) {}},
-		{"active, empty grid", func(ms *matrixState) { ms.active = true }},
-		{"active, fed", func(ms *matrixState) {
-			ms.active = true
-			ms.feed("hello world", 40)
+		{"inactive", func(*seaState) {}},
+		{"active, fed", func(s *seaState) {
+			s.feed("hello world", 40)
 		}},
-		{"active, padded", func(ms *matrixState) {
-			ms.active = true
-			ms.feed("hi", 20)
-			ms.fullWidth = ms.width + 10
-		}},
-		{"active, pad rounds to zero", func(ms *matrixState) {
-			ms.active = true
-			ms.width = 10
-			ms.fullWidth = 11
-		}},
-		{"cleared after feed", func(ms *matrixState) {
-			ms.active = true
-			ms.feed("hello", 40)
-			ms.clear()
+		{"cleared after feed", func(s *seaState) {
+			s.feed("hello", 40)
+			s.clear()
 		}},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var ms matrixState
-			tc.setup(&ms)
-			want := ms.render() != ""
-			if got := ms.visible(); got != want {
-				t.Fatalf("visible()=%v but render()!=%q is %v", got, "", want)
+			var s seaState
+			tc.setup(&s)
+			want := s.render() != ""
+			if got := s.visible(); got != want {
+				t.Fatalf("visible()=%v but render()!=\"\" is %v", got, want)
 			}
 		})
 	}

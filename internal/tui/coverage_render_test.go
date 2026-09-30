@@ -70,7 +70,7 @@ func TestRenderSidebar_Variations(t *testing.T) {
 			c.Running = true
 			c.ActiveTool = "bash"
 			c.StatusLine = "thinking"
-			c.MatrixLines = "010\n101"
+			c.SeaLines = "010\n101"
 			return c
 		}()},
 		{"loading-items", func() SidebarRenderInput {

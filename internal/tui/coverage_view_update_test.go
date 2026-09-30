@@ -21,7 +21,7 @@ func TestView_AcrossStates(t *testing.T) {
 	t.Run("running", func(t *testing.T) {
 		m := newTestModelFull(t)
 		m.running = true
-		m.matrix.feed("data", m.mainWidth())
+		m.sea.feed("data", m.mainWidth())
 		if m.View().Content == "" {
 			t.Fatal("running View empty")
 		}
@@ -68,7 +68,7 @@ func TestUpdate_MessageBattery(t *testing.T) {
 		agentToolResultMsg{name: "bash", content: `{"stdout":"x"}`},
 		agentSubEventMsg{agentID: "a-1", kind: "spawn"},
 		agentDoneMsg{err: nil},
-		matrixTickMsg{},
+		seaTickMsg{},
 		resetCtrlCCountMsg{},
 		loadingTickMsg{},
 	}

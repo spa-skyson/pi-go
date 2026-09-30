@@ -40,7 +40,7 @@ type SetupConfig struct {
 	Providers []SetupProvider
 	// Candidates maps a provider name to the model IDs offered for selection.
 	// An empty or missing entry means free-text entry only, which is the
-	// honest answer for a provider pi-go has no offline catalog for.
+	// honest answer for a provider Pi-rate has no offline catalog for.
 	Candidates map[string][]string
 
 	// InitialProvider preselects the configured provider, so re-running setup

@@ -198,13 +198,13 @@ func TestChatOutputCannotTakeTheSidebarsColumns(t *testing.T) {
 }
 
 func TestFrameIntegrityOnRealContent(t *testing.T) {
-	// Narrow and wide, with and without the sidebar and the matrix bar.
+	// Narrow and wide, with and without the sidebar and the sea bar.
 	for _, width := range []int{60, 80, 120, 200} {
-		for _, matrix := range []bool{false, true} {
+		for _, sea := range []bool{false, true} {
 			m := historyModel(t, "first")
 			m.width = width
 			m.height = 30
-			m.matrix.active = matrix
+			m.sea.active = sea
 			m.applyResize()
 			m.chatModel.Messages = append(m.chatModel.Messages, realisticChat()...)
 
@@ -213,7 +213,7 @@ func TestFrameIntegrityOnRealContent(t *testing.T) {
 			for _, scroll := range []int{0, maxScroll / 2, maxScroll} {
 				m.chatModel.Scroll = scroll
 				frame := m.View().Content
-				label := fmt.Sprintf("width=%d matrix=%v scroll=%d", width, matrix, scroll)
+				label := fmt.Sprintf("width=%d sea=%v scroll=%d", width, sea, scroll)
 
 				// The rail owns the panel's last column, on every top-section row.
 				railCol := m.mainWidth() - railWidth

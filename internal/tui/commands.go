@@ -339,8 +339,8 @@ func (m *model) clearConversation() {
 	m.statusModel.ActiveTool = ""
 	m.statusModel.ToolStart = time.Time{}
 	m.loadingItems = nil
-	m.matrix.clear()
-	m.matrix.feed("pi-go", m.mainWidth())
+	m.sea.clear()
+	m.sea.feed("ahoy", m.mainWidth())
 	// Drop the retry offer with the transcript: /retry after /clear would
 	// otherwise re-send a prompt whose turn is no longer on screen.
 	m.lastPrompt = ""

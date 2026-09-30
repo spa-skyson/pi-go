@@ -329,8 +329,8 @@ func TestChatModel_RenderMarkdown_RendersMarkdown(t *testing.T) {
 func TestChatModel_RenderMessages_EmptyShowsWelcome(t *testing.T) {
 	cm := NewChatModel(nil)
 	result := cm.RenderMessages(false)
-	if !strings.Contains(result, "Welcome to pi-go") {
-		t.Error("expected welcome screen for empty messages")
+	if !strings.Contains(result, "Welcome aboard") || !strings.Contains(result, "Yaaar") {
+		t.Error("expected pirate welcome screen for empty messages")
 	}
 }
 

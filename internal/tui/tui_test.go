@@ -2137,7 +2137,9 @@ func TestRenderWelcome(t *testing.T) {
 	got := cm.renderWelcome(darkPalette)
 	// Check for key content (some words may be split by ANSI style codes).
 	checks := []string{
-		"Welcome to pi-go",
+		"Welcome aboard",
+		"Yaaar",
+		"treasure",
 		"coding agent",
 		"help",
 		"commit",
@@ -2149,6 +2151,21 @@ func TestRenderWelcome(t *testing.T) {
 			t.Errorf("welcome screen missing %q", want)
 		}
 	}
+
+	// Pin the header's visible width. The header must stay glyph-safe: a
+	// double-wide or ZWJ emoji (the pirate flag was rejected for exactly this)
+	// would push the measured row wider than the terminal draws it and let the
+	// header collide with the rail. Update this number together with wording.
+	const wantHeaderWidth = 48
+	for line := range strings.SplitSeq(got, "\n") {
+		if strings.Contains(ansi.Strip(line), "Welcome aboard") {
+			if got := ansi.StringWidth(line); got != wantHeaderWidth {
+				t.Errorf("welcome header measures %d cells, want %d — re-pin after wording changes", got, wantHeaderWidth)
+			}
+			return
+		}
+	}
+	t.Error("welcome header line not found")
 }
 
 // ---------------------------------------------------------------------------

@@ -42,7 +42,10 @@ func TestRenderSidebar_WithoutPiSection(t *testing.T) {
 		HostName:   "dev-host",
 		FolderName: "pi-go",
 	})
-	if strings.Contains(result, "Pi") {
+	// "Pi " with a trailing space targets a standalone legacy section header;
+	// the version row legitimately renders "Pi-rate <version>" and must not
+	// trip this guard.
+	if strings.Contains(result, "Pi ") {
 		t.Error("expected Pi section to be hidden")
 	}
 	if strings.Contains(result, "pi #1.2.3") {
@@ -804,7 +807,7 @@ func TestRenderSidebar_VersionTopmost(t *testing.T) {
 		GitBranch:    "main",
 	}))
 
-	ver := strings.Index(result, "pi-go 1.4.2+a1b2c3d")
+	ver := strings.Index(result, "Pi-rate 1.4.2+a1b2c3d")
 	if ver < 0 {
 		t.Fatalf("version line missing; got:\n%s", result)
 	}
@@ -817,11 +820,11 @@ func TestRenderSidebar_VersionTopmost(t *testing.T) {
 	}
 }
 
-// No version configured means no line at all — an empty "pi-go " row would
+// No version configured means no line at all — an empty "Pi-rate " row would
 // occupy a scarce sidebar row to say nothing.
 func TestRenderSidebar_VersionHiddenWhenUnset(t *testing.T) {
 	result := ansi.Strip(RenderSidebar(SidebarRenderInput{Width: sidebarWidth(120), Height: 20}))
-	if strings.Contains(result, "pi-go") {
+	if strings.Contains(result, "Pi-rate") {
 		t.Errorf("version line rendered with no AppVersion:\n%s", result)
 	}
 }
