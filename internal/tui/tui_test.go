@@ -45,11 +45,12 @@ func TestHandleSlashCommandHelp(t *testing.T) {
 	if cmd != nil {
 		t.Error("expected nil cmd for /help")
 	}
-	if len(mm.chatModel.Messages) != 1 {
-		t.Fatalf("expected 1 message, got %d", len(mm.chatModel.Messages))
+	// /help opens the registry-built help dialog instead of printing text.
+	if mm.searchPopup == nil || mm.searchPopup.mode != searchModeHelp {
+		t.Fatalf("expected /help to open the help popup, got %+v", mm.searchPopup)
 	}
-	if mm.chatModel.Messages[0].role != "assistant" {
-		t.Errorf("expected assistant role, got %q", mm.chatModel.Messages[0].role)
+	if len(mm.chatModel.Messages) != 0 {
+		t.Fatalf("expected no message, got %d", len(mm.chatModel.Messages))
 	}
 }
 
@@ -787,14 +788,19 @@ func TestHandleSlashCommandHelpContainsBranch(t *testing.T) {
 	newM, _ := m.handleSlashCommand("/help")
 	mm := newM.(*model)
 
-	if !strings.Contains(mm.chatModel.Messages[0].content, "/branch") {
-		t.Errorf("expected /help to mention /branch, got %q", mm.chatModel.Messages[0].content)
+	// /help opens the help dialog built from the registry; these commands
+	// must be among its rows.
+	if mm.searchPopup == nil || mm.searchPopup.mode != searchModeHelp {
+		t.Fatalf("expected /help to open the help popup, got %+v", mm.searchPopup)
 	}
-	if !strings.Contains(mm.chatModel.Messages[0].content, "/compact") {
-		t.Errorf("expected /help to mention /compact, got %q", mm.chatModel.Messages[0].content)
+	seen := make(map[string]bool, len(mm.searchPopup.entries))
+	for _, it := range mm.searchPopup.entries {
+		seen[it.Text] = true
 	}
-	if !strings.Contains(mm.chatModel.Messages[0].content, "/session") {
-		t.Errorf("expected /help to mention /session, got %q", mm.chatModel.Messages[0].content)
+	for _, cmd := range []string{"/branch", "/compact", "/session"} {
+		if !seen[cmd] {
+			t.Errorf("expected the help dialog to list %s", cmd)
+		}
 	}
 }
 
@@ -833,18 +839,20 @@ func TestHelpText_IncludesPlanAndRun(t *testing.T) {
 	newM, _ := m.handleSlashCommand("/help")
 	mm := newM.(*model)
 
-	content := mm.chatModel.Messages[0].content
-	if !strings.Contains(content, "/plan") {
-		t.Errorf("expected /help to mention /plan, got %q", content)
+	// /help opens the registry-built help dialog; the rows must carry the
+	// commands and their descriptions.
+	if mm.searchPopup == nil || mm.searchPopup.mode != searchModeHelp {
+		t.Fatalf("expected /help to open the help popup, got %+v", mm.searchPopup)
 	}
-	if !strings.Contains(content, "/run") {
-		t.Errorf("expected /help to mention /run, got %q", content)
+	byText := make(map[string]string, len(mm.searchPopup.entries))
+	for _, it := range mm.searchPopup.entries {
+		byText[it.Text] = it.Description
 	}
-	if !strings.Contains(content, "PDD planning session") {
-		t.Errorf("expected /help to describe /plan, got %q", content)
+	if desc := byText["/plan"]; !strings.Contains(desc, "PDD planning session") {
+		t.Errorf("expected /plan row described as PDD planning session, got %q", desc)
 	}
-	if !strings.Contains(content, "spec") {
-		t.Errorf("expected /help to mention spec for /run, got %q", content)
+	if desc := byText["/run"]; !strings.Contains(desc, "spec") {
+		t.Errorf("expected /run row to mention spec, got %q", desc)
 	}
 }
 

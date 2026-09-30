@@ -785,31 +785,6 @@ func TestCommandFormatContextUsage_EmptyCompactStats(t *testing.T) {
 	}
 }
 
-// --- formatHelp edge cases ---
-
-func TestFormatHelp_WithSkills(t *testing.T) {
-	m := &model{
-		chatModel: ChatModel{Messages: make([]message, 0)},
-		cfg: Config{
-			Skills: []extension.Skill{
-				{Name: "test-skill", Description: "A test skill"},
-				{Name: "deploy", Description: "Deploy to production"},
-			},
-		},
-	}
-
-	result := m.formatHelp()
-	if !strings.Contains(result, "Available skills:") {
-		t.Error("expected Available skills section")
-	}
-	if !strings.Contains(result, "test-skill") {
-		t.Error("expected test-skill in help")
-	}
-	if !strings.Contains(result, "deploy") {
-		t.Error("expected deploy in help")
-	}
-}
-
 // --- handleSkillsCommand edge cases ---
 
 func TestHandleSkillsCommand_CreateSubcommand(t *testing.T) {

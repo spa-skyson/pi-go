@@ -139,11 +139,12 @@ func TestSlashCommand_Help(t *testing.T) {
 	m.inputModel.Text = "/help"
 	m.inputModel.CursorPos = 5
 	m.handleSlashCommand("/help")
-	if len(m.chatModel.Messages) == 0 {
-		t.Fatal("expected help message")
+	// /help opens the registry-built help dialog instead of printing text.
+	if m.searchPopup == nil || m.searchPopup.mode != searchModeHelp {
+		t.Fatalf("expected the help popup, got %+v", m.searchPopup)
 	}
-	if m.chatModel.Messages[len(m.chatModel.Messages)-1].role != "assistant" {
-		t.Error("expected assistant message for /help")
+	if len(m.chatModel.Messages) != 0 {
+		t.Error("expected no transcript message for /help")
 	}
 }
 
@@ -1014,8 +1015,9 @@ func TestSubmit_SlashCommand(t *testing.T) {
 	m := newTestModel(t)
 	m.inputModel.Text = "/help"
 	m.testSubmit()
-	if len(m.chatModel.Messages) == 0 {
-		t.Error("expected help message from submit")
+	// /help opens the help dialog, it does not print a message.
+	if m.searchPopup == nil || m.searchPopup.mode != searchModeHelp {
+		t.Errorf("expected the help popup from submit, got %+v", m.searchPopup)
 	}
 }
 

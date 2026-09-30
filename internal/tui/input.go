@@ -70,6 +70,10 @@ type InputModel struct {
 	// rendering. Zero means the dark default.
 	Palette Palette
 
+	// input text, while expandMarkers restores it on submit. See paste.go.
+	pastes   map[rune]pasteRecord // marker rune → full pasted text
+	pasteSeq rune                 // last issued marker number
+
 	input textinput.Model
 
 	// stylePaletteKey fingerprints the palette `input`'s prompt and cursor
@@ -110,7 +114,9 @@ func (im *InputModel) HandleKey(msg tea.KeyPressMsg) tea.Cmd {
 
 	switch key.Code {
 	case tea.KeyEnter:
-		text := strings.TrimSpace(im.input.Value())
+		// Expand first: submit, mentions and history all see the full
+		// pasted text — the placeholder exists only in the rendering.
+		text := strings.TrimSpace(im.expandMarkers(im.input.Value()))
 		if text == "" {
 			return nil
 		}
@@ -168,16 +174,34 @@ func (im *InputModel) View(running bool) string {
 		dim := lipgloss.NewStyle().Foreground(p.Dim)
 		return prefix + dim.Render("(waiting for response...)")
 	}
-	return im.input.View()
+	view := im.input.View()
+	// Collapsed pastes: swap marker runes for their styled labels. Zero cost
+	// while no paste is collapsed; the full text never shows in the input.
+	return renderPastePlaceholders(im, view)
 }
 
-// InsertText inserts pasted or programmatic text at cursor position.
+// InsertText inserts pasted or programmatic text at cursor position. Text
+// above a collapse threshold (pasteSummaryMinBytes / pasteSummaryMinLines)
+// becomes a single marker rune in the value; the full text waits in the
+// buffer and is restored on submit (expandMarkers) and in the Alt+V viewer.
+//
+// A collapsed paste never triggers the @-mention popup: the marker rune is
+// not '@', so a paste that itself starts with "@…" loses the trigger into the
+// buffer — the popup stays closed, which is the intended outcome. A typed '@'
+// immediately before a paste leaves a one-rune "prefix" the popup can filter
+// by; no file matches it, which is harmless.
 func (im *InputModel) InsertText(text string) {
 	im.ensureInput()
+	insert := text
+	if pasteNeedsSummary(text) {
+		if r, ok := im.registerPaste(text); ok {
+			insert = string(r)
+		}
+	}
 	pos := im.CursorPos
 	beforeByte := charOffsetToByteOffset(im.Text, im.CursorPos)
-	im.setValue(im.Text[:beforeByte] + text + im.Text[beforeByte:])
-	im.input.SetCursor(pos + utf8.RuneCountInString(text))
+	im.setValue(im.Text[:beforeByte] + insert + im.Text[beforeByte:])
+	im.input.SetCursor(pos + utf8.RuneCountInString(insert))
 	im.syncFromInput()
 }
 
@@ -285,6 +309,10 @@ func (im *InputModel) setValue(text string) {
 func (im *InputModel) syncFromInput() {
 	im.Text = im.input.Value()
 	im.CursorPos = im.input.Position()
+	// Editing keys that bypass InsertText (backspace on the marker rune,
+	// ctrl+u, SetText) can drop markers from the value; drop their buffer
+	// entries with them so the buffer never outlives its placeholders.
+	im.prunePastes()
 }
 
 func isLineStartKey(key tea.Key) bool {
@@ -297,39 +325,6 @@ func isLineEndKey(key tea.Key) bool {
 	return key.Code == tea.KeyEnd ||
 		(key.Code == 'e' && key.Mod == tea.ModCtrl) ||
 		key.Code == 0x05
-}
-
-// slashCommands is the list of available slash commands for autocomplete.
-// Skill subcommands (/skill-list, /skill-load, /skill-create) are handled
-// as args to /skills and omitted from the top-level list to keep it concise.
-// It is derived from slashCommandSpecs (commands.go) — the single source of
-// truth for name, description and handler — plus extraSlashCommands, whose
-// entries dispatch outside the table to avoid an initialization cycle.
-var slashCommands = func() []string {
-	names := make([]string, 0, len(slashCommandSpecs)+len(extraSlashCommands))
-	for _, spec := range slashCommandSpecs {
-		if spec.hidden {
-			continue
-		}
-		names = append(names, spec.name)
-	}
-	for _, e := range extraSlashCommands {
-		names = append(names, e.name)
-	}
-	return names
-}()
-
-// slashCommandDesc returns the description for a slash command.
-func slashCommandDesc(cmd string) string {
-	if spec, ok := slashCommandByName[cmd]; ok {
-		return spec.desc
-	}
-	for _, e := range extraSlashCommands {
-		if e.name == cmd {
-			return e.desc
-		}
-	}
-	return ""
 }
 
 // completeSlashCommand returns the best matching slash command for the current input.

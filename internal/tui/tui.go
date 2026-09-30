@@ -212,6 +212,11 @@ type model struct {
 	// full agentEvents; nil when closed. See subagent_monitor.go.
 	subagentViewer *subagentViewerState
 
+	// pasteViewer is the fullscreen read-only view of one collapsed paste's
+	// full text, opened from the prompt with Alt+V; nil when closed.
+	// See paste.go.
+	pasteViewer *pasteViewerState
+
 	// steerInput is the monitor's mini-input for sending a follow-up message
 	// to a running subagent (`s` on a running row); nil when closed. See
 	// subagent_monitor.go.
@@ -383,6 +388,11 @@ const (
 	// Enter, Esc) live in handleFilesPopupKey; every other key falls through
 	// to the prompt so typing keeps editing the mention.
 	searchModeFiles searchMode = "files"
+	// searchModeHelp is the /help dialog: every keyRegistry row — slash
+	// commands then hotkeys — with the category leading each description.
+	// Enter on a slash row runs the command through the normal dispatch;
+	// hotkey rows are view-only.
+	searchModeHelp searchMode = "help"
 )
 
 // SearchItem represents an item in the search popup (command or history entry).
@@ -513,6 +523,9 @@ func (m *model) newSearchPopup(mode searchMode) {
 		for _, c := range matchingFiles(search, workDir, mentionPopupFileLimit) {
 			items = append(items, SearchItem{Text: c.Text})
 		}
+
+	case searchModeHelp:
+		items = helpSearchItems()
 
 	}
 
@@ -1669,10 +1682,15 @@ func (m *model) handleBranchPopupKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 }
 
 // handleInterruptKey handles the keys that stay live while the agent runs:
-// Esc to dismiss or cancel, Ctrl+C to cancel then quit, and F12 as a no-op.
+// Esc to dismiss or cancel, Ctrl+C to cancel then quit, and Ctrl+Z to suspend.
+// The chords resolve through the registry (hotkeyIDFor); F12 is swallowed
+// before it — a dead-man key with no action, deliberately not in the help.
 func (m *model) handleInterruptKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
-	switch {
-	case key.Code == tea.KeyEsc:
+	if key.Code == tea.KeyF12 {
+		return m, nil, true
+	}
+	switch hotkeyIDFor(key) {
+	case "key.cancel":
 		if m.steerInput != nil {
 			// The monitor's steer mini-input: Esc backs out of the input
 			// first, a second Esc closes the monitor itself. Reached only
@@ -1691,7 +1709,7 @@ func (m *model) handleInterruptKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 
-	case key.Code == 'c' && key.Mod == tea.ModCtrl:
+	case "key.quit":
 		if m.running {
 			cmd := m.cancelAgent()
 			m.ctrlCCount++
@@ -1707,10 +1725,7 @@ func (m *model) handleInterruptKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 		m.chatModel.AppendWarning("\nCtrl+C again to quit...")
 		return m, resetCtrlCCount(m), true
 
-	case key.Code == tea.KeyF12:
-		return m, nil, true
-
-	case key.Code == 'z' && key.Mod == tea.ModCtrl:
+	case "key.suspend":
 		// Ctrl+Z: suspend the process, classic job-control style. Bubble
 		// Tea v2 owns the terminal in raw mode, so the shell would never
 		// see the keystroke — the model must forward it. tea.Suspend has
@@ -1725,69 +1740,75 @@ func (m *model) handleInterruptKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 	return nil, nil, false
 }
 
-// handleToggleKey handles the Ctrl-chord toggles and the search popup.
+// handleToggleKey handles the Ctrl-chord toggles and the search popup. The
+// chords resolve through the registry (hotkeyIDFor → keyRegistry); the action
+// bodies and their gates are unchanged.
 func (m *model) handleToggleKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
-	// Ctrl+R: re-send the prompt of a turn that failed. Checked before the input
-	// fallthrough, and only when the prompt is empty, so a user editing a new
-	// prompt never has it replaced by the previous one. A search popup owns the
-	// key while it is open — retrying under it would run a turn behind the popup.
-	if key.Code == 'r' && key.Mod == tea.ModCtrl && m.inputModel.Text == "" && m.searchPopup == nil {
-		model, cmd := m.handleRetry()
-		return model, cmd, true
-	}
+	switch hotkeyIDFor(key) {
+	case "key.retry":
+		// Ctrl+R: re-send the prompt of a turn that failed. Checked before
+		// the input fallthrough, and only when the prompt is empty, so a
+		// user editing a new prompt never has it replaced by the previous
+		// one. A search popup owns the key while it is open — retrying
+		// under it would run a turn behind the popup.
+		if m.inputModel.Text == "" && m.searchPopup == nil {
+			model, cmd := m.handleRetry()
+			return model, cmd, true
+		}
 
-	// Ctrl+O: toggle compact/expanded tool output.
-	if key.Code == 'o' && key.Mod == tea.ModCtrl {
+	case "key.compact-tools":
+		// Ctrl+O: toggle compact/expanded tool output.
 		m.chatModel.ToolDisplay.CompactTools = !m.chatModel.ToolDisplay.CompactTools
 		return m, nil, true
-	}
 
-	// Ctrl+B toggles the branch popup only when the prompt is empty. The
-	// standard text input uses Ctrl+B as backward cursor movement, and some
-	// terminals emit it for left/back navigation.
-	if key.Code == 'b' && key.Mod == tea.ModCtrl && m.inputModel.Text == "" {
-		if m.statusModel.GitBranch != "" {
-			if m.branchPopup == nil {
-				m.newBranchPopup()
-			} else {
-				m.popOverlay(overlayBranchPopup)
+	case "key.branch":
+		// Ctrl+B toggles the branch popup only when the prompt is empty. The
+		// standard text input uses Ctrl+B as backward cursor movement, and some
+		// terminals emit it for left/back navigation.
+		if m.inputModel.Text == "" {
+			if m.statusModel.GitBranch != "" {
+				if m.branchPopup == nil {
+					m.newBranchPopup()
+				} else {
+					m.popOverlay(overlayBranchPopup)
+				}
 			}
+			return m, nil, true
 		}
-		return m, nil, true
-	}
 
-	// Shift+Tab cycles the main session's agent: default → primary agents
-	// (alphabetical) → default. An open search popup never gets here: its
-	// stack entry owns Tab/Shift+Tab for list navigation and wins the key
-	// before the globals run.
-	if key.Code == tea.KeyTab && key.Mod == tea.ModShift {
+	case "key.agent-cycle":
+		// Shift+Tab cycles the main session's agent: default → primary agents
+		// (alphabetical) → default. An open search popup never gets here: its
+		// stack entry owns Tab/Shift+Tab for list navigation and wins the key
+		// before the globals run.
 		model, cmd := m.cycleAgent()
 		return model, cmd, true
-	}
 
-	// Ctrl+H: open history search popup (reverse-i-search style). With no
-	// history to search the key falls through to the input.
-	//
-	// Gated on an empty prompt because Ctrl+H is also the readline "delete
-	// backward" chord: with text in the buffer the input keeps it, so the
-	// editing key still works where it is actually needed. The popup gate
-	// stays too: the popup declines chords it does not own, so without the
-	// gate this would open a second popup under the open one.
-	if key.Code == 'h' && key.Mod == tea.ModCtrl && m.searchPopup == nil &&
-		len(m.inputModel.History) > 0 && m.inputModel.Text == "" {
-		m.newSearchPopup(searchModeHistory)
-		return m, nil, true
-	}
+	case "key.history":
+		// Ctrl+H: open history search popup (reverse-i-search style). With no
+		// history to search the key falls through to the input.
+		//
+		// Gated on an empty prompt because Ctrl+H is also the readline "delete
+		// backward" chord: with text in the buffer the input keeps it, so the
+		// editing key still works where it is actually needed. The popup gate
+		// stays too: the popup declines chords it does not own, so without the
+		// gate this would open a second popup under the open one.
+		if m.searchPopup == nil && len(m.inputModel.History) > 0 && m.inputModel.Text == "" {
+			m.newSearchPopup(searchModeHistory)
+			return m, nil, true
+		}
 
-	// Ctrl+T toggles the subagent monitor — the popup /subagents opens.
-	// Reachable while a response runs, like the other popups: watching a
-	// subagent is exactly what you do mid-turn. Gated on an empty prompt
-	// because Ctrl+T is a readline editing chord (transpose) with text in
-	// the buffer. With the stream viewer open its stack entry swallows the
-	// chord before the globals run.
-	if key.Code == 't' && key.Mod == tea.ModCtrl && m.inputModel.Text == "" {
-		m.toggleSubagentsPopup()
-		return m, nil, true
+	case "key.monitor":
+		// Ctrl+T toggles the subagent monitor — the popup /subagents opens.
+		// Reachable while a response runs, like the other popups: watching a
+		// subagent is exactly what you do mid-turn. Gated on an empty prompt
+		// because Ctrl+T is a readline editing chord (transpose) with text in
+		// the buffer. With the stream viewer open its stack entry swallows the
+		// chord before the globals run.
+		if m.inputModel.Text == "" {
+			m.toggleSubagentsPopup()
+			return m, nil, true
+		}
 	}
 	return nil, nil, false
 }
@@ -1816,15 +1837,15 @@ func (m *model) handleHistoryKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 	if m.shouldShowSlashCommandPopup() {
 		return nil, nil, false
 	}
-	switch key.Code {
-	case tea.KeyUp:
+	switch hotkeyIDFor(key) {
+	case "key.history-window":
 		if len(m.inputModel.History) == 0 {
 			m.chatModel.ScrollUp(3, m.height)
 			return m, nil, true
 		}
 		m.newSearchPopup(searchModeHistory)
 		return m, nil, true
-	case tea.KeyDown:
+	case "key.monitor-down":
 		if m.inputModel.Text == "" && m.chatModel.Scroll == 0 && m.runningSubagentCount() > 0 {
 			m.newSearchPopup(searchModeSubagents)
 			return m, nil, true
@@ -1837,11 +1858,11 @@ func (m *model) handleHistoryKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 
 // handleScrollKey pages the chat viewport.
 func (m *model) handleScrollKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
-	switch key.Code {
-	case tea.KeyPgUp:
+	switch hotkeyIDFor(key) {
+	case "key.chat-up":
 		m.chatModel.ScrollUp(5, m.height)
 		return m, nil, true
-	case tea.KeyPgDown:
+	case "key.chat-down":
 		m.chatModel.ScrollDown(5)
 		return m, nil, true
 	}
@@ -1852,6 +1873,14 @@ func (m *model) handleScrollKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 // popup in sync with the text as it changes.
 func (m *model) handleInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.Key()
+
+	// Alt+V: view the collapsed paste nearest the cursor fullscreen. No
+	// markers in the prompt → no-op. The viewer opens over the prompt and
+	// swallows keys until Esc (see handlePasteViewerKey).
+	if key.Code == 'v' && key.Mod == tea.ModAlt {
+		m.openPasteViewer()
+		return m, nil
+	}
 
 	// Show the commands popup when the input starts with "/".
 	if m.shouldShowSlashCommandPopup() {
@@ -1903,7 +1932,7 @@ func (m *model) handleSearchPopupKey(key tea.Key) (tea.Cmd, bool) {
 		// The file popup is text-driven: letters never land here.
 		return m.handleFilesPopupKey(key)
 	}
-	if sp.mode == searchModeSubagents && key.Mod == 0 && key.Text == "s" {
+	if sp.mode == searchModeSubagents && hotkeyIDFor(key) == "key.subagents-steer" {
 		m.tryOpenSubagentSteer()
 		// Consumed either way: a refusal is a notice, not a filter edit.
 		return nil, true
@@ -2033,6 +2062,17 @@ func (m *model) acceptSearchPopupSelection() tea.Cmd {
 		}
 	case searchModeTodos:
 		// View-only: Enter does nothing. Esc closes the popup.
+	case searchModeHelp:
+		// Slash rows run the command through the normal dispatch — the same
+		// path typing it would take. Hotkey rows are view-only: the key is
+		// consumed, the popup stays open.
+		if _, ok := registryByCommand[item.Text]; !ok {
+			return nil
+		}
+		m.popOverlay(overlaySearchPopup)
+		m.recordCommandUse(item.Text)
+		_, cmd := m.handleSlashCommand(item.Text)
+		return cmd
 	}
 	return nil
 }
@@ -2081,6 +2121,9 @@ func (m *model) View() tea.View {
 	// the search popup: the monitor stays open underneath it and the viewer
 	// simply covers it up.
 	visibleMessages = m.overlaySubagentViewer(visibleMessages, bodyWidth)
+	// The paste viewer paints last: opened from the prompt, it sits on top of
+	// whatever popup happens to be live beneath it.
+	visibleMessages = m.overlayPasteViewer(visibleMessages, bodyWidth)
 
 	// Note: width constraint is handled by glamour's WithWordWrap(contentWidth) in chatModel.UpdateRenderer.
 	// lipgloss.Width() counts raw bytes including invisible ANSI codes, causing wrapping issues.
@@ -3167,6 +3210,8 @@ func searchPopupFooter(mode searchMode) string {
 		return "  ↑/↓ move · Enter view · s steer · Esc close"
 	case searchModeCommands:
 		return "  ↑/↓ move · Enter run · Esc close"
+	case searchModeHelp:
+		return "  ↑/↓ move · Enter run command · Esc close"
 	case searchModeHistory:
 		return "  ↑/↓ move · Enter insert · Esc close"
 	case searchModeFiles:
@@ -3233,6 +3278,10 @@ func (m *model) searchPopupStyles(mode searchMode, width int) searchPopupStyleSe
 		accent = m.palette.Sapphire // sapphire for file mentions
 		st.itemStyle = st.itemStyle.Foreground(m.palette.Text)
 		st.header = "Files"
+	case searchModeHelp:
+		accent = m.palette.Yellow // yellow for the help dialog
+		st.itemStyle = st.itemStyle.Foreground(m.palette.Text)
+		st.header = "Help"
 	default:
 		return st
 	}
