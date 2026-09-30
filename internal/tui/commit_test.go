@@ -308,8 +308,19 @@ func TestHandleSlashCommandHelpContainsCommit(t *testing.T) {
 	newM, _ := m.handleSlashCommand("/help")
 	mm := newM.(*model)
 
-	if !strings.Contains(mm.chatModel.Messages[0].content, "/commit") {
-		t.Errorf("expected /help to mention /commit, got %q", mm.chatModel.Messages[0].content)
+	// /help opens the help dialog built from the registry; /commit must be
+	// among its rows.
+	if mm.searchPopup == nil || mm.searchPopup.mode != searchModeHelp {
+		t.Fatalf("expected /help to open the help popup, got %+v", mm.searchPopup)
+	}
+	found := false
+	for _, it := range mm.searchPopup.entries {
+		if it.Text == "/commit" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected the help dialog to list /commit")
 	}
 }
 

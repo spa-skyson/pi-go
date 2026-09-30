@@ -20,15 +20,6 @@ func (m *model) handleSlashCommand(input string) (tea.Model, tea.Cmd) {
 	parts := strings.Fields(input)
 	cmd := strings.ToLower(parts[0])
 
-	// /todos opens the plan popup. Handled here to avoid an init cycle:
-	// slashCommandSpecs → handler → newSearchPopup → allSearchCandidates → slashCommands → slashCommandSpecs.
-	// It is still listed in autocomplete via extraSlashCommands. It takes no
-	// arguments: trailing whitespace or stray text is ignored, the popup opens.
-	if cmd == "/todos" {
-		m.newSearchPopup(searchModeTodos)
-		return m, nil
-	}
-
 	// Log all slash commands.
 	if m.cfg.Logger != nil {
 		m.cfg.Logger.UserMessage(input)
@@ -47,26 +38,14 @@ func (m *model) handleSlashCommand(input string) (tea.Model, tea.Cmd) {
 		m.setSessionTitle(input)
 	}
 
-	if spec, ok := slashCommandByName[cmd]; ok {
-		// /model, /agent and /subagents with no argument open their picker
-		// popups instead of printing a listing into the chat. Routed here
-		// rather than from inside the handlers: they are referenced from the
-		// slashCommandSpecs package variable, and a static reference back
-		// into newSearchPopup — which reaches that variable through the
-		// derived command tables — would close an initialization cycle.
-		if len(parts) == 1 {
-			switch cmd {
-			case "/model":
-				return m, m.openModelsPopup()
-			case "/agent":
-				m.newSearchPopup(searchModeAgents)
-				return m, nil
-			case "/subagents":
-				m.newSearchPopup(searchModeSubagents)
-				return m, nil
-			}
+	// Dispatch through the central registry: the row carries the identity,
+	// description and category; the handler attaches lazily (slashHandlerFor)
+	// so the popup-opening commands — /todos, /model, /agent, /subagents —
+	// live in the same table without an initialization cycle.
+	if binding, ok := registryByCommand[cmd]; ok {
+		if h := slashHandlerFor(binding.ID); h != nil {
+			return h(m, parts[1:])
 		}
-		return spec.run(m, parts[1:])
 	}
 
 	// Check if it's a dynamic skill command.
@@ -80,116 +59,6 @@ func (m *model) handleSlashCommand(input string) (tea.Model, tea.Cmd) {
 	})
 
 	return m, nil
-}
-
-// slashCommandSpec is one built-in slash command: how it is advertised in the
-// command list and autocomplete, and what typing it does. Keeping the name,
-// the description and the handler in one row is what stops the dispatch switch
-// and the description switch from drifting apart.
-type slashCommandSpec struct {
-	name string
-	desc string
-	// hidden keeps a command out of slashCommands — the autocomplete and
-	// /help listing — while it still dispatches and still has a description.
-	hidden bool
-	run    func(m *model, args []string) (tea.Model, tea.Cmd)
-}
-
-// slashCmdArgs adapts a handler that mutates the model and returns nothing.
-func slashCmdArgs(f func(*model, []string)) func(*model, []string) (tea.Model, tea.Cmd) {
-	return func(m *model, args []string) (tea.Model, tea.Cmd) {
-		f(m, args)
-		return m, nil
-	}
-}
-
-// slashCmdBare adapts a handler that takes no args and returns a command.
-func slashCmdBare(f func(*model) (tea.Model, tea.Cmd)) func(*model, []string) (tea.Model, tea.Cmd) {
-	return func(m *model, _ []string) (tea.Model, tea.Cmd) {
-		return f(m)
-	}
-}
-
-// slashCmdVoid adapts a handler that takes no args and returns nothing.
-func slashCmdVoid(f func(*model)) func(*model, []string) (tea.Model, tea.Cmd) {
-	return func(m *model, _ []string) (tea.Model, tea.Cmd) {
-		f(m)
-		return m, nil
-	}
-}
-
-// slashCommandSpecs is the single source of truth for the built-in slash
-// commands. Order matters: slashCommands is derived from it, and autocomplete
-// returns the first prefix match.
-var slashCommandSpecs = []slashCommandSpec{
-	{name: "/help", desc: "Show help", run: slashCmdVoid((*model).showHelpMessage)},
-	{name: "/clear", desc: "Clear conversation", run: slashCmdVoid((*model).clearConversation)},
-	{name: "/copy", desc: "Copy conversation to clipboard", run: slashCmdBare((*model).handleCopyCommand)},
-	{name: "/model", desc: "Show or switch model", run: (*model).handleModelCommand},
-	{name: "/agent", desc: "Show or switch the session agent", run: (*model).handleAgentCommand},
-	{name: "/session", desc: "Show session info", run: slashCmdVoid((*model).showSessionMessage)},
-	{name: "/context", desc: "Show context usage", run: slashCmdVoid((*model).showContextMessage)},
-	{name: "/branch", desc: "Manage branches", run: slashCmdArgs((*model).handleBranchCommand)},
-	{name: "/compact", desc: "Compact context", run: slashCmdVoid((*model).handleCompactCommand)},
-	{name: "/subagents", desc: "Monitor subagents", run: slashCmdVoid((*model).handleAgentsCommand)},
-	{name: "/history", desc: "Command history", run: slashCmdArgs((*model).handleHistoryCommand)},
-	{name: "/login", desc: "Configure API keys (codex, openai, anthropic, gemini)", run: (*model).handleLoginCommand},
-	{name: "/commit", desc: "Create commit from staged changes", run: slashCmdBare((*model).handleCommitCommand)},
-	{name: "/plan", desc: "Start PDD planning session", run: (*model).handlePlanCommand},
-	{
-		name: "/run",
-		desc: "Execute a spec with task agent (verifies subagent exit status before merging)",
-		run:  (*model).handleRunCommand,
-	},
-	{
-		name: "/pr-autofix",
-		desc: "Watch a GitHub PR's checks and fix them until it is green",
-		run:  (*model).handlePRAutofixCommand,
-	},
-	// After /run and /pr-autofix: autocomplete returns the first prefix match, so
-	// "/r" must keep completing to /run.
-	{name: "/retry", desc: "Re-send the prompt of a turn that failed", run: slashCmdBare((*model).handleRetry)},
-	{name: "/skills", desc: "List skills (create, load)", run: (*model).handleSkillsCommand},
-	{name: "/skill-list", desc: "List all loaded skills", hidden: true, run: slashCmdBare((*model).handleSkillListCommand)},
-	{name: "/skill-load", desc: "Reload skills from disk", hidden: true, run: slashCmdBare((*model).handleSkillLoadCommand)},
-	{name: "/skill-create", desc: "Create a new skill", hidden: true, run: (*model).handleSkillCreateCommand},
-	{name: "/theme", desc: "Switch theme or list themes", run: (*model).handleThemeCommand},
-	{name: "/ping", desc: "Test LLM connectivity", run: (*model).handlePingCommand},
-	{name: "/model-price-refresh", desc: "Refresh model prices from models.dev", run: (*model).handleModelPriceRefreshCommand},
-	{name: "/rtk", desc: "Output compaction stats", run: slashCmdArgs((*model).handleRTKCommand)},
-	{name: "/mcp", desc: "List MCP servers and tool status", run: slashCmdVoid((*model).handleMCPCommand)},
-	{name: "/exit", desc: "Exit", run: slashCmdBare((*model).handleQuitCommand)},
-	{name: "/quit", desc: "Exit", run: slashCmdBare((*model).handleQuitCommand)},
-}
-
-// slashCommandByName indexes slashCommandSpecs for dispatch and descriptions.
-var slashCommandByName = func() map[string]slashCommandSpec {
-	byName := make(map[string]slashCommandSpec, len(slashCommandSpecs))
-	for _, spec := range slashCommandSpecs {
-		byName[spec.name] = spec
-	}
-	return byName
-}()
-
-// extraSlashCommands lists commands that dispatch as special cases in
-// handleSlashCommand rather than through slashCommandSpecs: their handlers
-// reach the search popup, which reads slashCommands — initialized from
-// slashCommandSpecs — so putting them in the table would close an
-// initialization cycle. They still appear in autocomplete and /help via
-// slashCommands/slashCommandDesc.
-var extraSlashCommands = []struct {
-	name string
-	desc string
-}{
-	{"/todos", "Show todo/plan list"},
-}
-
-// showHelpMessage appends the help text as an assistant message.
-func (m *model) showHelpMessage() {
-	m.chatModel.Messages = append(m.chatModel.Messages, message{
-		role:    "assistant",
-		content: m.formatHelp(),
-	})
 }
 
 // showSessionMessage appends the current session ID as an assistant message.
@@ -966,81 +835,6 @@ func (m *model) showCommandList() {
 		role:    "assistant",
 		content: b.String(),
 	})
-}
-
-// formatHelp builds the grouped help text for /help.
-func (m *model) formatHelp() string {
-	var b strings.Builder
-
-	b.WriteString("**Commands:**\n\n")
-	b.WriteString("| Command | Description |\n")
-	b.WriteString("|---------|-------------|\n")
-	b.WriteString("| `/help` | Show this help |\n")
-	b.WriteString("| `/clear` | Clear conversation |\n")
-	b.WriteString("| `/copy` | Copy conversation to clipboard |\n")
-	b.WriteString("| `/model [name]` | Show or switch current model |\n")
-	b.WriteString("| `/agent [name]` | Show or switch the session agent |\n")
-	b.WriteString("| `/session` | Show session info |\n")
-	b.WriteString("| `/context` | Show context usage |\n")
-	b.WriteString("| `/compact` | Compact session context |\n")
-	b.WriteString("| `/history [query]` | Command history |\n")
-	b.WriteString("| `/retry` | Re-send the prompt of a turn that failed |\n")
-	b.WriteString("| `/exit`, `/quit` | Exit |\n")
-
-	b.WriteString("\n**Git & Planning:**\n\n")
-	b.WriteString("| Command | Description |\n")
-	b.WriteString("|---------|-------------|\n")
-	b.WriteString("| `/commit` | Generate commit from staged changes |\n")
-	b.WriteString("| `/branch <name>` | Create/switch/list branches |\n")
-	b.WriteString("| `/plan <idea>` | Start PDD planning session |\n")
-	b.WriteString("| `/plan resume` | Resume interrupted plan session |\n")
-	b.WriteString("| `/run <spec>` | Execute a spec with task agent |\n")
-
-	b.WriteString("\n**Display:**\n\n")
-	b.WriteString("| Command | Description |\n")
-	b.WriteString("|---------|-------------|\n")
-	b.WriteString("| `/theme [name]` | List or switch themes |\n")
-
-	b.WriteString("\n**System:**\n\n")
-	b.WriteString("| Command | Description |\n")
-	b.WriteString("|---------|-------------|\n")
-	b.WriteString("| `/subagents` | Monitor running subagents |\n")
-	b.WriteString("| `/todos` | Show todo/plan list |\n")
-	b.WriteString("| `/rtk` | Output compaction stats |\n")
-	b.WriteString("| `/mcp` | List MCP servers and tool status |\n")
-	b.WriteString("| `/login <provider>` | Configure API keys |\n")
-
-	b.WriteString("\n**Skills:**\n\n")
-	b.WriteString("| Command | Description |\n")
-	b.WriteString("|---------|-------------|\n")
-	b.WriteString("| `/skills` | List available skills |\n")
-	b.WriteString("| `/skills create <n>` | Create a new skill |\n")
-	b.WriteString("| `/skills load` | Reload skills from disk |\n")
-
-	if len(m.cfg.Skills) > 0 {
-		b.WriteString("\n**Available skills:**\n\n")
-		b.WriteString("| Skill | Description |\n")
-		b.WriteString("|-------|-------------|\n")
-		for _, s := range m.cfg.Skills {
-			desc := s.Description
-			if len(desc) > 80 {
-				desc = desc[:77] + "..."
-			}
-			fmt.Fprintf(&b, "| `/%s` | %s |\n", s.Name, desc)
-		}
-	}
-
-	b.WriteString("\n**Keyboard shortcuts:**\n\n")
-	b.WriteString("| Key | Action |\n")
-	b.WriteString("|-----|--------|\n")
-	b.WriteString("| `Enter` | Submit |\n")
-	b.WriteString("| `Ctrl+C` / `Esc` | Cancel |\n")
-	b.WriteString("| `Up/Down` | Prompt history |\n")
-	b.WriteString("| `Ctrl+H` | History search |\n")
-	b.WriteString("| `Ctrl+R` | Retry the last failed turn |\n")
-	b.WriteString("| `PgUp/PgDn` | Scroll chat |\n")
-
-	return b.String()
 }
 
 // handleSkillsCommand handles /skills and its subcommands: create, load, list (default).

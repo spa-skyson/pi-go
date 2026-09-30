@@ -74,14 +74,15 @@ func (c *cplxTracker) BodyTokens() int64           { return c.body }
 func (c *cplxTracker) CachePrefixTokens() int64    { return c.prefix }
 
 // -----------------------------------------------------------------------------
-// Slash command table — the shared source of truth behind handleSlashCommand,
-// slashCommands and slashCommandDesc.
+// Command registry — the shared source of truth behind handleSlashCommand,
+// slashCommands, slashCommandDesc and the help dialog.
 // -----------------------------------------------------------------------------
 
 // The dispatch switch and the description switch used to enumerate the command
-// set separately. Merging them is only safe if the table still covers exactly
-// what both did, so pin the full set explicitly.
-func TestCplxSlashCommandSpecs_CoverExpectedSet(t *testing.T) {
+// set separately. The registry replaced both; this pins that it still covers
+// exactly what they did — the /todos row included, absorbed from
+// extraSlashCommands — and that every row has a handler.
+func TestCplxKeyRegistry_CoversCommandSet(t *testing.T) {
 	want := []string{
 		"/help", "/clear", "/copy", "/model", "/agent", "/session", "/context", "/branch",
 		"/compact", "/subagents", "/history", "/login", "/commit", "/plan", "/run",
@@ -90,20 +91,25 @@ func TestCplxSlashCommandSpecs_CoverExpectedSet(t *testing.T) {
 		"/skills", "/skill-list", "/skill-load", "/skill-create", "/theme", "/ping",
 		"/model-price-refresh",
 		"/rtk", "/mcp", "/exit", "/quit",
+		// Formerly the extraSlashCommands special case; the registry owns it now.
+		"/todos",
 	}
-	if len(slashCommandSpecs) != len(want) {
-		t.Fatalf("slashCommandSpecs has %d entries, want %d", len(slashCommandSpecs), len(want))
+	if len(registryByCommand) != len(want) {
+		t.Fatalf("registryByCommand has %d entries, want %d", len(registryByCommand), len(want))
 	}
 	for _, name := range want {
-		spec, ok := slashCommandByName[name]
+		binding, ok := registryByCommand[name]
 		if !ok {
-			t.Errorf("command %q missing from the table", name)
+			t.Errorf("command %q missing from the registry", name)
 			continue
 		}
-		if spec.desc == "" {
+		if binding.Description == "" {
 			t.Errorf("command %q has no description", name)
 		}
-		if spec.run == nil {
+		if binding.Category == "" {
+			t.Errorf("command %q has no category", name)
+		}
+		if slashHandlerFor(binding.ID) == nil {
 			t.Errorf("command %q has no handler", name)
 		}
 	}
@@ -121,8 +127,9 @@ func TestCplxSlashCommands_DerivedOrder(t *testing.T) {
 		// After /run, so "/r" still completes to /run.
 		"/retry",
 		"/skills", "/theme", "/ping", "/model-price-refresh", "/rtk", "/mcp", "/exit", "/quit",
-		// extraSlashCommands are appended after the table: "/t" still
-		// completes to /theme, and "/todos" owns "/to" outright.
+		// The /todos row closes the table (formerly appended via
+		// extraSlashCommands): "/t" still completes to /theme, and "/todos"
+		// owns "/to" outright.
 		"/todos",
 	}
 	if len(slashCommands) != len(want) {
@@ -142,7 +149,7 @@ func TestCplxSlashCommands_HiddenAreDispatchableNotListed(t *testing.T) {
 		if slashCommandDesc(name) == "" {
 			t.Errorf("hidden command %q lost its description", name)
 		}
-		if _, ok := slashCommandByName[name]; !ok {
+		if binding, ok := registryByCommand[name]; !ok || slashHandlerFor(binding.ID) == nil {
 			t.Errorf("hidden command %q is not dispatchable", name)
 		}
 		for _, listed := range slashCommands {
@@ -306,9 +313,9 @@ func TestCplxShowMessageHelpers(t *testing.T) {
 	})
 	t.Run("help", func(t *testing.T) {
 		m := cplxModel(t)
-		m.showHelpMessage()
-		if m.chatModel.Messages[0].content == "" {
-			t.Error("help message is empty")
+		m.handleSlashCommand("/help")
+		if m.searchPopup == nil || m.searchPopup.mode != searchModeHelp {
+			t.Error("/help did not open the help popup")
 		}
 	})
 	t.Run("context", func(t *testing.T) {
