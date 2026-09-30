@@ -53,20 +53,30 @@ func LegacyHome() string {
 }
 
 // MigrateLegacyHome copies a legacy ~/.pi-go directory to ~/.pirate on first
-// run: if the new home does not exist and the legacy one does, its contents
-// (files, subdirectories, symlinks) are copied, a MIGRATED.txt marker is
-// written and a note goes to stderr. The legacy directory is left untouched.
-// Copy errors are warnings, not failures: migration proceeds with whatever
-// copied. If the new home already exists (or there is nothing to migrate),
-// this is a no-op, so a second start never re-copies.
+// run: if the legacy home exists and the new home carries no real content yet,
+// its contents (files, subdirectories, symlinks) are copied, a MIGRATED.txt
+// marker is written and a note goes to stderr. The legacy directory is left
+// untouched. Copy errors are warnings, not failures: migration proceeds with
+// whatever copied.
+//
+// "No real content" means the new home does not exist, or exists without any
+// of config.json, MIGRATED.txt, agents/ and skills/. Those four appear only
+// when a migration has already run or a user has actually configured the tool,
+// so finding any of them marks the home as populated and the migration is a
+// no-op — a second start never re-copies. A home that exists but holds only
+// incidental state (log/, memory/ or sessions/ created by a component that
+// started earlier in the same process, or an empty directory) is treated as
+// fresh: the copy proceeds into it and merges alongside what is already
+// there. This keeps first-run migration working even when something created
+// the home directory before this call.
 func MigrateLegacyHome() {
 	dst := PirateHome()
 	src := LegacyHome()
 	if src == "" || dst == src {
 		return
 	}
-	if _, err := os.Lstat(dst); err == nil {
-		return // user already has a new home; never touch it
+	if newHomePopulated(dst) {
+		return // user already has a real new home; never touch it
 	}
 	if _, err := os.Lstat(src); err != nil {
 		return // nothing to migrate
@@ -91,6 +101,19 @@ func MigrateLegacyHome() {
 		warn(err)
 	}
 	fmt.Fprintf(os.Stderr, "pirate: migrated configuration from ~/.pi-go to ~/.pirate (old directory kept)\n")
+}
+
+// newHomePopulated reports whether dst already carries real new-home content:
+// any of config.json, MIGRATED.txt, agents/ or skills/. A missing directory,
+// or one holding only incidental state (log/, memory/, sessions/ created by
+// an early-starting component), is not populated.
+func newHomePopulated(dst string) bool {
+	for _, rel := range []string{"config.json", "MIGRATED.txt", "agents", "skills"} {
+		if _, err := os.Lstat(filepath.Join(dst, rel)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // copyDir recursively copies src's entries into dst. Symlinks are recreated as

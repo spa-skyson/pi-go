@@ -2602,10 +2602,10 @@ func palaceConfigFromCLI(cfg *config.Config) struct{ DBPath, ModelPath string } 
 
 // Execute runs the root command.
 func Execute() error {
-	// Before anything reads the home directory: a legacy ~/.pirate is copied to
-	// ~/.pirate once, and every later lookup (config, sessions, logs, memory)
-	// sees the new home. Covers both the interactive and print modes, which
-	// share this entry point.
+	// Defensive repeat of the migration done at the very top of main(): direct
+	// callers of Execute (tests, future entry points) must not skip it. It is
+	// idempotent — a home that already carries migrated content is a no-op —
+	// so this costs a few Lstats when main already ran.
 	config.MigrateLegacyHome()
 	return newRootCmd().Execute()
 }

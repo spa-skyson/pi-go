@@ -188,28 +188,98 @@ func TestMigrateLegacyHome(t *testing.T) {
 		}
 	})
 
-	t.Run("both homes exist is a no-op", func(t *testing.T) {
+	t.Run("new home with config.json is a no-op and its config is not overwritten", func(t *testing.T) {
 		legacy, new := migrateFixture(t)
 		if err := os.MkdirAll(new, 0o755); err != nil {
 			t.Fatal(err)
 		}
 		t.Setenv("PIRATE_HOME", new)
 		t.Setenv("PI_GO_HOME", legacy)
-		sentinel := filepath.Join(new, "user-data.txt")
-		if err := os.WriteFile(sentinel, []byte("mine"), 0o644); err != nil {
+		mine := filepath.Join(new, "config.json")
+		if err := os.WriteFile(mine, []byte(`{"model":"mine"}`), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
 		MigrateLegacyHome()
 
-		if _, err := os.Stat(sentinel); err != nil {
-			t.Errorf("existing new home was touched: %v", err)
-		}
-		if _, err := os.Stat(filepath.Join(new, "config.json")); !os.IsNotExist(err) {
-			t.Error("legacy content was copied into an existing new home")
+		b, err := os.ReadFile(mine)
+		if err != nil || string(b) != `{"model":"mine"}` {
+			t.Errorf("existing new-home config.json was touched: %q err=%v", b, err)
 		}
 		if _, err := os.Stat(filepath.Join(new, "MIGRATED.txt")); !os.IsNotExist(err) {
 			t.Error("MIGRATED.txt written for a no-op migration")
+		}
+	})
+
+	t.Run("new home holding any real-content marker is a no-op", func(t *testing.T) {
+		for _, marker := range []string{"config.json", "MIGRATED.txt", "agents", "skills"} {
+			t.Run(marker, func(t *testing.T) {
+				legacy, new := migrateFixture(t)
+				if err := os.MkdirAll(new, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				path := filepath.Join(new, marker)
+				var err error
+				if marker == "agents" || marker == "skills" {
+					err = os.MkdirAll(path, 0o755)
+				} else {
+					err = os.WriteFile(path, []byte("original"), 0o644)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Setenv("PIRATE_HOME", new)
+				t.Setenv("PI_GO_HOME", legacy)
+
+				MigrateLegacyHome()
+
+				if _, err := os.Stat(filepath.Join(new, "config.json")); marker != "config.json" && !os.IsNotExist(err) {
+					t.Errorf("legacy content was copied into an existing new home with %s", marker)
+				}
+				if marker != "agents" && marker != "skills" {
+					// The marker file must survive verbatim: migration is a
+					// no-op, so it neither rewrote MIGRATED.txt nor replaced
+					// the user's config.json.
+					b, err := os.ReadFile(path)
+					if err != nil || string(b) != "original" {
+						t.Errorf("marker %s was rewritten: %q err=%v", marker, b, err)
+					}
+				}
+			})
+		}
+	})
+
+	t.Run("pre-created empty new home (only log/) is filled by migration", func(t *testing.T) {
+		legacy, new := migrateFixture(t)
+		// The #13 failure mode: an early-starting component created
+		// ~/.pirate/log before the migration ran, so the home exists but
+		// carries none of the real-content markers.
+		logDir := filepath.Join(new, "log", "2026-09-30")
+		if err := os.MkdirAll(logDir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		earlyLog := filepath.Join(logDir, "session-09-00-00.log")
+		if err := os.WriteFile(earlyLog, []byte("early log line"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("PIRATE_HOME", new)
+		t.Setenv("PI_GO_HOME", legacy)
+
+		MigrateLegacyHome()
+
+		for _, rel := range []string{
+			"config.json",
+			"MIGRATED.txt",
+			filepath.Join("sessions", "s1.json"),
+			filepath.Join("memory", "claude-mem.db"),
+		} {
+			if _, err := os.Stat(filepath.Join(new, rel)); err != nil {
+				t.Errorf("legacy file %s not migrated into the pre-created home: %v", rel, err)
+			}
+		}
+		// The pre-existing directory is merged with, not wiped.
+		if b, err := os.ReadFile(earlyLog); err != nil || string(b) != "early log line" {
+			t.Errorf("pre-existing log file was touched: %q err=%v", b, err)
 		}
 	})
 
