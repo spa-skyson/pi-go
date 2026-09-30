@@ -377,6 +377,12 @@ const (
 	// searchModeTodos shows the current todo/plan list. View-only: Enter
 	// does nothing; Esc closes it.
 	searchModeTodos searchMode = "todos"
+	// searchModeFiles is the @file-mention popup. No command opens it: the
+	// trigger is the prompt text itself — an @ where a mention can start —
+	// and the filter is the text typed after it. The keys it owns (arrows,
+	// Enter, Esc) live in handleFilesPopupKey; every other key falls through
+	// to the prompt so typing keeps editing the mention.
+	searchModeFiles searchMode = "files"
 )
 
 // SearchItem represents an item in the search popup (command or history entry).
@@ -433,6 +439,7 @@ func searchPopupListHeight(itemCount, availableRows int) int {
 // newSearchPopup creates a unified search popup with the given mode.
 func (m *model) newSearchPopup(mode searchMode) {
 	var items []SearchItem
+	var search string // files mode opens pre-filtered by the typed @prefix
 
 	switch mode {
 	case searchModeCommands:
@@ -494,6 +501,19 @@ func (m *model) newSearchPopup(mode searchMode) {
 			}
 		}
 
+	case searchModeFiles:
+		workDir := m.inputModel.WorkDir
+		if workDir == "" {
+			workDir = m.cfg.WorkDir
+		}
+		_, search = m.mentionAtCursor()
+		// matchingFiles already narrowed to prefix and fuzzy hits; the
+		// popup's filterSearch then ranks them. Paths are the rows; the
+		// per-file "file" description adds nothing here.
+		for _, c := range matchingFiles(search, workDir, mentionPopupFileLimit) {
+			items = append(items, SearchItem{Text: c.Text})
+		}
+
 	}
 
 	availableRows := m.messageViewportHeight()
@@ -515,7 +535,7 @@ func (m *model) newSearchPopup(mode searchMode) {
 		suggested: m.suggestedItems(mode),
 		filtered:  items,
 		selected:  0,
-		search:    "",
+		search:    search,
 		height:    popupHeight,
 		scrollOff: 0,
 	}
@@ -1196,6 +1216,10 @@ func (m *model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd, boo
 func (m *model) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd, bool) {
 	if !m.resizeDraining() && isUserPaste(msg.Content) {
 		m.inputModel.InsertText(msg.Content)
+		// A pasted @ is a mention like a typed one: sync opens, refilters,
+		// or closes the file popup to match the text at the cursor. A paste
+		// without a triggerable @ is a no-op here.
+		m.syncFilesPopup()
 	}
 	if m.resizeDraining() {
 		return m, resizeDrainDoneCmd(m.resizeAt), true
@@ -1829,6 +1853,10 @@ func (m *model) handleInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	prevText := m.inputModel.Text
 	cmd := m.inputModel.HandleKey(msg)
+	// The @file popup mirrors the mention at the cursor on every key —
+	// including ones that only move the cursor — so it can never outlive
+	// its trigger.
+	m.syncFilesPopup()
 	if m.inputModel.Text == prevText {
 		return m, cmd
 	}
@@ -1854,6 +1882,10 @@ func (m *model) handleSearchPopupKey(key tea.Key) (tea.Cmd, bool) {
 	// `s` on a running row opens it before the key reaches the filter below.
 	if m.steerInput != nil {
 		return m.handleSubagentSteerKey(key), true
+	}
+	if sp.mode == searchModeFiles {
+		// The file popup is text-driven: letters never land here.
+		return m.handleFilesPopupKey(key)
 	}
 	if sp.mode == searchModeSubagents && key.Mod == 0 && key.Text == "s" {
 		m.tryOpenSubagentSteer()
@@ -1962,6 +1994,9 @@ func (m *model) acceptSearchPopupSelection() tea.Cmd {
 		m.popOverlay(overlaySearchPopup)
 	case searchModeHistory:
 		m.inputModel.SetText(item.Text)
+		m.popOverlay(overlaySearchPopup)
+	case searchModeFiles:
+		m.insertFilesPopupSelection(item.Text)
 		m.popOverlay(overlaySearchPopup)
 	case searchModeModels:
 		m.popOverlay(overlaySearchPopup)
@@ -3117,6 +3152,8 @@ func searchPopupFooter(mode searchMode) string {
 		return "  ↑/↓ move · Enter run · Esc close"
 	case searchModeHistory:
 		return "  ↑/↓ move · Enter insert · Esc close"
+	case searchModeFiles:
+		return "  ↑/↓ move · Enter insert · Esc close"
 	case searchModeModels, searchModeAgents:
 		return "  ↑/↓ move · Enter switch · Esc close"
 	default:
@@ -3175,6 +3212,10 @@ func (m *model) searchPopupStyles(mode searchMode, width int) searchPopupStyleSe
 		accent = m.palette.Green // green for todos
 		st.itemStyle = st.itemStyle.Foreground(m.palette.Text)
 		st.header = "Todos"
+	case searchModeFiles:
+		accent = m.palette.Sapphire // sapphire for file mentions
+		st.itemStyle = st.itemStyle.Foreground(m.palette.Text)
+		st.header = "Files"
 	default:
 		return st
 	}
