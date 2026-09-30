@@ -546,6 +546,7 @@ func (m *model) handleModelCandidates(msg modelCandidatesMsg) (tea.Model, tea.Cm
 	sp := m.searchPopup
 	markActiveRole(msg.items, m.cfg.ActiveRole)
 	sp.entries = msg.items
+	sp.suggested = m.suggestedItems(sp.mode)
 	sp.filterSearch()
 	m.refreshSearchPopupHeight()
 	return m, nil
@@ -1082,6 +1083,8 @@ func formatThemeList(themes []Theme, currentName string, p Palette) string {
 		}
 	}
 
+	custom := lipgloss.NewStyle().Foreground(p.Dim)
+
 	var b strings.Builder
 	for i, t := range themes {
 		if i > 0 {
@@ -1099,6 +1102,9 @@ func formatThemeList(themes []Theme, currentName string, p Palette) string {
 			icon,
 			nameStyle.Render(fmt.Sprintf("%-*s", nameWidth, t.Name)),
 			swatchStrip(t.Colors))
+		if t.Custom {
+			b.WriteString("  " + custom.Render("(custom)"))
+		}
 	}
 	return b.String()
 }
@@ -1123,12 +1129,19 @@ func (m *model) handleThemeCommand(args []string) (tea.Model, tea.Cmd) {
 	}
 
 	if len(args) == 0 {
+		// Cheap re-scan so themes written since startup show up without a
+		// restart; broken files surface here, where the user is looking for
+		// them. Warnings are transient (status flash) — the list still renders.
+		var cmd tea.Cmd
+		if warnings := m.themeManager.LoadCustomThemes(m.cfg.WorkDir); len(warnings) > 0 {
+			cmd = m.setFlash("Custom themes: " + strings.Join(warnings, "; "))
+		}
 		m.chatModel.Messages = append(m.chatModel.Messages, message{
 			role:        "assistant",
 			preRendered: true,
 			content:     formatThemeList(m.themeManager.List(), m.themeManager.CurrentName(), m.palette),
 		})
-		return m, nil
+		return m, cmd
 	}
 
 	if strings.ToLower(args[0]) == "palette" {
