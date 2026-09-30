@@ -29,11 +29,11 @@ The Harness workload must listen over HTTP and implement the A2A protocol,
 including `/.well-known/agent-card.json`. The pi-go command below is not enough:
 
 ```text
-pi acp-server
+pirate acp-server
 ```
 
 That command speaks ACP over stdin/stdout. The Dockerfile in this directory
-builds the real adapter: `pi a2a`, which serves JSON-RPC A2A + gRPC A2A on
+builds the real adapter: `pirate a2a`, which serves JSON-RPC A2A + gRPC A2A on
 `$PORT` (80) plus the agent card and `/readyz` readiness probe on :8081.
 
 ## Option A: local registry (recommended)
