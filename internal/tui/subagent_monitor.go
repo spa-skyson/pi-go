@@ -266,10 +266,10 @@ func (m *model) handleSubagentSteerKey(key tea.Key) tea.Cmd {
 	if si == nil {
 		return nil
 	}
-	switch {
-	case key.Code == tea.KeyEsc:
+	switch key.Code {
+	case tea.KeyEsc:
 		m.steerInput = nil
-	case key.Code == tea.KeyEnter:
+	case tea.KeyEnter:
 		m.steerInput = nil
 		text := strings.TrimSpace(si.text)
 		if text == "" {
@@ -280,7 +280,7 @@ func (m *model) handleSubagentSteerKey(key tea.Key) tea.Cmd {
 			return nil
 		}
 		m.chatModel.AppendNotice(fmt.Sprintf("⏎ steer queued → %s", agentTitleFit(si.label, 40)))
-	case key.Code == tea.KeyBackspace:
+	case tea.KeyBackspace:
 		if r := []rune(si.text); len(r) > 0 {
 			si.text = string(r[:len(r)-1])
 		}

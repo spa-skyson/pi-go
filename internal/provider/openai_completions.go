@@ -183,7 +183,7 @@ func oaiToolCallMessages(
 			call.SetExtraFields(extra)
 		}
 		toolCalls = append(toolCalls, openai.ChatCompletionMessageToolCallUnionParam{OfFunction: call})
-		contentStr := "This tool call was cancelled before it returned; if it was a subagent, its own session may hold a partial report."
+		contentStr := "This tool call was canceled before it returned; if it was a subagent, its own session may hold a partial report."
 		if fr := functionResponses[fc.ID]; fr != nil {
 			contentStr = oaiFunctionResponseContent(fr.Response)
 		}

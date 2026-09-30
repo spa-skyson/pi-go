@@ -863,7 +863,7 @@ func (m *model) handleKeyPressMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 // handleInputSubmit runs a submitted line: a slash command directly, anything
 // else queued as a prompt. Slash commands are ignored while a turn is running.
 //
-// A prompt submitted mid-turn is queued without cancelling the running turn
+// A prompt submitted mid-turn is queued without canceling the running turn
 // (opencode semantics: typing is never lost and the running turn completes
 // before the queued prompt starts). Esc or Ctrl+C still cancels explicitly.
 func (m *model) handleInputSubmit(msg InputSubmitMsg) (tea.Model, tea.Cmd, bool) {

@@ -7,7 +7,7 @@ import (
 )
 
 // Queue-during-turn: a prompt submitted while a turn runs is queued without
-// cancelling the running turn. It starts when the current turn completes.
+// canceling the running turn. It starts when the current turn completes.
 //
 // The design rule these pin is that queuing must not create a second turn racing
 // the one in progress, and the running turn must not be interrupted.
@@ -19,14 +19,14 @@ func TestQueueWhileRunning_DoesNotCancelAndQueuesText(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.agentCancel = cancel
 
-	m_, cmd, _ := m.handleInputSubmit(InputSubmitMsg{Text: "actually, do X instead"})
-	m = m_.(*model)
+	updated, cmd, _ := m.handleInputSubmit(InputSubmitMsg{Text: "actually, do X instead"})
+	m = updated.(*model)
 
 	if cmd == nil {
 		t.Fatal("queued prompt returned no command; the turn is still running, so nothing would start it")
 	}
 	if ctx.Err() != nil {
-		t.Fatal("queuing cancelled the running turn — it must be left running")
+		t.Fatal("queuing canceled the running turn — it must be left running")
 	}
 	if !m.running {
 		t.Fatal("queuing cleared running; the UI would look idle while the old turn unwinds")
@@ -73,14 +73,14 @@ func TestQueueWhileRunning_FullQueueLeavesTurnRunning(t *testing.T) {
 	m.agentCancel = cancel
 	m.pendingPrompts = make([]queuedPrompt, maxPendingPrompts)
 
-	m_, cmd, _ := m.handleInputSubmit(InputSubmitMsg{Text: "won't fit"})
-	m = m_.(*model)
+	updated, cmd, _ := m.handleInputSubmit(InputSubmitMsg{Text: "won't fit"})
+	m = updated.(*model)
 
 	if cmd != nil {
 		t.Fatal("enqueue returned a command with a full queue")
 	}
 	if ctx.Err() != nil {
-		t.Error("enqueue cancelled the running turn with nowhere for the replacement to go")
+		t.Error("enqueue canceled the running turn with nowhere for the replacement to go")
 	}
 	if !m.running {
 		t.Error("enqueue stopped the turn instead of refusing")
@@ -145,7 +145,7 @@ func TestQueue_EscCancelsAndStartsQueuedPrompt(t *testing.T) {
 	}
 }
 
-// Esc-cancelled turn still reports its error (no steer flag to suppress it).
+// Esc-canceled turn still reports its error (no steer flag to suppress it).
 func TestQueue_EscCancelStillReportsFailure(t *testing.T) {
 	m := newTestModel(t)
 	m.running = true
@@ -175,8 +175,8 @@ func TestQueueWhileRunning_ShowsQueuedFlash(t *testing.T) {
 	m.running = true
 	m.agentCh = make(chan agentMsg, 4)
 
-	m_, _, _ := m.handleInputSubmit(InputSubmitMsg{Text: "do something else"})
-	m = m_.(*model)
+	updated, _, _ := m.handleInputSubmit(InputSubmitMsg{Text: "do something else"})
+	m = updated.(*model)
 	if m.flash != "Queued" {
 		t.Errorf("flash = %q, want %q", m.flash, "Queued")
 	}

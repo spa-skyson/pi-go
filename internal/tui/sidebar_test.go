@@ -702,13 +702,13 @@ func TestRenderSidebar_PlanChecklist(t *testing.T) {
 	}
 }
 
-// Plan-checklist lines carry their state's colour on the entire row, not just
+// Plan-checklist lines carry their state's color on the entire row, not just
 // the marker. A done phase must not render as default overlay text.
 //
 // The test inspects raw (unstripped) ANSI output: each checklist row must start
-// with a CSI colour sequence, and the byte immediately after the marker prefix
+// with a CSI color sequence, and the byte immediately after the marker prefix
 // must be the first byte of the title, not a style-reset escape. A reset there
-// would mean only the marker was coloured and the title is plain text.
+// would mean only the marker was colored and the title is plain text.
 func TestRenderSidebar_PlanChecklistFullRowStyle(t *testing.T) {
 	result := RenderSidebar(SidebarRenderInput{
 		Width:  40,
@@ -735,9 +735,9 @@ func TestRenderSidebar_PlanChecklistFullRowStyle(t *testing.T) {
 		if !strings.Contains(row, "[x]") && !strings.Contains(row, "[ ]") && !strings.Contains(row, "▶") {
 			continue
 		}
-		// Must start with a CSI colour sequence.
+		// Must start with a CSI color sequence.
 		if !strings.HasPrefix(rawRow, "\x1b[") {
-			t.Errorf("checklist row %q does not start with CSI colour sequence", row)
+			t.Errorf("checklist row %q does not start with CSI color sequence", row)
 			continue
 		}
 		// Find the marker text in the raw row.
@@ -753,7 +753,7 @@ func TestRenderSidebar_PlanChecklistFullRowStyle(t *testing.T) {
 		}
 		// The byte right after the marker prefix must NOT be ESC (\x1b).
 		// If it is, a style reset sits between marker and title — only the
-		// marker was coloured.
+		// marker was colored.
 		afterMarker := rawRow[idx+len(markerPlain):]
 		if len(afterMarker) == 0 {
 			continue // continuation line with only indent

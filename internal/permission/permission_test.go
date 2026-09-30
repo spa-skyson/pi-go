@@ -416,7 +416,7 @@ func TestApplyOverride(t *testing.T) {
 		t.Errorf("bash override missed duplicate pattern: %+v", got.Bash)
 	}
 	if got.Bash[1].Pattern != "rm *" || got.Bash[1].Directive != Deny {
-		t.Errorf("neighbouring bash rule drifted: %+v", got.Bash[1])
+		t.Errorf("neighboring bash rule drifted: %+v", got.Bash[1])
 	}
 	if rules.Bash[0].Directive != Ask {
 		t.Errorf("input mutated in place: %+v", rules.Bash[0])

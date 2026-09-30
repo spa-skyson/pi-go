@@ -59,10 +59,10 @@ func nodeAt(t *testing.T, doc map[string]any, path []string) map[string]any {
 	for i := 0; i < len(path); i++ {
 		step := path[i]
 		var next any
-		switch {
-		case step == "items" || step == "additionalProperties":
+		switch step {
+		case "items", "additionalProperties":
 			next = node[step]
-		case step == "anyOf":
+		case "anyOf":
 			if i+1 >= len(path) {
 				t.Fatalf("anyOf in path %v must be followed by a branch index", path)
 			}
