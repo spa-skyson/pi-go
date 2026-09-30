@@ -482,7 +482,7 @@ func (m *model) startPlanSession(taskName, roughIdea, specDir string) (tea.Model
 	m.chatModel.Thinking = ""
 
 	m.mode = "plan"
-	m.running = true
+	m.beginTurn()
 
 	return m, m.startAgentLoop(roughIdea)
 }

@@ -53,7 +53,12 @@ func (m *model) handleApprovalRequest(msg approvalRequestMsg) (tea.Model, tea.Cm
 	}
 	req := msg.req
 	m.approval = &req
-	return m, waitForApproval(m.cfg.ApprovalCh)
+	// Attention first: the loop is blocked until the dialog is answered, so a
+	// user who switched away needs the bell/notification to come back. The
+	// command is nil (no-op in the Batch) when attention is off or the
+	// terminal is focused.
+	return m, tea.Batch(m.attentionCmd("π Pi-rate", "Approval required: "+req.Tool),
+		waitForApproval(m.cfg.ApprovalCh))
 }
 
 // handleApprovalKey resolves the approval dialog, swallowing every key it owns

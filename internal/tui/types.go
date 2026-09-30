@@ -58,6 +58,12 @@ type Config struct {
 	// dialog answers it via request.Reply. Nil disables the dialog: sessions
 	// without it fall back to the non-interactive denial of ask.
 	ApprovalCh <-chan permission.ApprovalRequest
+	// Attention gates the terminal attention signals (bell, OSC 777
+	// notification) sent when an approval dialog opens or a long turn
+	// completes. Nil turns attention off entirely — no sequences, and focus
+	// reporting stays off too. The CLI passes the resolved config section;
+	// tests that build Config directly get the quiet default.
+	Attention *config.AttentionConfig
 	// ContextBreakdown attributes fixed context overhead (system prompt, tool
 	// definitions, rules, skills, MCP tools, subagents) to its origins, so the
 	// gauge can show what is filling the window rather than only how much.

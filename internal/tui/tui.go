@@ -83,6 +83,19 @@ type model struct {
 	agentCancel    context.CancelFunc // cancels the active agent response without quitting the TUI
 	pendingPrompts []queuedPrompt     // prompts submitted while a response is active
 
+	// turnStarted is when the current turn began (set by beginTurn next to
+	// running). The done-attention signal in handleAgentDone measures the
+	// turn against attentionDoneAfter from it.
+	turnStarted time.Time
+
+	// focused mirrors the terminal window focus (tea.FocusMsg / tea.BlurMsg,
+	// reported because the View sets ReportFocus while attention is on).
+	// Starts false — "assume away": a terminal that does not answer focus
+	// reporting never sends either message, and for such a terminal the bell
+	// must stay usable, not go silently dead. A focus-reporting terminal
+	// sends FocusMsg almost immediately, so the unfocused window is brief.
+	focused bool
+
 	// activeAgent names the primary agent the main session runs on
 	// ("" = the built-in default). Set by /agent, Shift+Tab, and startup
 	// defaultAgent; shown in the sidebar next to the model.
@@ -676,6 +689,10 @@ func Run(ctx context.Context, cfg Config) error {
 
 	opts := append(terminalProgramOptions(os.Stdout, os.Environ()), tea.WithContext(ctx))
 	p := tea.NewProgram(&m, opts...)
+	// Everything after p.Run() may write to the terminal: the program owns
+	// stdout/stderr until it returns, and any print while it is live corrupts
+	// the drawn frame (AGENTS.md, TUI output safety). Callers keep the same
+	// contract for their post-Run epilogues — see internal/cli/interactive.go.
 	_, err := p.Run()
 	drainTerminalResponses()
 	if m.initErr != nil {
@@ -809,6 +826,17 @@ func (m *model) updateTerminal(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	case tea.BackgroundColorMsg:
 		m.handleBackgroundColor(msg)
+		return m, nil, true
+
+	case tea.FocusMsg:
+		// The terminal window gained focus (ReportFocus is on while
+		// attention is configured): bells stay quiet while the user is
+		// looking at the screen.
+		m.focused = true
+		return m, nil, true
+
+	case tea.BlurMsg:
+		m.focused = false
 		return m, nil, true
 
 	case tea.PasteMsg:
@@ -1428,6 +1456,18 @@ func (m *model) handleInterruptKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 
 	case key.Code == tea.KeyF12:
 		return m, nil, true
+
+	case key.Code == 'z' && key.Mod == tea.ModCtrl:
+		// Ctrl+Z: suspend the process, classic job-control style. Bubble
+		// Tea v2 owns the terminal in raw mode, so the shell would never
+		// see the keystroke — the model must forward it. tea.Suspend has
+		// the program restore the terminal, SIGTSTP the process group,
+		// and on resume (SIGCONT) re-init input and fully repaint the
+		// renderer, so no manual termios/stop machinery lives here. Lives
+		// in the always-live interrupt chain: suspending while a turn
+		// runs (its main use) and under open overlays both work, and the
+		// Ctrl+C scheme above is untouched.
+		return m, tea.Suspend, true
 	}
 	return nil, nil, false
 }
@@ -1911,6 +1951,12 @@ func (m *model) View() tea.View {
 	// Bubble Tea has no wheel-only mode.
 	v.AltScreen = false
 	v.MouseMode = tea.MouseModeCellMotion
+	// Focus reporting backs the attention policy: FocusMsg/BlurMsg keep the
+	// model's m.focused current, and attentionCmd rings only while blurred.
+	// Enabled only when attention is actually configured — a session with the
+	// signals off should not flip the terminal's focus-report mode for
+	// nothing.
+	v.ReportFocus = m.attentionEnabled()
 	return v
 }
 

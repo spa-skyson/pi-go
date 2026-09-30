@@ -96,6 +96,28 @@ func (c Config) ResolveCompressor() (name string, ok bool) {
 	}
 }
 
+// AttentionConfig gates the terminal attention signals the TUI sends when it
+// needs the user back: a tool-approval dialog opening, or a turn that ran
+// longer than the done threshold finishing. Both channels default to on; the
+// fields are pointers so an explicit `false` survives a config round trip
+// instead of collapsing into the default (see Memory.Enabled for the same
+// shape).
+type AttentionConfig struct {
+	// Bell rings the terminal bell (ASCII BEL) on an attention event.
+	Bell *bool `json:"bell,omitempty"`
+	// Notify sends an OSC 777 desktop notification, which supporting
+	// terminals surface even when the window is not focused.
+	Notify *bool `json:"notify,omitempty"`
+}
+
+// BellEnabled reports whether the bell channel is on. Nil config means the
+// default: on.
+func (a *AttentionConfig) BellEnabled() bool { return a == nil || a.Bell == nil || *a.Bell }
+
+// NotifyEnabled reports whether the OSC 777 notification channel is on. Nil
+// config means the default: on.
+func (a *AttentionConfig) NotifyEnabled() bool { return a == nil || a.Notify == nil || *a.Notify }
+
 // RateLimitConfig paces pi-go's outbound requests to one provider so a turn
 // stays inside the provider's quota instead of discovering it by being
 // rejected. See internal/ratelimit for why retrying is not a substitute.
@@ -186,9 +208,13 @@ type Config struct {
 	Compactor   *CompactorConfig          `json:"compactor,omitempty"`
 	AutoCompact *AutoCompactConfig        `json:"autoCompact,omitempty"`
 	Memory      *MemoryConfig             `json:"memory,omitempty"`
-	Palace      *PalaceConfig             `json:"palace,omitempty"`
-	A2A         *A2AConfig                `json:"a2a,omitempty"`
-	LLMS        *LLMSConfig               `json:"llms,omitempty"`
+	// Attention gates the TUI's terminal attention signals (bell, OSC 777
+	// notification) for approval requests and long-turn completion. Nil keeps
+	// both channels on, the default.
+	Attention *AttentionConfig `json:"attention,omitempty"`
+	Palace    *PalaceConfig    `json:"palace,omitempty"`
+	A2A       *A2AConfig       `json:"a2a,omitempty"`
+	LLMS      *LLMSConfig      `json:"llms,omitempty"`
 	// ReroutedLLMS names the MCP servers whose URL is an llms.txt index and
 	// which were therefore given a fetch_docs source during load.
 	ReroutedLLMS []string `json:"-"`
@@ -307,6 +333,7 @@ func Defaults() Config {
 		ThinkingLevel:   "high",
 		Theme:           "default",
 		PlanAutoFix:     boolPtr(true),
+		Attention:       &AttentionConfig{},
 	}
 }
 
