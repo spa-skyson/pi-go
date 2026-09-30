@@ -172,7 +172,7 @@ func (m *model) subagentSearchItems() []SearchItem {
 // newSearchPopup like /model and /agent do.
 func (m *model) toggleSubagentsPopup() {
 	if m.searchPopup != nil && m.searchPopup.mode == searchModeSubagents {
-		m.searchPopup = nil
+		m.popOverlay(overlaySearchPopup)
 		return
 	}
 	m.newSearchPopup(searchModeSubagents)
@@ -257,7 +257,19 @@ func (m *model) tryOpenSubagentSteer() {
 			agentTitleFit(row.label(), 40), row.status))
 	default:
 		m.steerInput = &subagentSteerState{agentID: agentID, label: row.label()}
+		m.openOverlay(overlaySteerInput)
 	}
+}
+
+// handleSteerOverlayKey adapts the steer input to the overlay stack. The
+// input owns every key while open — the monitor behind it must not collect
+// filter characters meant for the mini-input — so it never declines.
+func (m *model) handleSteerOverlayKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
+	if m.steerInput == nil {
+		return nil, nil, false
+	}
+	cmd := m.handleSubagentSteerKey(key)
+	return m, cmd, true
 }
 
 // handleSubagentSteerKey drives the open steer input: printable characters
@@ -271,9 +283,9 @@ func (m *model) handleSubagentSteerKey(key tea.Key) tea.Cmd {
 	}
 	switch key.Code {
 	case tea.KeyEsc:
-		m.steerInput = nil
+		m.popOverlay(overlaySteerInput)
 	case tea.KeyEnter:
-		m.steerInput = nil
+		m.popOverlay(overlaySteerInput)
 		text := strings.TrimSpace(si.text)
 		if text == "" {
 			return nil // nothing to send
@@ -380,7 +392,7 @@ func (m *model) handleSubagentViewerKey(key tea.Key) (tea.Model, tea.Cmd, bool) 
 	maxScroll := max(0, total-viewport)
 	switch {
 	case key.Code == tea.KeyEsc:
-		m.subagentViewer = nil
+		m.popOverlay(overlaySubagentViewer)
 	case key.Code == tea.KeyPgUp:
 		v.scroll = min(v.scroll+viewerPage, maxScroll)
 	case key.Code == tea.KeyPgDown:

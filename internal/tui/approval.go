@@ -53,6 +53,7 @@ func (m *model) handleApprovalRequest(msg approvalRequestMsg) (tea.Model, tea.Cm
 	}
 	req := msg.req
 	m.approval = &req
+	m.openOverlay(overlayApproval)
 	// Attention first: the loop is blocked until the dialog is answered, so a
 	// user who switched away needs the bell/notification to come back. The
 	// command is nil (no-op in the Batch) when attention is off or the
@@ -94,7 +95,7 @@ func (m *model) handleApprovalKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 // dialog and records what happened in the transcript.
 func (m *model) answerApproval(res permission.ApprovalResult) (tea.Model, tea.Cmd) {
 	req := m.approval
-	m.approval = nil
+	m.popOverlay(overlayApproval)
 	if req != nil {
 		// Reply is buffered to one and this is its only send: never blocks.
 		req.Reply <- res

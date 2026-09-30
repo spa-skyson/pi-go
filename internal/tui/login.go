@@ -145,6 +145,7 @@ func (m *model) loginStartManualCode(prov auth.Provider) (tea.Model, tea.Cmd) {
 		provider:   prov.Name,
 		manualCode: sess,
 	}
+	m.openOverlay(overlayLogin)
 
 	m.chatModel.Messages = append(m.chatModel.Messages, message{
 		role: "assistant",
@@ -169,6 +170,7 @@ func (m *model) loginStartManual(prov auth.Provider) (tea.Model, tea.Cmd) {
 		phase:    "waiting",
 		provider: prov.Name,
 	}
+	m.openOverlay(overlayLogin)
 
 	m.chatModel.Messages = append(m.chatModel.Messages, message{
 		role: "assistant",
@@ -188,6 +190,7 @@ func (m *model) loginStartPKCEFlow(prov auth.Provider) (tea.Model, tea.Cmd) {
 		phase:    "sso",
 		provider: prov.Name,
 	}
+	m.openOverlay(overlayLogin)
 
 	title := fmt.Sprintf("Starting **%s** login...", prov.Name)
 	browserLine := "A browser window will open for authentication."
@@ -238,12 +241,13 @@ func (m *model) loginStartCodexDeviceFlow(prov auth.Provider) (tea.Model, tea.Cm
 		phase:    "device",
 		provider: prov.Name,
 	}
+	m.openOverlay(overlayLogin)
 
 	// Requesting the code is a single fast call; only the polling is slow, so
 	// it runs synchronously to keep the prompt and the code in one frame.
 	sess, err := auth.StartCodexDeviceFlow(context.Background(), prov)
 	if err != nil {
-		m.login = nil
+		m.popOverlay(overlayLogin)
 		m.logLogin("codex device auth failed to start provider=%s err=%v", prov.Name, err)
 		m.chatModel.Messages = append(m.chatModel.Messages, message{
 			role:    "assistant",
@@ -299,11 +303,12 @@ func (m *model) loginStartDeviceFlow(prov auth.Provider) (tea.Model, tea.Cmd) {
 		phase:    "device",
 		provider: prov.Name,
 	}
+	m.openOverlay(overlayLogin)
 
 	// Request device code synchronously (fast HTTP call), then poll async.
 	dcr, err := auth.DeviceFlow(context.Background(), prov)
 	if err != nil {
-		m.login = nil
+		m.popOverlay(overlayLogin)
 		m.chatModel.Messages = append(m.chatModel.Messages, message{
 			role:    "assistant",
 			content: fmt.Sprintf("Login error for %s: %v", prov.Name, err),
@@ -358,7 +363,7 @@ func (m *model) handleLoginSSOResult(msg loginSSOResultMsg) (tea.Model, tea.Cmd)
 		m.logLogin("sso result ignored: login was canceled")
 		return m, nil
 	}
-	m.login = nil
+	m.popOverlay(overlayLogin)
 
 	r := msg.result
 	if r.Err != nil {
@@ -404,7 +409,7 @@ func (m *model) handleLoginSSOResult(msg loginSSOResultMsg) (tea.Model, tea.Cmd)
 // handleLoginSave saves a manually entered API key to ~/.pirate/.env.
 func (m *model) handleLoginSave(apiKey string) (tea.Model, tea.Cmd) {
 	provName := m.login.provider
-	m.login = nil
+	m.popOverlay(overlayLogin)
 
 	prov, ok := auth.FindProvider(provName)
 	if !ok {
@@ -438,7 +443,7 @@ func (m *model) handleLoginCodeSubmit(pasted string) (tea.Model, tea.Cmd) {
 	sess := m.login.manualCode
 	provName := m.login.provider
 	if sess == nil {
-		m.login = nil
+		m.popOverlay(overlayLogin)
 		m.logLogin("manual-code submit failed: no session")
 		m.chatModel.Messages = append(m.chatModel.Messages, message{
 			role:    "assistant",
@@ -476,7 +481,7 @@ func (m *model) handleLoginCodeSubmit(pasted string) (tea.Model, tea.Cmd) {
 
 // handleLoginCancel cancels the login flow.
 func (m *model) handleLoginCancel() (tea.Model, tea.Cmd) {
-	m.login = nil
+	m.popOverlay(overlayLogin)
 	m.chatModel.Messages = append(m.chatModel.Messages, message{
 		role:    "assistant",
 		content: "Login canceled.",

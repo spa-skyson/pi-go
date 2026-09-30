@@ -217,6 +217,14 @@ type model struct {
 	// subagent_monitor.go.
 	steerInput *subagentSteerState
 
+	// overlays is the modal stack: the top entry sees every key first, a
+	// handled key never reaches the layers below, and a declined one falls
+	// through unless the entry swallows input. The fields above hold each
+	// overlay's STATE; the stack holds the DISPATCH. openOverlay/popOverlay
+	// keep the two in step at every open and close site, and syncOverlays
+	// repairs drift before each dispatch. See overlay.go.
+	overlays []overlayEntry
+
 	// Legacy selection index for slash commands (used in tests).
 	slashCommandSelected int
 
@@ -301,6 +309,7 @@ func (m *model) newBranchPopup() {
 		height:    popupHeight,
 		scrollOff: 0,
 	}
+	m.openOverlay(overlayBranchPopup)
 }
 
 // listGitBranches returns a list of all local git branches, with the active one first.
@@ -498,7 +507,7 @@ func (m *model) newSearchPopup(mode searchMode) {
 
 	// A fresh popup never inherits a steer input from a previous monitor
 	// session — an orphaned mini-input would own keys with nothing on screen.
-	m.steerInput = nil
+	m.popOverlay(overlaySteerInput)
 
 	m.searchPopup = &searchPopupState{
 		mode:      mode,
@@ -510,6 +519,7 @@ func (m *model) newSearchPopup(mode searchMode) {
 		height:    popupHeight,
 		scrollOff: 0,
 	}
+	m.openOverlay(overlaySearchPopup)
 	// Pin the Suggested rows for the empty query the popup opens with.
 	m.searchPopup.filterSearch()
 }
@@ -1493,30 +1503,26 @@ func (m *model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 // falls through to the next handler.
 type keyHandler func(tea.Key) (_ tea.Model, _ tea.Cmd, handled bool)
 
-// handleKey routes a key press through the modal overlays in priority order,
-// then the editing keys, and finally the prompt input. Each layer decides for
-// itself whether it owns the key.
+// handleKey routes a key press through the overlay stack — the top entry
+// sees every key first — then the interrupt layer, the editing keys, and
+// finally the prompt input. Esc against an open overlay is the overlay's
+// (the viewer steps back to the monitor, the monitor closes); only an empty
+// stack reaches the interrupt layer, where Esc cancels a running turn. A new
+// overlay joins by pushing an entry — handleKey does not grow.
 func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.Key()
 
-	// Overlays get first refusal, even while the agent runs. The approval
-	// dialog is checked first: it gates a live tool call, and its keys (y, n,
-	// a, Enter, Esc) must not leak into the other overlays — in particular Esc
-	// denies the request instead of canceling the turn. The stream viewer sits
-	// before handleInterruptKey for the same reason: with it open, Esc steps
-	// back to the monitor instead of canceling the running turn.
-	for _, handle := range []keyHandler{
-		m.handleApprovalKey,
-		m.handleCommitKey,
-		m.handleLoginKey,
-		m.handleSkillCreateKey,
-		m.handleBranchPopupKey,
-		m.handleSubagentViewerKey,
-		m.handleInterruptKey,
-	} {
-		if model, cmd, handled := handle(key); handled {
-			return model, cmd
-		}
+	// The stack, top first. syncOverlays runs first so the stack mirrors the
+	// overlay fields no matter what cleared or opened one behind the helpers.
+	m.syncOverlays()
+	if model, cmd, handled := m.dispatchOverlays(key); handled {
+		return model, cmd
+	}
+
+	// The interrupt layer sits below the stack: with an overlay open, Esc
+	// belongs to that overlay, and only an empty stack cancels the turn.
+	if model, cmd, handled := m.handleInterruptKey(key); handled {
+		return model, cmd
 	}
 
 	// Everything below edits the prompt, which is read-only while busy.
@@ -1627,7 +1633,7 @@ func (m *model) handleBranchPopupKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 	case tea.KeyDown:
 		m.branchPopup.moveDown()
 	default:
-		m.branchPopup = nil
+		m.popOverlay(overlayBranchPopup)
 	}
 	return m, nil, true
 }
@@ -1639,12 +1645,15 @@ func (m *model) handleInterruptKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 	case key.Code == tea.KeyEsc:
 		if m.steerInput != nil {
 			// The monitor's steer mini-input: Esc backs out of the input
-			// first, a second Esc closes the monitor itself.
-			m.steerInput = nil
+			// first, a second Esc closes the monitor itself. Reached only
+			// when called below the stack — through handleKey the steer
+			// entry owns the key first — but kept so the layer stays
+			// correct on a direct call.
+			m.popOverlay(overlaySteerInput)
 			return m, nil, true
 		}
 		if m.searchPopup != nil {
-			m.searchPopup = nil
+			m.popOverlay(overlaySearchPopup)
 			return m, nil, true
 		}
 		if m.running {
@@ -1656,7 +1665,7 @@ func (m *model) handleInterruptKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 		if m.running {
 			cmd := m.cancelAgent()
 			m.ctrlCCount++
-			m.chatModel.AppendWarning("\nCtrl+C again to quit (or wait 2s)...")
+			m.chatModel.AppendWarning("\nCtrl+C again to quit...")
 			return m, tea.Batch(cmd, resetCtrlCCount(m)), true
 		}
 		m.ctrlCCount++
@@ -1665,7 +1674,7 @@ func (m *model) handleInterruptKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 			return m, tea.Quit, true
 		}
 		// First press: warn, and reset the count after 2 seconds.
-		m.chatModel.AppendWarning("\nCtrl+C again to quit (or wait 2s)...")
+		m.chatModel.AppendWarning("\nCtrl+C again to quit...")
 		return m, resetCtrlCCount(m), true
 
 	case key.Code == tea.KeyF12:
@@ -1711,21 +1720,17 @@ func (m *model) handleToggleKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 			if m.branchPopup == nil {
 				m.newBranchPopup()
 			} else {
-				m.branchPopup = nil
+				m.popOverlay(overlayBranchPopup)
 			}
 		}
 		return m, nil, true
 	}
 
-	// Unified search popup keys (slash commands or history).
-	if cmd, handled := m.handleSearchPopupKey(key); handled {
-		return m, cmd, true
-	}
-
 	// Shift+Tab cycles the main session's agent: default → primary agents
-	// (alphabetical) → default. Checked after the search popup, which owns
-	// Tab/Shift+Tab for list navigation while it is open.
-	if key.Code == tea.KeyTab && key.Mod == tea.ModShift && m.searchPopup == nil {
+	// (alphabetical) → default. An open search popup never gets here: its
+	// stack entry owns Tab/Shift+Tab for list navigation and wins the key
+	// before the globals run.
+	if key.Code == tea.KeyTab && key.Mod == tea.ModShift {
 		model, cmd := m.cycleAgent()
 		return model, cmd, true
 	}
@@ -1735,7 +1740,9 @@ func (m *model) handleToggleKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 	//
 	// Gated on an empty prompt because Ctrl+H is also the readline "delete
 	// backward" chord: with text in the buffer the input keeps it, so the
-	// editing key still works where it is actually needed.
+	// editing key still works where it is actually needed. The popup gate
+	// stays too: the popup declines chords it does not own, so without the
+	// gate this would open a second popup under the open one.
 	if key.Code == 'h' && key.Mod == tea.ModCtrl && m.searchPopup == nil &&
 		len(m.inputModel.History) > 0 && m.inputModel.Text == "" {
 		m.newSearchPopup(searchModeHistory)
@@ -1746,8 +1753,9 @@ func (m *model) handleToggleKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 	// Reachable while a response runs, like the other popups: watching a
 	// subagent is exactly what you do mid-turn. Gated on an empty prompt
 	// because Ctrl+T is a readline editing chord (transpose) with text in
-	// the buffer, and the viewer takes the key first when it is open.
-	if key.Code == 't' && key.Mod == tea.ModCtrl && m.subagentViewer == nil && m.inputModel.Text == "" {
+	// the buffer. With the stream viewer open its stack entry swallows the
+	// chord before the globals run.
+	if key.Code == 't' && key.Mod == tea.ModCtrl && m.inputModel.Text == "" {
 		m.toggleSubagentsPopup()
 		return m, nil, true
 	}
@@ -1766,9 +1774,10 @@ func (m *model) handleToggleKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 // fresh session.
 //
 // A prompt starting with "/" is excluded: those arrows drive the slash-command
-// popup instead.
+// popup instead. An open search popup never gets here either: its stack entry
+// owns Up/Down for list navigation and wins the key before the globals run.
 func (m *model) handleHistoryKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
-	if m.searchPopup != nil || m.shouldShowSlashCommandPopup() {
+	if m.shouldShowSlashCommandPopup() {
 		return nil, nil, false
 	}
 	switch key.Code {
@@ -1826,7 +1835,7 @@ func (m *model) handleInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// The text changed: open or close the popup to match the new prompt.
 	if m.searchPopup != nil && m.searchPopup.mode == searchModeCommands && !m.shouldShowSlashCommandPopup() {
-		m.searchPopup = nil
+		m.popOverlay(overlaySearchPopup)
 	}
 	if m.searchPopup == nil && m.shouldShowSlashCommandPopup() {
 		m.newSearchPopup(searchModeCommands)
@@ -1865,12 +1874,12 @@ func (m *model) handleSearchPopupKey(key tea.Key) (tea.Cmd, bool) {
 	case tea.KeyEnter:
 		return m.acceptSearchPopupSelection(), true
 	case tea.KeyEsc:
-		m.searchPopup = nil
+		m.popOverlay(overlaySearchPopup)
 		return nil, true
 	case tea.KeyBackspace:
 		if len(sp.search) == 0 {
 			// If search is empty, close popup on backspace
-			m.searchPopup = nil
+			m.popOverlay(overlaySearchPopup)
 			return nil, true
 		}
 		sp.search = sp.search[:len(sp.search)-1]
@@ -1950,16 +1959,16 @@ func (m *model) acceptSearchPopupSelection() tea.Cmd {
 	case searchModeCommands:
 		m.recordCommandUse(item.Text)
 		m.inputModel.SetText(item.Text + " ")
-		m.searchPopup = nil
+		m.popOverlay(overlaySearchPopup)
 	case searchModeHistory:
 		m.inputModel.SetText(item.Text)
-		m.searchPopup = nil
+		m.popOverlay(overlaySearchPopup)
 	case searchModeModels:
-		m.searchPopup = nil
+		m.popOverlay(overlaySearchPopup)
 		_, cmd := m.handleModelCommand([]string{item.Text})
 		return cmd
 	case searchModeAgents:
-		m.searchPopup = nil
+		m.popOverlay(overlaySearchPopup)
 		_, cmd := m.handleAgentCommand([]string{item.Text})
 		return cmd
 	case searchModeSubagents:
@@ -1969,6 +1978,7 @@ func (m *model) acceptSearchPopupSelection() tea.Cmd {
 		// show: the key is consumed but nothing opens.
 		if item.ID != "" && m.agentCardByID(item.ID) != nil {
 			m.subagentViewer = &subagentViewerState{agentID: item.ID}
+			m.openOverlay(overlaySubagentViewer)
 		}
 	case searchModeTodos:
 		// View-only: Enter does nothing. Esc closes the popup.
@@ -2782,7 +2792,7 @@ func detectBranch(workDir string) string {
 // handleBranchSelect switches to the selected branch.
 func (m *model) handleBranchSelect() (tea.Model, tea.Cmd) {
 	if m.branchPopup == nil || len(m.branchPopup.branches) == 0 {
-		m.branchPopup = nil
+		m.popOverlay(overlayBranchPopup)
 		return m, nil
 	}
 
@@ -2790,7 +2800,7 @@ func (m *model) handleBranchSelect() (tea.Model, tea.Cmd) {
 
 	// Don't switch if already on this branch
 	if selectedBranch == m.branchPopup.active {
-		m.branchPopup = nil
+		m.popOverlay(overlayBranchPopup)
 		return m, nil
 	}
 
@@ -2810,7 +2820,7 @@ func (m *model) handleBranchSelect() (tea.Model, tea.Cmd) {
 		m.refreshDiffStats()
 	}
 
-	m.branchPopup = nil
+	m.popOverlay(overlayBranchPopup)
 	return m, nil
 }
 

@@ -111,6 +111,7 @@ func (m *model) handleCommitCommand() (tea.Model, tea.Cmd) {
 		content: "Generating commit message...",
 	})
 	m.commit = &commitState{phase: "generating"}
+	m.openOverlay(overlayCommit)
 
 	// Start async LLM call.
 	diffText := diffs.String()
@@ -123,7 +124,7 @@ func (m *model) handleCommitCommand() (tea.Model, tea.Cmd) {
 // handleCommitGenerated processes the LLM-generated commit message.
 func (m *model) handleCommitGenerated(msg commitGeneratedMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
-		m.commit = nil
+		m.popOverlay(overlayCommit)
 		// Update the "generating" message to show error.
 		if len(m.chatModel.Messages) > 0 {
 			m.chatModel.Messages[len(m.chatModel.Messages)-1].content = fmt.Sprintf("Error generating commit message: %v", msg.err)
@@ -137,6 +138,7 @@ func (m *model) handleCommitGenerated(msg commitGeneratedMsg) (tea.Model, tea.Cm
 	commitMsg = strings.TrimSpace(commitMsg)
 
 	m.commit = &commitState{phase: "confirming", message: commitMsg}
+	m.openOverlay(overlayCommit)
 
 	// Update the "generating" message to show the proposed commit.
 	if len(m.chatModel.Messages) > 0 {
@@ -156,7 +158,7 @@ func (m *model) handleCommitConfirm() (tea.Model, tea.Cmd) {
 	}
 
 	commitMsg := m.commit.message
-	m.commit = nil
+	m.popOverlay(overlayCommit)
 
 	cwd := m.cwd()
 	return m, func() tea.Msg {
@@ -183,7 +185,7 @@ func (m *model) handleCommitDone(msg commitDoneMsg) (tea.Model, tea.Cmd) {
 
 // handleCommitCancel cancels the commit flow.
 func (m *model) handleCommitCancel() (tea.Model, tea.Cmd) {
-	m.commit = nil
+	m.popOverlay(overlayCommit)
 	m.chatModel.Messages = append(m.chatModel.Messages, message{
 		role:    "assistant",
 		content: "Commit canceled.",
