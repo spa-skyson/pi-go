@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/spa-skyson/pi-rate/internal/cli"
+	"github.com/spa-skyson/pi-rate/internal/config"
 	"github.com/spa-skyson/pi-rate/internal/otel"
 )
 
@@ -40,6 +41,13 @@ func applyGCDefaults() {
 }
 
 func main() {
+	// First meaningful line of the process: migrate a legacy ~/.pi-go home to
+	// ~/.pirate before anything can create or read the new home. run() then
+	// loads ~/.pirate/.env (cli.LoadDotEnv), whose first lookup must see the
+	// migrated file, not the not-yet-migrated legacy one. cli.Execute repeats
+	// the call for direct callers; MigrateLegacyHome is idempotent, so the
+	// second invocation is a no-op.
+	config.MigrateLegacyHome()
 	applyGCDefaults()
 	os.Exit(run(os.Stderr, cli.Execute))
 }
