@@ -21,10 +21,10 @@ Test the Python LSP integration:
 
 ```sh
 # Test diagnostics
-go run ./cmd/pi --mode json "Use lsp-diagnostics on hack/test/lsp/python/src/hello_world/main.py"
+go run ./cmd/pirate --mode json "Use lsp-diagnostics on hack/test/lsp/python/src/hello_world/main.py"
 
 # Test code actions
-go run ./cmd/pi --mode json "Use lsp-code-action on hack/test/lsp/python/src/hello_world/main.py at line 10"
+go run ./cmd/pirate --mode json "Use lsp-code-action on hack/test/lsp/python/src/hello_world/main.py at line 10"
 ```
 
 ## Notes

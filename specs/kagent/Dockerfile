@@ -1,6 +1,6 @@
 # Multi-stage OCI image for pi-go as a kagent Substrate harness runtime.
 #
-# The image runs `pi a2a`, an HTTP+gRPC A2A server that satisfies the kagent
+# The image runs `pirate a2a`, an HTTP+gRPC A2A server that satisfies the kagent
 # v2 runtime contract:
 #   - JSON-RPC A2A + gRPC A2A on $PORT (default 80, kagent compiler sets PORT=80)
 #   - agent card at /.well-known/agent-card.json (from KAGENT_AGENT_CARD_JSON
@@ -35,7 +35,7 @@ RUN go mod download
 ARG TARGETARCH=arm64
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags "-s -w" -o /out/pi ./cmd/pi
+    go build -trimpath -ldflags "-s -w" -o /out/pirate ./cmd/pirate
 
 FROM debian:bookworm-slim
 
@@ -113,17 +113,17 @@ USER pi
 
 WORKDIR /data
 
-# Everything pi keeps under ~/.pi-go — session transcripts, the memory
+# Everything pirate keeps under ~/.pirate — session transcripts, the memory
 # store, logs — has to land on the durable mount, or an actor that Substrate
 # checkpoints and restores elsewhere, or replaces outright, comes back with
 # no record of its conversations. HOME is the one knob all of it hangs off;
 # PI_SESSIONS_DIR alone would leave the memory store behind.
 ENV HOME=/data
-COPY --from=build /out/pi /usr/local/bin/pi
+COPY --from=build /out/pirate /usr/local/bin/pirate
 
 # A2A HTTP/gRPC port (kagent compiler sets PORT=80; readyz stays 8081).
 EXPOSE 80 8081
 
 ENV PORT=80
 
-ENTRYPOINT ["pi", "a2a"]
+ENTRYPOINT ["pirate", "a2a"]

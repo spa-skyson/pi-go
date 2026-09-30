@@ -12,8 +12,8 @@ between the two protocols.
 ## Current compatibility facts
 
 - pi-go repository: `https://github.com/dimetron/pi-go`
-- pi-go entry point: `cmd/pi`
-- pi-go ACP command: `pi acp-server`
+- pi-go entry point: `cmd/pirate`
+- pi-go ACP command: `pirate acp-server`
 - ACP transport: stdin/stdout
 - kagent Harness API: `kagent.dev/v1alpha3`
 - kagent Harness runtime adapter currently available: `spec.kagent`
