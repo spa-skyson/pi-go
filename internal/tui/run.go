@@ -561,7 +561,7 @@ func (m *model) startRunAgent(
 	m.chatModel.Messages = append(m.chatModel.Messages, message{role: "assistant", content: ""})
 	m.chatModel.Streaming = ""
 	m.chatModel.Thinking = ""
-	m.running = true
+	m.beginTurn()
 	m.chatModel.Scroll = 0
 
 	return m, waitForRunAgent(events, agentID)
@@ -667,7 +667,7 @@ func (m *model) handleRunParallel(specName, promptMD string, gates []Gate, check
 	m.chatModel.Messages = append(m.chatModel.Messages, message{role: "assistant", content: ""})
 	m.chatModel.Streaming = ""
 	m.chatModel.Thinking = ""
-	m.running = true
+	m.beginTurn()
 	m.chatModel.Scroll = 0
 
 	// Start consuming events from both agents via fan-in.
@@ -1110,7 +1110,7 @@ func (m *model) retryRun(reason, extraContext string) tea.Cmd {
 	m.chatModel.Messages = append(m.chatModel.Messages, message{role: "assistant", content: ""})
 	m.chatModel.Streaming = ""
 	m.chatModel.Thinking = ""
-	m.running = true
+	m.beginTurn()
 	m.chatModel.Scroll = 0
 
 	return waitForRunAgent(events, agentID)

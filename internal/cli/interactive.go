@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -194,6 +195,14 @@ func runInteractive(
 		deferredInit(initCtx, cfg, llm, info.Provider, info.Model, info.BaseURL, tokenTracker, cwd, sandboxRoot, worktreeDir, headerSessionID, initCh, noticeCh, approvalCh, todoCh, &res)
 	}()
 
+	// The TUI owns the terminal from here until tui.Run returns: it renders on
+	// the normal screen and anything written to stdout/stderr while the
+	// tea.Program is live paints raw text over the drawn frame, and the
+	// renderer never learns those cells changed (AGENTS.md, TUI output
+	// safety). Everything below — the exit epilogue, cleanup diagnostics —
+	// therefore runs only after Run has returned and the terminal state is
+	// restored. printSessionEpilogue takes its writer as a parameter precisely
+	// so this invariant is unit-testable.
 	tuiErr := tui.Run(ctx, tui.Config{
 		PlanAutoFix:    planAutoFixEnabled(cfg),
 		LLM:            llm,
@@ -207,6 +216,10 @@ func runInteractive(
 		ThemeName:      cfg.Theme,
 		TokenTracker:   tokenTracker,
 		LifecycleHooks: convertHooks(cfg.Hooks),
+		// Attention carries the resolved config section (nil pointers inside mean
+		// "on"); nil section means the signals stay off. Consumed by
+		// internal/tui/attention.go.
+		Attention:      cfg.Attention,
 		DeferredInit:   initCh,
 		SystemNoticeCh: noticeCh,
 		ApprovalCh:     approvalCh,
@@ -255,13 +268,26 @@ func runInteractive(
 	initCancel() // signal deferred init to stop
 	<-initDone
 
-	// Print session ID and resume command on exit.
-	if res.sessionID != "" {
-		fmt.Fprintf(os.Stderr, "\nSession: %s\nResume:  pi --session %s\n", res.sessionID, res.sessionID)
-	}
+	// Print session ID and resume command on exit — after Run, per the
+	// invariant above.
+	printSessionEpilogue(os.Stderr, res.sessionID)
 
 	res.cleanup()
 	return tuiErr
+}
+
+// printSessionEpilogue writes the exit banner — session ID and the command to
+// resume the session — to w. It is called only after tui.Run has returned and
+// the tea.Program no longer owns the terminal: while the TUI is live, any
+// write to the terminal corrupts the drawn frame (AGENTS.md, TUI output
+// safety). The writer is a parameter, not a package-level sink, so a unit
+// test can pin both the output bytes and the fact that the helper itself
+// never prints anywhere on its own.
+func printSessionEpilogue(w io.Writer, sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	fmt.Fprintf(w, "\nSession: %s\nResume:  pi --session %s\n", sessionID, sessionID)
 }
 
 // deferredInit performs all heavy initialization, sending progress via ch.

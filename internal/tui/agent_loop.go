@@ -841,6 +841,15 @@ func waitForSubEvent(ch <-chan AgentSubEvent) tea.Cmd {
 	}
 }
 
+// beginTurn marks the model as running and stamps the turn's start time. The
+// stamp feeds turnDoneAttention: it is what lets a completed turn be measured
+// against attentionDoneAfter. Every "a turn is now running" site goes through
+// this so the invariant "running implies a fresh stamp" cannot drift.
+func (m *model) beginTurn() {
+	m.running = true
+	m.turnStarted = time.Now()
+}
+
 // cancelAgent stops a running agent and drains its channel.
 //
 // It returns the command for the next queued prompt, if any. That is not
@@ -1020,7 +1029,7 @@ func (m *model) submitPrompt(text string, mentions []string) (tea.Model, tea.Cmd
 	m.chatModel.Messages = append(m.chatModel.Messages, message{role: "assistant", content: ""})
 	m.chatModel.Streaming = ""
 	m.chatModel.Thinking = ""
-	m.running = true
+	m.beginTurn()
 	m.chatModel.Scroll = 0
 	if m.face != nil {
 		m.face.SetMood(MoodThinking)
@@ -2048,9 +2057,10 @@ func (m *model) handleAgentDone(msg agentDoneMsg) (tea.Model, tea.Cmd) {
 		m.runLifecycleHooks("user_input_required", map[string]any{})
 	}
 	if len(m.pendingPrompts) > 0 {
-		return m.startNextPrompt()
+		model, next := m.startNextPrompt()
+		return model, tea.Batch(m.turnDoneAttention(), next)
 	}
-	return m, nil
+	return m, m.turnDoneAttention()
 }
 
 // runLifecycleHooks fires every configured lifecycle hook for the given event,

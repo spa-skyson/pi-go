@@ -43,7 +43,7 @@ func (m *model) handleSkillCommand(skill extension.Skill, args []string) (tea.Mo
 	m.inputModel.Clear()
 	m.chatModel.Streaming = ""
 	m.chatModel.Thinking = ""
-	m.running = true
+	m.beginTurn()
 	m.chatModel.Scroll = 0
 
 	return m, m.startAgentLoop(display)
@@ -234,7 +234,7 @@ After the user answers, update %s with:
 
 	m.chatModel.Streaming = ""
 	m.chatModel.Thinking = ""
-	m.running = true
+	m.beginTurn()
 	m.chatModel.Scroll = 0
 
 	return m, m.startAgentLoop(prompt)
