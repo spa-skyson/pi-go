@@ -846,7 +846,7 @@ func TestBackgroundRegistry_StartFinishGet(t *testing.T) {
 	_ = bg.start("agent-1", "explore")
 
 	// Verify running state.
-	status, result, errMsg, done, ok := bg.get("agent-1")
+	status, _, _, _, ok := bg.get("agent-1")
 	if !ok {
 		t.Fatal("get returned not found")
 	}
@@ -856,7 +856,7 @@ func TestBackgroundRegistry_StartFinishGet(t *testing.T) {
 
 	// Finish with success.
 	bg.finish("agent-1", "completed", "analysis result", "")
-	status, result, errMsg, done, ok = bg.get("agent-1")
+	status, result, errMsg, done, ok := bg.get("agent-1")
 	if !ok {
 		t.Fatal("get returned not found after finish")
 	}

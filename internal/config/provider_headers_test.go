@@ -51,6 +51,6 @@ func TestProviderHeadersOmittedWhenUnset(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(blob) != `{"baseURL":"https://x.invalid"}` {
-		t.Errorf("marshalled = %s, want no headers key", blob)
+		t.Errorf("marshaled = %s, want no headers key", blob)
 	}
 }

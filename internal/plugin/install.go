@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	config "github.com/spa-skyson/pi-rate/internal/config"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 // cloneTimeout bounds a single git operation. Cloning a plugin repository is a
