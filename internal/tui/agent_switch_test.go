@@ -222,7 +222,7 @@ func TestHandleAgentCommandList(t *testing.T) {
 	if len(texts) != 3 || texts[0] != "pm" || texts[1] != "default" || texts[2] != "build" {
 		t.Fatalf("popup entries = %v, want [pm default build] (active agent pinned first)", texts)
 	}
-	if !strings.Contains(descs["default"], "built-in pi-go agent") {
+	if !strings.Contains(descs["default"], "built-in pirate agent") {
 		t.Errorf("default description = %q", descs["default"])
 	}
 	if !strings.Contains(descs["build"], "executor") || !strings.Contains(descs["pm"], "orchestrator") {

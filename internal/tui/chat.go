@@ -69,10 +69,13 @@ func (c *ChatModel) renderWelcome(p Palette) string {
 	lines := []string{
 		face,
 		"",
-		accent.Render("  Welcome to pi-go.sh") + dim.Render(" — your AI coding agent"),
+		// No emoji in the header: the pirate flag (🏴‍☠️) is a ZWJ sequence no
+		// width table measures consistently across terminals. The mascot art
+		// above carries the identity; TestRenderWelcome pins the cell width.
+		accent.Render("  Welcome aboard Pi-rate") + dim.Render(" — Yaaar AI coding agent"),
 		"",
-		dim.Render("  Ask me anything or describe a task:"),
-		dim.Render("    - ") + dim.Render(`"research this codebase and explain the architecture"`),
+		dim.Render("  Let's go hunt for treasure:"),
+		dim.Render("    - ") + dim.Render(`"plunder this codebase and explain the architecture"`),
 		dim.Render("    - ") + dim.Render(`"fix the failing test in auth_test.go"`),
 		dim.Render("    - ") + dim.Render(`"add error handling to the upload endpoint"`),
 		dim.Render("    - ") + dim.Render(`"explain how the session middleware works"`),

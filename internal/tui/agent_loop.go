@@ -1035,7 +1035,7 @@ func (m *model) submitPrompt(text string, mentions []string) (tea.Model, tea.Cmd
 		m.face.SetMood(MoodThinking)
 	}
 
-	m.matrix.feed("init", m.mainWidth())
+	m.sea.feed("init", m.mainWidth())
 
 	// Remember what was asked, so a turn that dies under a provider failure can
 	// be re-sent without retyping it (see handleRetry). The flag is cleared here
@@ -1044,7 +1044,7 @@ func (m *model) submitPrompt(text string, mentions []string) (tea.Model, tea.Cmd
 	m.lastMentions = append([]string(nil), mentions...)
 	m.lastPromptFailed = false
 
-	return m, tea.Batch(m.startAgentLoop(promptText), matrixTickCmd())
+	return m, tea.Batch(m.startAgentLoop(promptText), seaTickCmd())
 }
 
 // applySessionTitle derives a short title from the user prompt, records it on
@@ -1122,7 +1122,7 @@ func (m *model) runAgentLoop(ctx context.Context, prompt string, ch chan agentMs
 
 	// Start a top-level OTEL span for the entire agent run, inheriting the
 	// per-response context so Esc/Ctrl+C can interrupt it without quitting the TUI.
-	tracer := otel.Tracer("pi-go")
+	tracer := otel.Tracer("pirate")
 	ctx, span := tracer.Start(ctx, "agent.prompt")
 	defer span.End()
 	span.SetAttributes(
@@ -1417,7 +1417,7 @@ func (m *model) handleAgentThinking(msg agentThinkingMsg) (tea.Model, tea.Cmd) {
 	if m.face != nil {
 		m.face.SetMood(MoodThinking)
 	}
-	m.matrix.feed(msg.text, m.mainWidth())
+	m.sea.feed(msg.text, m.mainWidth())
 	// Thinking buffers the open reasoning block only, for the same reason
 	// Streaming does in handleAgentText: a tool call between two reasoning
 	// blocks starts a new message, and a carried-over buffer would repeat the
@@ -1467,7 +1467,7 @@ func (m *model) handleAgentText(msg agentTextMsg) (tea.Model, tea.Cmd) {
 			m.chatModel.Streaming = ""
 		}
 	}
-	m.matrix.feed(msg.text, m.mainWidth())
+	m.sea.feed(msg.text, m.mainWidth())
 	// Keep chronology stable: only update a trailing assistant message.
 	// If the latest message is a tool event, append a new assistant message
 	// so rendered order matches event order.
@@ -1516,7 +1516,7 @@ func (m *model) handleAgentToolCall(msg agentToolCallMsg) (tea.Model, tea.Cmd) {
 	m.statusModel.ActiveTools[msg.name] = time.Now()
 	m.statusModel.ActiveTool = msg.name
 	m.statusModel.ToolStart = time.Now()
-	m.matrix.feed(msg.name, m.mainWidth())
+	m.sea.feed(msg.name, m.mainWidth())
 	argsJSON, _ := json.MarshalIndent(msg.args, "", "  ")
 	m.chatModel.TraceLog = append(m.chatModel.TraceLog, traceEntry{
 		time:    time.Now(),
@@ -1687,8 +1687,7 @@ func (m *model) handleAgentToolResult(msg agentToolResultMsg) (tea.Model, tea.Cm
 		m.statusModel.ToolStart = m.statusModel.ActiveTools[name]
 		break
 	}
-	m.matrix.feed(msg.name+msg.content, m.mainWidth())
-	m.matrix.shiftLeft()
+	m.sea.feed(msg.name+msg.content, m.mainWidth())
 	m.chatModel.TraceLog = append(m.chatModel.TraceLog, traceEntry{
 		time:    time.Now(),
 		kind:    "tool_result",
@@ -1948,7 +1947,7 @@ func (m *model) handleAgentSubEvent(msg agentSubEventMsg) (tea.Model, tea.Cmd) {
 	if strings.HasPrefix(msg.kind, bashEventPrefix) {
 		return m.handleBashEvent(msg)
 	}
-	m.matrix.feed(msg.kind+msg.content, m.mainWidth())
+	m.sea.feed(msg.kind+msg.content, m.mainWidth())
 	if msg.kind == "spawn" {
 		// Track background spawns.
 		if msg.background {
@@ -2007,7 +2006,7 @@ func (m *model) handleAgentDone(msg agentDoneMsg) (tea.Model, tea.Cmd) {
 	m.invalidatePlanPhases()
 	m.running = false
 	m.agentCancel = nil
-	m.matrix.clear()
+	m.sea.clear()
 	m.statusModel.ActiveTool = ""
 	m.statusModel.ActiveTools = nil
 	if m.approval != nil {

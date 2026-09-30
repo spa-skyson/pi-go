@@ -523,12 +523,12 @@ func TestView_WindowTitle_AnimatesWhileRunning(t *testing.T) {
 
 // The matrix tick is what drives the animation: it already advances the tool
 // bullet's blink while running, and now the title phase alongside it.
-func TestMatrixTick_AdvancesTitleSpin(t *testing.T) {
+func TestSeaTick_AdvancesTitleSpin(t *testing.T) {
 	m, _ := newTitleTestModel(t)
 	m.running = true
 	m.titleSpin = -1
 
-	updated, _ := m.Update(matrixTickMsg{})
+	updated, _ := m.Update(seaTickMsg{})
 	mm, ok := updated.(*model)
 	if !ok {
 		t.Fatalf("Update returned %T, want *model", updated)

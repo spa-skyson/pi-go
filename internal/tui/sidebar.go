@@ -100,7 +100,7 @@ type SidebarRenderInput struct {
 	// checklist plus a graph saying the same thing twice. Set by RenderSidebar
 	// once it knows the graph will fit.
 	mergePlanGraph bool
-	MatrixLines    string                   // pre-rendered matrix rain (2 lines)
+	SeaLines       string                   // pre-rendered sea scene (seaLines rows)
 	StatusLine     string                   // status text shown above matrix
 	Orchestrator   *subagent.Orchestrator   // may be nil — for agents section
 	Skills         []extension.Skill        // skills section; nil = hidden
@@ -356,8 +356,8 @@ func graphSection(in SidebarRenderInput, used, innerW int, st sidebarStyles) []s
 // is a guess.
 func sidebarContentHeight(in SidebarRenderInput) int {
 	matrixH, statusH := 0, 0
-	if in.MatrixLines != "" {
-		matrixH = matrixLines
+	if in.SeaLines != "" {
+		matrixH = seaLines
 		statusH = 1
 	}
 	ruleH := 0
@@ -381,7 +381,7 @@ func sidebarMoodLines(in SidebarRenderInput, st sidebarStyles) []string {
 // is the canonical context gauge (calibrated to the dumb-zone framework) and the
 // OTEL indicator adds nothing the user cannot already see via the run status.
 
-// sidebarVersionLines shows the running pi-go build as the first row of the
+// sidebarVersionLines shows the running Pi-rate build as the first row of the
 // panel, so the binary in use is visible without running `pi version` in
 // another shell. It is rendered topmost because it qualifies every other
 // section: behavior that looks wrong in this session is only diagnosable if
@@ -391,7 +391,7 @@ func sidebarVersionLines(in SidebarRenderInput, innerW int, st sidebarStyles) []
 		return nil
 	}
 	return []string{
-		st.dim.Render("  " + truncateLabel("pi-go "+in.AppVersion, innerW)),
+		st.dim.Render("  " + truncateLabel("Pi-rate "+in.AppVersion, innerW)),
 		"",
 	}
 }
@@ -828,14 +828,14 @@ func sidebarLoadingLines(in SidebarRenderInput, st sidebarStyles) []string {
 }
 
 // sidebarFrame pads the section lines to fill the panel height, appends the
-// token status line and matrix rain when active, closes with the rule, and
+// token status line and sea scene when active, closes with the rule, and
 // boxes the result at a fixed width.
 func sidebarFrame(in SidebarRenderInput, lines []string, w int, st sidebarStyles) string {
-	// Reserve rows for the matrix rain and its status separator.
-	hasMatrix := in.MatrixLines != ""
+	// Reserve rows for the sea scene and its status separator.
+	hasSea := in.SeaLines != ""
 	matrixH, statusH := 0, 0
-	if hasMatrix {
-		matrixH = matrixLines
+	if hasSea {
+		matrixH = seaLines
 		statusH = 1
 	}
 	// The closing rule owns the last row. It carries the panel's rule across the
@@ -858,13 +858,13 @@ func sidebarFrame(in SidebarRenderInput, lines []string, w int, st sidebarStyles
 		contentLines = contentLines[:targetH]
 	}
 
-	if hasMatrix {
+	if hasSea {
 		statusText := cmp.Or(in.StatusLine, "──── tokens ────")
 		if maxStatusW := w - 4; runewidth.StringWidth(statusText) > maxStatusW {
 			statusText = runewidth.Truncate(statusText, maxStatusW-1, "─")
 		}
 		contentLines = append(contentLines, st.dim.Render(statusText))
-		contentLines = append(contentLines, strings.Split(in.MatrixLines, "\n")...)
+		contentLines = append(contentLines, strings.Split(in.SeaLines, "\n")...)
 	}
 	if ruleH > 0 {
 		contentLines = append(contentLines,

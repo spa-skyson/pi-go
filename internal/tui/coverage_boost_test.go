@@ -18,104 +18,108 @@ import (
 )
 
 // -----------------------------------------------------------------------------
-// matrixState tests — covers renderLine, render, tick, feed, clear.
+// seaState tests — render, tick, feed, clear; scene-specific cases in sea_test.go.
 // -----------------------------------------------------------------------------
 
-func TestMatrixState_FeedAndRender(t *testing.T) {
-	var ms matrixState
-	// Feed some text. Width big enough for matrixW = 60% of 100 = 60.
-	ms.feed("hello world", 100)
-	if !ms.active {
-		t.Error("feed should activate matrix")
+func TestSeaState_FeedAndRender(t *testing.T) {
+	var s seaState
+	s.feed("hello world", 100)
+	if !s.active {
+		t.Error("feed should activate the scene")
 	}
-	out := ms.render()
+	out := s.render()
 	if out == "" {
 		t.Error("render should return non-empty when active")
 	}
-}
-
-func TestMatrixState_RenderInactive(t *testing.T) {
-	var ms matrixState
-	if got := ms.render(); got != "" {
-		t.Errorf("render of inactive matrix should be empty, got %q", got)
+	// The sea itself must be visible: the two wave rows carry '~'.
+	rows := strings.Split(out, "\n")
+	waves := 0
+	for _, row := range rows {
+		if strings.Contains(row, "~") {
+			waves++
+		}
+	}
+	if waves < 2 {
+		t.Errorf("expected at least 2 wave rows, got %d in:\n%s", waves, out)
 	}
 }
 
-func TestMatrixState_RenderLineEmpty(t *testing.T) {
-	var ms matrixState
-	// grid[row] is nil/empty, renderLine should return empty.
-	if got := ms.renderLine(0); got != "" {
-		t.Errorf("renderLine on empty grid should be empty, got %q", got)
+func TestSeaState_RenderInactive(t *testing.T) {
+	var s seaState
+	if got := s.render(); got != "" {
+		t.Errorf("render of an inactive scene should be empty, got %q", got)
 	}
 }
 
-func TestMatrixState_Tick(t *testing.T) {
-	var ms matrixState
-	ms.feed("seed", 80)
-	oldCell := ms.grid[0][0]
-	ms.tick(80)
-	// Width should stay same; after shift a new cell at rightmost is populated.
-	if len(ms.grid[0]) == 0 {
-		t.Fatal("tick should not reset grid width")
+func TestSeaState_Tick(t *testing.T) {
+	var s seaState
+	s.feed("seed", 80)
+	before := s.render()
+	s.tick(80)
+	if s.width != 80 {
+		t.Errorf("tick should keep the zone width, got %d", s.width)
 	}
-	_ = oldCell
-}
-
-func TestMatrixState_TickInactive(t *testing.T) {
-	var ms matrixState
-	ms.tick(80) // no-op when inactive
-	if ms.active {
-		t.Error("tick should not activate an inactive matrix")
+	if s.render() == before {
+		t.Error("a tick must advance the animation — the frame changed not")
 	}
 }
 
-func TestMatrixState_Clear(t *testing.T) {
-	var ms matrixState
-	ms.feed("data", 80)
-	ms.clear()
-	if ms.active {
-		t.Error("clear should deactivate matrix")
-	}
-	if ms.width != 0 {
-		t.Errorf("clear should zero width, got %d", ms.width)
+func TestSeaState_TickInactive(t *testing.T) {
+	var s seaState
+	s.tick(80) // no-op when inactive
+	if s.active {
+		t.Error("tick should not activate an inactive scene")
 	}
 }
 
-func TestMatrixState_FeedLongText(t *testing.T) {
-	var ms matrixState
-	// Large input triggers shifts cap and different code path.
+func TestSeaState_Clear(t *testing.T) {
+	var s seaState
+	s.feed("data", 80)
+	s.clear()
+	if s.active {
+		t.Error("clear should deactivate the scene")
+	}
+	if s.width != 0 {
+		t.Errorf("clear should zero width, got %d", s.width)
+	}
+	if got := s.render(); got != "" {
+		t.Errorf("render after clear should be empty, got %q", got)
+	}
+}
+
+func TestSeaState_FeedLongText(t *testing.T) {
+	var s seaState
+	// Large input exercises the shift-cap path.
 	big := strings.Repeat("x", 10000)
-	ms.feed(big, 200)
-	if !ms.active {
+	s.feed(big, 200)
+	if !s.active {
 		t.Error("feed should activate")
 	}
 }
 
-func TestMatrixState_FeedTinyWidth(t *testing.T) {
-	var ms matrixState
-	ms.feed("x", 0) // matrixW would be 0, gets clamped to width (0), then... guard in feed.
-	// When width=0, matrixW=0, reset to width(0). ensureWidth with 0 allocates 0-length grid.
-	// feed shouldn't panic.
-	_ = ms.render()
+func TestSeaState_FeedTinyWidth(t *testing.T) {
+	var s seaState
+	s.feed("x", 0) // clamps to a 1-cell zone; must not panic
+	_ = s.render()
 }
 
-func TestMatrixTickCmd(t *testing.T) {
-	cmd := matrixTickCmd()
+func TestSeaTickCmd(t *testing.T) {
+	cmd := seaTickCmd()
 	if cmd == nil {
-		t.Fatal("matrixTickCmd should return non-nil cmd")
+		t.Fatal("seaTickCmd should return non-nil cmd")
 	}
-	// Invoke the command, make sure it returns a matrixTickMsg.
+	// Invoke the command, make sure it returns a seaTickMsg.
 	done := make(chan tea.Msg, 1)
 	go func() {
 		done <- cmd()
 	}()
 	select {
 	case msg := <-done:
-		if _, ok := msg.(matrixTickMsg); !ok {
-			t.Errorf("expected matrixTickMsg, got %T", msg)
+		if _, ok := msg.(seaTickMsg); !ok {
+			t.Errorf("expected seaTickMsg, got %T", msg)
 		}
 	case <-time.After(500 * time.Millisecond):
-		t.Fatal("matrixTickCmd timed out")
+		t.Fatal("seaTickCmd timed out")
 	}
 }
 
@@ -374,15 +378,15 @@ func TestView_WithoutSidebar_Narrow(t *testing.T) {
 	}
 }
 
-func TestView_WithMatrix(t *testing.T) {
+func TestView_WithSea(t *testing.T) {
 	m := newTestModelFull(t)
 	m.width = 140
 	m.height = 40
-	m.matrix.feed("hello", 100)
+	m.sea.feed("hello", 100)
 	v := m.View()
 	s := v.Content
 	if s == "" {
-		t.Error("expected non-empty view with matrix")
+		t.Error("expected non-empty view with sea scene")
 	}
 }
 
@@ -430,21 +434,21 @@ func newTestModelFull(t *testing.T) *model {
 // Update branches — matrix tick, reset ctrl-C count, ping done, etc.
 // -----------------------------------------------------------------------------
 
-func TestUpdate_MatrixTickMsg_Running(t *testing.T) {
+func TestUpdate_SeaTickMsg_Running(t *testing.T) {
 	m := newTestModelFull(t)
 	m.running = true
-	m.matrix.feed("init", 100)
-	newM, cmd := m.Update(matrixTickMsg{})
+	m.sea.feed("init", 100)
+	newM, cmd := m.Update(seaTickMsg{})
 	if cmd == nil {
-		t.Error("expected matrix tick to schedule another tick when running")
+		t.Error("expected sea tick to schedule another tick when running")
 	}
 	_ = newM
 }
 
-func TestUpdate_MatrixTickMsg_NotRunning(t *testing.T) {
+func TestUpdate_SeaTickMsg_NotRunning(t *testing.T) {
 	m := newTestModelFull(t)
 	m.running = false
-	_, cmd := m.Update(matrixTickMsg{})
+	_, cmd := m.Update(seaTickMsg{})
 	if cmd != nil {
 		t.Error("expected nil cmd when not running")
 	}

@@ -30,7 +30,7 @@ const terminalTitleApp = terminalTitleName + " -"
 var terminalTitleWorkingSymbols = []rune{'⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'}
 
 // terminalTitleSpinPeriod is the wall-clock dwell of one symbol. The frame that
-// carries the title is redrawn on the 150ms matrix tick while running, so this
+// carries the title is redrawn on the 150ms sea tick while running, so this
 // only has to be a multiple of that; ~half a second keeps the tab bar readable
 // instead of strobing.
 const terminalTitleSpinPeriod = 500 * time.Millisecond

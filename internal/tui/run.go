@@ -718,11 +718,11 @@ func waitForRunAgent(events <-chan subagent.Event, agentID string) tea.Cmd {
 func (m *model) handleRunAgentEvent(msg runAgentEventMsg) (tea.Model, tea.Cmd) {
 	ev := msg.event
 
-	// Feed the matrix rain widget so it visibly reacts to ACP subagent output.
+	// Feed the sea scene widget so it visibly reacts to ACP subagent output.
 	if ev.Content != "" {
-		m.matrix.feed(ev.Content, m.mainWidth())
+		m.sea.feed(ev.Content, m.mainWidth())
 	} else if ev.Type != "" {
-		m.matrix.feed(ev.Type, m.mainWidth())
+		m.sea.feed(ev.Type, m.mainWidth())
 	}
 
 	switch ev.Type {
@@ -1468,7 +1468,7 @@ func mergeRunTargets(wm *subagent.WorktreeManager, targets []mergeTarget, specNa
 		// The task agent is told its edits stay local to the worktree and
 		// is never asked to commit, so without this the merge below has no
 		// commits to take and Cleanup force-removes the only copy.
-		if _, err := wm.CommitAll(aid, fmt.Sprintf("pi-go run %s (agent %s)", specName, aid)); err != nil {
+		if _, err := wm.CommitAll(aid, fmt.Sprintf("pirate run %s (agent %s)", specName, aid)); err != nil {
 			return runMergeResultMsg{
 				output:          allOutput.String(),
 				err:             fmt.Errorf("commit worktree for %s: %w", aid, err),

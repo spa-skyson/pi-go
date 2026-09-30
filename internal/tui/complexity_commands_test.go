@@ -1752,12 +1752,12 @@ func TestCplxHandleLoadingTick(t *testing.T) {
 	})
 }
 
-func TestCplxHandleMatrixTick(t *testing.T) {
+func TestCplxHandleSeaTick(t *testing.T) {
 	t.Run("running", func(t *testing.T) {
 		m := cplxModel(t)
 		m.running = true
-		m.matrix.feed("init", 100)
-		_, cmd, handled := m.handleMatrixTick()
+		m.sea.feed("init", 100)
+		_, cmd, handled := m.handleSeaTick()
 		if !handled || cmd == nil {
 			t.Error("a tick while running must re-arm")
 		}
@@ -1766,7 +1766,7 @@ func TestCplxHandleMatrixTick(t *testing.T) {
 	t.Run("idle", func(t *testing.T) {
 		m := cplxModel(t)
 		m.running = false
-		_, cmd, handled := m.handleMatrixTick()
+		_, cmd, handled := m.handleSeaTick()
 		if !handled {
 			t.Error("the tick must still be marked handled")
 		}

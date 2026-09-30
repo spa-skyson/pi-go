@@ -266,24 +266,24 @@ func TestPingDoneMsg_ErrorIncluded(t *testing.T) {
 	}
 }
 
-func TestPingDoneMsg_UpdatesMatrix(t *testing.T) {
+func TestPingDoneMsg_UpdatesSea(t *testing.T) {
 	m := &model{
 		chatModel: ChatModel{Messages: []message{
 			{role: "thinking", content: "Pinging model..."},
 		}},
-		matrix: matrixState{},
+		sea: seaState{},
 	}
-	m.matrix.feed("init", 80) // Activate matrix
+	m.sea.feed("init", 80) // Activate the scene
 
 	msg := pingDoneMsg{output: "**Provider:** test\n✓ Model **test** is ALIVE", reply: "Pong"}
 	newM, _ := m.Update(msg)
 	mm := newM.(*model)
 
-	// Matrix should have been fed the reply text.
-	if !mm.matrix.active {
-		t.Error("expected matrix to be active after ping")
+	// The scene should have been fed the reply text.
+	if !mm.sea.active {
+		t.Error("expected the sea scene to be active after ping")
 	}
-	if len(mm.matrix.grid) == 0 {
-		t.Error("expected matrix grid to have content")
+	if mm.sea.width == 0 {
+		t.Error("expected the sea scene width to be set")
 	}
 }

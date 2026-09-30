@@ -321,17 +321,17 @@ func isBlankRow(plain string) bool {
 
 // The message block must sit inset by the same number of rows from the header
 // above it and the rule below it. The gap used to exist only below — and only
-// when the matrix bar was off — so the block hugged the top and floated off the
+// when the sea bar was off — so the block hugged the top and floated off the
 // bottom.
 func TestMessageBlockGapsAreSymmetric(t *testing.T) {
-	for _, matrix := range []bool{false, true} {
+	for _, sea := range []bool{false, true} {
 		m := historyModel(t, "first")
 		m.width = 80
 		m.height = 20
 		m.applyResize()
-		// applyResize feeds the matrix, which activates it — so the flag has to
-		// be set afterwards to actually test the bar being off.
-		m.matrix.active = matrix
+		// applyResize feeds the sea scene, which activates it — so the flag
+		// has to be set afterwards to actually test the bar being off.
+		m.sea.active = sea
 		m.chatModel.Messages = append(m.chatModel.Messages,
 			message{role: "user", content: "hi"},
 			message{role: "assistant", content: "hello"})
@@ -342,20 +342,18 @@ func TestMessageBlockGapsAreSymmetric(t *testing.T) {
 		}
 
 		// The chat area runs from just below the header to the rule above the
-		// status bar. With the matrix bar on, the header is rule/bar/rule; with
+		// status bar. With the sea bar on, the header is rule/scene/rule; with
 		// it off, the chat starts at the top of the panel.
 		top := -1
-		if matrix {
-			for i, r := range rows {
-				if isRule(r) {
-					top = i // the second rule closes the matrix header
-				}
-				if i >= 2 {
-					break
-				}
+		if sea {
+			// Header: rule, seaLines scene rows, rule.
+			if !isRule(rows[0]) {
+				t.Fatalf("sea header missing its opening rule: %q", rows[0])
 			}
-			if top != 2 {
-				t.Fatalf("matrix header is not rule/bar/rule; second rule at row %d", top)
+			if close := seaLines + 1; close >= len(rows) || !isRule(rows[close]) {
+				t.Fatalf("sea header is not rule/scene/rule; no closing rule at row %d", seaLines+1)
+			} else {
+				top = close
 			}
 		}
 		bottom := -1
@@ -366,22 +364,22 @@ func TestMessageBlockGapsAreSymmetric(t *testing.T) {
 			}
 		}
 		if bottom < 0 {
-			t.Fatalf("matrix=%v: no rule below the chat", matrix)
+			t.Fatalf("sea=%v: no rule below the chat", sea)
 		}
 
 		// One blank row on each side of the messages, and the same on each side.
 		if !isBlankRow(rows[top+1]) {
-			t.Errorf("matrix=%v: no gap below the header: %q", matrix, rows[top+1])
+			t.Errorf("sea=%v: no gap below the header: %q", sea, rows[top+1])
 		}
 		if !isBlankRow(rows[bottom-1]) {
-			t.Errorf("matrix=%v: no gap above the rule: %q", matrix, rows[bottom-1])
+			t.Errorf("sea=%v: no gap above the rule: %q", sea, rows[bottom-1])
 		}
 
 		// A rule must never carry a scroll thumb — that would mean the minimap
 		// spilled out of the message area.
 		for i, r := range rows {
 			if isRule(r) && strings.Contains(r, railThumb) {
-				t.Errorf("matrix=%v: rule at row %d carries a scroll thumb", matrix, i)
+				t.Errorf("sea=%v: rule at row %d carries a scroll thumb", sea, i)
 			}
 		}
 	}
