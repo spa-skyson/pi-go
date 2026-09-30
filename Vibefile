@@ -1,6 +1,6 @@
 model  = claude-sonnet-4-6
 name   = pi-go
-module = github.com/dimetron/pi-go
+module = github.com/spa-skyson/pi-rate
 
 # ── build & test ──────────────────────────────
 

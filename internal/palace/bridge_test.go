@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/memory"
 )
 
 func TestBridge_ConvertAndStore(t *testing.T) {

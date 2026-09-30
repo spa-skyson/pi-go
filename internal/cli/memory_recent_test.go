@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/memory"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 func TestMemoryRecent_NoDB(t *testing.T) {
 	// When no DB exists, findMemoryDB returns an error.
 	// (Skip if global memory DB exists — fallback will find it instead of erroring.)
 	home, _ := os.UserHomeDir()
-	globalDB := filepath.Join(home, ".pi-go", "memory", "claude-mem.db")
+	globalDB := filepath.Join(home, ".pirate", "memory", "claude-mem.db")
 	if _, err := os.Stat(globalDB); err == nil {
 		t.Skip("global memory DB exists — fallback will be used instead of erroring")
 	}
@@ -28,7 +28,7 @@ func TestMemoryRecent_NoDB(t *testing.T) {
 func TestMemoryRecent_EmptyDB(t *testing.T) {
 	// Create a temp project dir and init a memory DB inside it.
 	dir := t.TempDir()
-	memDir := filepath.Join(dir, ".pi-go", "memory")
+	memDir := filepath.Join(dir, ".pirate", "memory")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestMemoryRecent_InvalidType(t *testing.T) {
 func TestMemoryRecent_WithObservations(t *testing.T) {
 	// Create a temp dir with a memory DB that has observations.
 	dir := t.TempDir()
-	memDir := filepath.Join(dir, ".pi-go", "memory")
+	memDir := filepath.Join(dir, ".pirate", "memory")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestMemoryRecent_WithObservations(t *testing.T) {
 func TestMemoryRecent_TypeFilter(t *testing.T) {
 	// Create a temp dir with a memory DB.
 	dir := t.TempDir()
-	memDir := filepath.Join(dir, ".pi-go", "memory")
+	memDir := filepath.Join(dir, ".pirate", "memory")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestRunMemoryRecent_CurrentDir(t *testing.T) {
 	testenv.SetHome(t, tmpDir)
 
 	// Create a memory DB in project-specific location.
-	memDir := filepath.Join(tmpDir, "proj", ".pi-go", "memory")
+	memDir := filepath.Join(tmpDir, "proj", ".pirate", "memory")
 	os.MkdirAll(memDir, 0755)
 	dbPath := filepath.Join(memDir, "claude-mem.db")
 	db, err := memory.OpenDB(dbPath)
@@ -231,7 +231,7 @@ func TestRunMemoryRecent_CurrentDir(t *testing.T) {
 
 func TestRunMemoryRecent_WithObservations(t *testing.T) {
 	dir := t.TempDir()
-	memDir := filepath.Join(dir, ".pi-go", "memory")
+	memDir := filepath.Join(dir, ".pirate", "memory")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +257,7 @@ func TestRunMemoryRecent_WithObservations(t *testing.T) {
 
 func TestRunMemoryRecent_AllObservationTypes(t *testing.T) {
 	dir := t.TempDir()
-	memDir := filepath.Join(dir, ".pi-go", "memory")
+	memDir := filepath.Join(dir, ".pirate", "memory")
 	os.MkdirAll(memDir, 0o755)
 	dbPath := filepath.Join(memDir, "claude-mem.db")
 	db, err := memory.OpenDB(dbPath)
@@ -299,7 +299,7 @@ func TestRunMemoryRecent_AllObservationTypes(t *testing.T) {
 
 func TestRunMemoryRecent_LimitWithTypeFilter(t *testing.T) {
 	dir := t.TempDir()
-	memDir := filepath.Join(dir, ".pi-go", "memory")
+	memDir := filepath.Join(dir, ".pirate", "memory")
 	os.MkdirAll(memDir, 0o755)
 	dbPath := filepath.Join(memDir, "claude-mem.db")
 	db, err := memory.OpenDB(dbPath)
@@ -333,7 +333,7 @@ func TestRunMemoryRecent_LimitWithTypeFilter(t *testing.T) {
 
 func TestRunMemoryRecent_LimitExceedsData(t *testing.T) {
 	dir := t.TempDir()
-	memDir := filepath.Join(dir, ".pi-go", "memory")
+	memDir := filepath.Join(dir, ".pirate", "memory")
 	os.MkdirAll(memDir, 0o755)
 	dbPath := filepath.Join(memDir, "claude-mem.db")
 	db, err := memory.OpenDB(dbPath)

@@ -19,10 +19,10 @@ import (
 	llmmodel "google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/auth"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/httplog"
-	"github.com/dimetron/pi-go/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/auth"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/httplog"
+	"github.com/spa-skyson/pi-rate/internal/provider"
 )
 
 // ANSI color codes for ping output.
@@ -49,9 +49,9 @@ The default test sends "prompt-prompt" and expects "prompt-prompt". If a prompt 
 it is sent instead and the full response is displayed with all trace-level data.
 
 Examples:
-  pi ping                     # prompt-prompt connectivity test
-  pi ping 2+2                 # custom prompt with full trace
-  pi ping --smol Explain Go   # test smol role with custom prompt`,
+  pirate ping                     # prompt-prompt connectivity test
+  pirate ping 2+2                 # custom prompt with full trace
+  pirate ping --smol Explain Go   # test smol role with custom prompt`,
 		Args: cobra.ArbitraryArgs,
 		RunE: runPing,
 	}

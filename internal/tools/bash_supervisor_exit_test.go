@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/procs"
+	"github.com/spa-skyson/pi-rate/internal/procs"
 )
 
 // unreapedProc is a bashProc that has been registered but whose reaping

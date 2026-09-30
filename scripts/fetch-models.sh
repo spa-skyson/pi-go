@@ -2,7 +2,7 @@
 # fetch-models: regenerate the embedded per-provider model catalogs under
 # internal/provider/modeldata/ from live provider APIs.
 #
-# Uses the CLI's `pi model list <provider> -o json` mode (Slice 5 of
+# Uses the CLI's `pirate model list <provider> -o json` mode (Slice 5 of
 # features/TOO/024-mistral-provider) as the fetch mechanism — no separate Go
 # fetch code. Providers without an API key are skipped with a note; the target
 # does not fail on a missing key.
@@ -12,9 +12,9 @@ cd "$(dirname "$0")/.."
 
 # Load dotenv files the same way the CLI's loadDotEnv does, so the per-provider
 # skip check below sees exactly the keys the binary will see. Order matters:
-# $HOME/.pi-go/.env first, then the nearest .pi-go/.env walking up from the
+# $HOME/.pirate/.env first, then the nearest .pirate/.env walking up from the
 # working directory, which wins. That second file is the one that matters in a
-# worktree - .pi-go/.env is gitignored and lives only in the primary checkout,
+# worktree - .pirate/.env is gitignored and lives only in the primary checkout,
 # so a worktree finds it by walking up rather than by having its own copy.
 #
 # Parsed rather than sourced: `.` would execute the file, and the CLI treats it
@@ -36,13 +36,13 @@ load_dotenv() {
   done < "$1"
 }
 
-# nearest_dotenv walks up from $1 looking for .pi-go/.env, mirroring the CLI's
+# nearest_dotenv walks up from $1 looking for .pirate/.env, mirroring the CLI's
 # findNearestDotEnv.
 nearest_dotenv() {
   local dir=$1 parent
   while :; do
-    if [ -f "$dir/.pi-go/.env" ]; then
-      printf '%s\n' "$dir/.pi-go/.env"
+    if [ -f "$dir/.pirate/.env" ]; then
+      printf '%s\n' "$dir/.pirate/.env"
       return 0
     fi
     parent=$(dirname "$dir")
@@ -51,7 +51,7 @@ nearest_dotenv() {
   done
 }
 
-load_dotenv "$HOME/.pi-go/.env"
+load_dotenv "$HOME/.pirate/.env"
 if project_env=$(nearest_dotenv "$PWD"); then
   load_dotenv "$project_env"
 fi
@@ -62,7 +62,7 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 PI_BIN="$WORK/pi-fetch-models"
 
-echo "Building pi..."
+echo "Building pirate..."
 go build -o "$PI_BIN" ./cmd/pi
 
 PROVIDERS="anthropic openai gemini mistral xai openrouter"

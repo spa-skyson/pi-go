@@ -11,8 +11,8 @@ import (
 	"google.golang.org/adk/v2/agent/llmagent"
 	adktool "google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/memory"
 )
 
 // namedTool is the minimum an after-tool callback needs from a tool: its name.

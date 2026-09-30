@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dimetron/pi-go/internal/mermaid/renderer"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/renderer"
 )
 
 // journeyTask is a single step in a user journey, with a 1-5 satisfaction

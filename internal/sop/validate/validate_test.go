@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/sop/specdoc"
+	"github.com/spa-skyson/pi-rate/internal/sop/specdoc"
 )
 
 func TestParseRule(t *testing.T) {

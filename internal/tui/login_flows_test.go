@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/auth"
-	"github.com/dimetron/pi-go/internal/logger"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/auth"
+	"github.com/spa-skyson/pi-rate/internal/logger"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // newMockCodexDeviceServer stands in for auth.openai.com's device endpoints.

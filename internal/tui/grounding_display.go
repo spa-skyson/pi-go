@@ -3,8 +3,8 @@ package tui
 import (
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/logger"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/logger"
 )
 
 // groundingToolName is the label the chat renders for a Gemini grounded search.

@@ -9,7 +9,7 @@ import (
 	adkagent "google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/permission"
+	"github.com/spa-skyson/pi-rate/internal/permission"
 )
 
 // NewPermissionCallback builds a before-tool callback that gates every tool

@@ -53,5 +53,5 @@ func Notifyf(format string, args ...any) {
 		fn(msg)
 		return
 	}
-	fmt.Fprintf(os.Stderr, "pi-go: %s\n", msg)
+	fmt.Fprintf(os.Stderr, "pirate: %s\n", msg)
 }

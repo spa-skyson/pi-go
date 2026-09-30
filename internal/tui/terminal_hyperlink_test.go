@@ -8,7 +8,7 @@ import (
 )
 
 func TestHyperlinkURLs(t *testing.T) {
-	const codecov = "https://app.codecov.io/gh/dimetron/pi-go/pull/96"
+	const codecov = "https://app.codecov.io/gh/spa-skyson/pi-rate/pull/96"
 	got := hyperlinkURLs("codecov/project: " + codecov + ".")
 	want := "codecov/project: " + osc8Open + codecov + "\x1b\\" + codecov + osc8Close + "."
 	if got != want {
@@ -29,7 +29,7 @@ func TestHyperlinkURLsLeavesInvalidAndNonHTTPURLsAlone(t *testing.T) {
 func TestRenderMarkdownEmitsTerminalHyperlink(t *testing.T) {
 	c := NewChatModel(nil)
 	c.UpdateRenderer(80)
-	const link = "https://app.codecov.io/gh/dimetron/pi-go/pull/96"
+	const link = "https://app.codecov.io/gh/spa-skyson/pi-rate/pull/96"
 	got := c.RenderMarkdown("codecov/project: " + link)
 	if !strings.Contains(got, osc8Open+link+"\x1b\\") || !strings.Contains(got, osc8Close) {
 		t.Fatalf("RenderMarkdown() did not hyperlink URL: %q", got)

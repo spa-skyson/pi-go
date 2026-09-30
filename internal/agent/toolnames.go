@@ -11,7 +11,7 @@ import (
 	"google.golang.org/adk/v2/tool/toolutils"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/notice"
+	"github.com/spa-skyson/pi-rate/internal/notice"
 )
 
 // maxToolNameLen is the longest function name the model APIs accept. Gemini,

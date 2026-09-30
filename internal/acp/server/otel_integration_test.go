@@ -19,8 +19,8 @@ import (
 	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/dimetron/pi-go/internal/acp/server"
-	"github.com/dimetron/pi-go/internal/otel"
+	"github.com/spa-skyson/pi-rate/internal/acp/server"
+	"github.com/spa-skyson/pi-rate/internal/otel"
 )
 
 // ---------------------------------------------------------------------------
@@ -191,7 +191,7 @@ func withEnvDot(t *testing.T, vals map[string]string) (cleanup func()) {
 	if err != nil {
 		t.Skip("no home dir")
 	}
-	path := filepath.Join(home, ".pi-go", ".env")
+	path := filepath.Join(home, ".pirate", ".env")
 
 	var orig string
 	if data, err := os.ReadFile(path); err == nil {
@@ -237,7 +237,7 @@ func TestACPWithOTELAllSpansShareTraceID(t *testing.T) {
 	collector := newOTLPCollector(t)
 	defer collector.srv.Close()
 
-	// 2. Override ~/.pi-go/.env so otel.Tracer() exports to our collector.
+	// 2. Override ~/.pirate/.env so otel.Tracer() exports to our collector.
 	//    OTEL_BSP_SCHEDULE_DELAY shrinks the default 5s batch interval so the
 	//    in-process collector sees spans within the test's sleep window without
 	//    needing to call otel.Shutdown (which would also kill the global
@@ -250,14 +250,14 @@ func TestACPWithOTELAllSpansShareTraceID(t *testing.T) {
 	})
 	defer cleanupEnv()
 	// The OTel SDK reads OTEL_BSP_* from process env, not from the custom
-	// ~/.pi-go/.env file. Mirror the delay there so the batch processor
+	// ~/.pirate/.env file. Mirror the delay there so the batch processor
 	// flushes spans within the test's sleep window.
 	t.Setenv("OTEL_BSP_SCHEDULE_DELAY", "100")
 
 	// otel.Tracer() lazy-init on first call. We check IsEnabled to confirm
 	// the exporter is active; if false the .env wasn't picked up.
 	if !otel.IsEnabled() {
-		t.Skip("OTEL not enabled — set OTEL_TRACES_EXPORTER=otlp in ~/.pi-go/.env")
+		t.Skip("OTEL not enabled — set OTEL_TRACES_EXPORTER=otlp in ~/.pirate/.env")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

@@ -9,7 +9,7 @@ import (
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/memory"
 )
 
 // MemSearchInput defines parameters for the mem-search tool.

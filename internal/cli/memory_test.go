@@ -26,8 +26,8 @@ func TestMemoryCmd_SubcommandsRegistered(t *testing.T) {
 func TestMemoryClear_RemovesDatabases(t *testing.T) {
 	dir := t.TempDir()
 	paths := []string{
-		filepath.Join(dir, ".pi-go", "memory", "claude-mem.db"),
-		filepath.Join(dir, ".pi-go", "palace.db"),
+		filepath.Join(dir, ".pirate", "memory", "claude-mem.db"),
+		filepath.Join(dir, ".pirate", "palace.db"),
 	}
 	for _, path := range paths {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -50,7 +50,7 @@ func TestMemoryClear_RemovesDatabases(t *testing.T) {
 
 func TestMemoryClear_Canceled(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, ".pi-go", "palace.db")
+	path := filepath.Join(dir, ".pirate", "palace.db")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestMemoryInit_CreatesDB(t *testing.T) {
 	}
 
 	// Verify database was created.
-	dbPath := filepath.Join(dir, ".pi-go", "palace.db")
+	dbPath := filepath.Join(dir, ".pirate", "palace.db")
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		t.Error("palace.db was not created")
 	}
@@ -174,7 +174,7 @@ func TestMemoryStatus_EmptyPalace(t *testing.T) {
 	}
 
 	// Now check status using the created DB.
-	err = runMemoryStatus(filepath.Join(dir, ".pi-go", "palace.db"))
+	err = runMemoryStatus(filepath.Join(dir, ".pirate", "palace.db"))
 	if err != nil {
 		t.Fatalf("status error: %v", err)
 	}

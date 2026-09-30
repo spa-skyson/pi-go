@@ -8,7 +8,7 @@ import (
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
 
-	acpserver "github.com/dimetron/pi-go/internal/acp/server"
+	acpserver "github.com/spa-skyson/pi-rate/internal/acp/server"
 )
 
 // silentHandler models the shape that broke the kagent chat: a turn that

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# E2E test: run pi with Ollama to explore codebase and generate PI.md
+# E2E test: run pirate with Ollama to explore codebase and generate PI.md
 # Usage: ./scripts/test-ollama-e2e.sh [model]
 # Default model: glm-5.2:cloud
 
@@ -55,10 +55,10 @@ pass "jq is available"
 
 # --- Build ---
 
-info "Building pi binary..."
+info "Building pirate binary..."
 cd "$PROJECT_DIR"
 go build -o "$PI_BIN" ./cmd/pi
-pass "pi binary built"
+pass "pirate binary built"
 
 # --- Clean up previous PI.md ---
 
@@ -66,7 +66,7 @@ rm -f "$PI_MD"
 
 # --- Run the agent ---
 
-info "Running pi --model ${MODEL} --mode print (timeout ${TIMEOUT}s)..."
+info "Running pirate --model ${MODEL} --mode print (timeout ${TIMEOUT}s)..."
 echo ""
 
 PROMPT='Explore this Go project codebase. Use the tree tool to see the directory structure, then read key files to understand the architecture. Finally, create a file called PI.md in the project root with a project overview that includes:
@@ -93,7 +93,7 @@ echo ""
 info "Agent finished in ${DURATION}s (exit code: ${PI_EXIT})"
 
 if [ "$PI_EXIT" -ne 0 ] && [ "$PI_EXIT" -ne 124 ]; then
-    error "pi exited with code ${PI_EXIT}"
+    error "pirate exited with code ${PI_EXIT}"
     if [ -f "${PROJECT_DIR}/.test-stderr.log" ]; then
         echo "  stderr:"
         cat "${PROJECT_DIR}/.test-stderr.log" | head -20
@@ -101,7 +101,7 @@ if [ "$PI_EXIT" -ne 0 ] && [ "$PI_EXIT" -ne 124 ]; then
 fi
 
 if [ "$PI_EXIT" -eq 124 ]; then
-    error "pi timed out after ${TIMEOUT}s"
+    error "pirate timed out after ${TIMEOUT}s"
 fi
 
 # --- Validate PI.md ---
@@ -131,7 +131,7 @@ fi
 info "Validating session logs..."
 
 # Find the latest log file
-LOG_DIR="$HOME/.pi-go/log/$(date +%Y-%m-%d)"
+LOG_DIR="$HOME/.pirate/log/$(date +%Y-%m-%d)"
 if [ ! -d "$LOG_DIR" ]; then
     error "No log directory found at ${LOG_DIR}"
 else

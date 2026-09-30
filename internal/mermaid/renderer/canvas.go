@@ -3,7 +3,7 @@ package renderer
 import (
 	"strings"
 
-	"github.com/dimetron/pi-go/internal/mermaid/textwidth"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/textwidth"
 )
 
 // boxChars is the set of all box-drawing characters that participate in

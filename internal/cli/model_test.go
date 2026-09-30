@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/provider"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // runModelList executes the cobra "model list" command with the given args,
@@ -30,7 +30,7 @@ func runModelListCapture(t *testing.T, args ...string) (string, error) {
 
 // isolateRunModelListEnv clears machine-wide credentials that could leak into
 // runModelList via loadDotEnv or config lookups, then chdirs into a clean
-// temp dir so findNearestDotEnv can't find any .pi-go/.env file.
+// temp dir so findNearestDotEnv can't find any .pirate/.env file.
 // It registers a cleanup to restore the previous working directory.
 //
 // Callers that need specific credentials should set them AFTER calling this
@@ -47,7 +47,7 @@ func isolateRunModelListEnv(t *testing.T) {
 	// The no-args path queries any provider with either one set, so a var left
 	// out sends a live request to that vendor from a unit test — which then
 	// fails, or passes, depending on whose machine it runs on. loadDotEnv uses
-	// os.Setenv, so a value picked up from .pi-go/.env by an earlier
+	// os.Setenv, so a value picked up from .pirate/.env by an earlier
 	// non-isolated test outlives that test and reaches this one.
 	for _, k := range []string{
 		"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",

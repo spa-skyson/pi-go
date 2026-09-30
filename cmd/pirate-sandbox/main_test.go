@@ -88,15 +88,15 @@ func TestIsNoiseLogLine(t *testing.T) {
 	}
 }
 
-// exitCodeFor forwards the child's own exit code, so `pi-sandbox` is
+// exitCodeFor forwards the child's own exit code, so `pirate-sandbox` is
 // transparent to callers and CI.
 func TestExitCodeFor(t *testing.T) {
 	// Needs a POSIX shell to produce a child with a chosen exit code. Git for
 	// Windows ships one, but its usr/bin is not on the default runner PATH, and
-	// pi-sandbox is a macOS launcher (sandbox-exec + log stream) with no Windows
+	// pirate-sandbox is a macOS launcher (sandbox-exec + log stream) with no Windows
 	// behavior to cover here.
 	if runtime.GOOS == "windows" {
-		t.Skip("needs a POSIX shell; pi-sandbox is macOS-only")
+		t.Skip("needs a POSIX shell; pirate-sandbox is macOS-only")
 	}
 
 	var stderr bytes.Buffer
@@ -173,10 +173,10 @@ func TestRun(t *testing.T) {
 	// Every subtest stands in for sandbox-exec and `log stream` with bare
 	// `sh`/`true`/`false`. Those live in Git for Windows' usr/bin, which is not
 	// on the default windows-latest PATH, so they would fail to exec rather than
-	// exercise anything. pi-sandbox is macOS-only; there is no Windows path here
+	// exercise anything. pirate-sandbox is macOS-only; there is no Windows path here
 	// that these tests would otherwise cover.
 	if runtime.GOOS == "windows" {
-		t.Skip("stub commands are POSIX utilities; pi-sandbox is macOS-only")
+		t.Skip("stub commands are POSIX utilities; pirate-sandbox is macOS-only")
 	}
 
 	newCfg := func(t *testing.T, sandboxCmd string) config {
@@ -207,7 +207,7 @@ func TestRun(t *testing.T) {
 		}
 	})
 
-	t.Run("missing pi binary fails", func(t *testing.T) {
+	t.Run("missing pirate binary fails", func(t *testing.T) {
 		cfg := newCfg(t, "true")
 		cfg.piName = "pi-does-not-exist-xyz"
 		var stderr safeBuffer
@@ -233,10 +233,10 @@ func TestRun(t *testing.T) {
 	t.Run("denials are written to the log file", func(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			// The stub child is a #!/bin/sh script and the stub log stream is
-			// printf(1); Windows honors neither. pi-sandbox itself is a macOS
+			// printf(1); Windows honors neither. pirate-sandbox itself is a macOS
 			// launcher (sandbox-exec plus `log stream`), so there is no Windows
 			// behavior being hidden here.
-			t.Skip("stub child is a shell script; pi-sandbox is macOS-only")
+			t.Skip("stub child is a shell script; pirate-sandbox is macOS-only")
 		}
 		cfg := newCfg(t, "true")
 		// Stub log stream: one header line (dropped) and one denial (kept).

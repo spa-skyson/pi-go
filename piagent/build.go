@@ -10,15 +10,15 @@ import (
 
 	adktool "google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/extension"
-	"github.com/dimetron/pi-go/internal/gitroot"
-	"github.com/dimetron/pi-go/internal/lsp"
-	"github.com/dimetron/pi-go/internal/memory"
-	"github.com/dimetron/pi-go/internal/palace"
-	"github.com/dimetron/pi-go/internal/subagent"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/gitroot"
+	"github.com/spa-skyson/pi-rate/internal/lsp"
+	"github.com/spa-skyson/pi-rate/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 )
 
 // gitCmdTimeout bounds the repository-root lookup so a wedged git never
@@ -77,7 +77,7 @@ func resolveSessionDir(dir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolving home directory: %w", err)
 	}
-	return filepath.Join(home, ".pi-go", "sessions"), nil
+	return filepath.Join(home, ".pirate", "sessions"), nil
 }
 
 // detectGitRoot returns the repository root containing dir, or "" when dir is
@@ -89,7 +89,7 @@ func detectGitRoot(ctx context.Context, dir string) string {
 }
 
 // buildSandbox roots the file tools at workDir and grants the extra
-// directories, always including ~/.pi-go so config, skills and memory remain
+// directories, always including ~/.pirate so config, skills and memory remain
 // reachable.
 func buildSandbox(workDir string, extra []string) (*tools.Sandbox, error) {
 	sb, err := tools.NewSandbox(workDir)
@@ -98,7 +98,7 @@ func buildSandbox(workDir string, extra []string) (*tools.Sandbox, error) {
 	}
 	dirs := extra
 	if home, hErr := os.UserHomeDir(); hErr == nil {
-		dirs = append([]string{filepath.Join(home, ".pi-go")}, dirs...)
+		dirs = append([]string{filepath.Join(home, ".pirate")}, dirs...)
 	}
 	for _, dir := range dirs {
 		if err := sb.AddExtraDir(dir); err != nil {
@@ -111,7 +111,7 @@ func buildSandbox(workDir string, extra []string) (*tools.Sandbox, error) {
 
 // buildSubagents discovers the agent definitions visible from workDir and
 // returns an orchestrator for them. Discovery failures degrade to the bundled
-// set rather than failing construction: a malformed .pi-go/agents file should
+// set rather than failing construction: a malformed .pirate/agents file should
 // not stop the agent from running.
 func buildSubagents(ctx context.Context, cfg *config.Config, workDir string) *subagent.Orchestrator {
 	discovery, err := subagent.DiscoverAgents(workDir, subagent.ScopeBoth)
@@ -184,7 +184,7 @@ func memoryDBPath(cfg config.Config) string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".pi-go", "memory", "claude-mem.db")
+	return filepath.Join(home, ".pirate", "memory", "claude-mem.db")
 }
 
 // maxPendingObservations resolves the worker's queue depth from config.
@@ -295,10 +295,10 @@ func palacePaths(cfg config.Config) (dbPath, modelPath string) {
 		return dbPath, modelPath
 	}
 	if dbPath == "" {
-		dbPath = filepath.Join(home, ".pi-go", "palace.db")
+		dbPath = filepath.Join(home, ".pirate", "palace.db")
 	}
 	if modelPath == "" {
-		modelPath = filepath.Join(home, ".pi-go", "models", "KnightsAnalytics_all-MiniLM-L6-v2")
+		modelPath = filepath.Join(home, ".pirate", "models", "KnightsAnalytics_all-MiniLM-L6-v2")
 	}
 	return dbPath, modelPath
 }

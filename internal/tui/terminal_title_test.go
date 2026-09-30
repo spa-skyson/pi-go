@@ -9,7 +9,7 @@ import (
 
 	"google.golang.org/adk/v2/session"
 
-	"github.com/dimetron/pi-go/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/agent"
 )
 
 // recordingSessionService is a session.Service that records SetSessionTitle
@@ -126,14 +126,14 @@ func TestFormatTerminalTitle(t *testing.T) {
 	cases := []struct {
 		in, want string
 	}{
-		{"", "π -"},
-		{"fix bug", "π - fix bug"},
-		{"  spaced  ", "π - spaced"},
+		{"", "π Pi-rate -"},
+		{"fix bug", "π Pi-rate - fix bug"},
+		{"  spaced  ", "π Pi-rate - spaced"},
 		// Control characters are replaced with spaces — this keeps the
 		// OSC 0 payload printable and safe.
-		{"with\nnewline", "π - with newline"},
-		{"with\x1bESC", "π - with ESC"},
-		{"with\x07BEL", "π - with BEL"},
+		{"with\nnewline", "π Pi-rate - with newline"},
+		{"with\x1bESC", "π Pi-rate - with ESC"},
+		{"with\x07BEL", "π Pi-rate - with BEL"},
 	}
 	for _, c := range cases {
 		got := formatTerminalTitle(c.in)
@@ -154,31 +154,31 @@ func TestFormatTerminalTitleWithCWD(t *testing.T) {
 		cwd   string
 		want  string
 	}{
-		// Empty cwd keeps the legacy "π - <title>" shape so callers that
+		// Empty cwd keeps the legacy "π Pi-rate - <title>" shape so callers that
 		// never set WorkDir (the unit tests for View()) see the old output.
-		{"empty cwd, empty title", "", "", "π -"},
-		{"empty cwd, short title", "/clear", "", "π - /clear"},
-		{"empty cwd, long title is preserved by old shape", "fix the linter issue in agent.go", "", "π - fix the linter issue in agent.go"},
+		{"empty cwd, empty title", "", "", "π Pi-rate -"},
+		{"empty cwd, short title", "/clear", "", "π Pi-rate - /clear"},
+		{"empty cwd, long title is preserved by old shape", "fix the linter issue in agent.go", "", "π Pi-rate - fix the linter issue in agent.go"},
 
 		// Set cwd but no command — just the CWD anchor.
-		{"cwd only", "", "/home/dev/pi-go", "π - pi-go"},
+		{"cwd only", "", "/home/dev/pi-go", "π Pi-rate - pi-go"},
 
 		// Cwd + command is the new context-aware shape.
-		{"cwd + command", "/clear", "/home/dev/pi-go", "π - pi-go | /clear"},
-		{"cwd + slash with args", "/model gpt-5.4", "/home/dev/pi-go", "π - pi-go | /model gpt-5.4"},
-		{"cwd + prompt-derived", "fix the linter issue in agent.go", "/home/dev/pi-go", "π - pi-go | fix the linter issue in agent.go"},
+		{"cwd + command", "/clear", "/home/dev/pi-go", "π Pi-rate - pi-go | /clear"},
+		{"cwd + slash with args", "/model gpt-5.4", "/home/dev/pi-go", "π Pi-rate - pi-go | /model gpt-5.4"},
+		{"cwd + prompt-derived", "fix the linter issue in agent.go", "/home/dev/pi-go", "π Pi-rate - pi-go | fix the linter issue in agent.go"},
 
 		// Trimming of whitespace must not break the CWD basename extraction.
-		{"cwd padded", "/clear", "  /home/dev/pi-go  ", "π - pi-go | /clear"},
+		{"cwd padded", "/clear", "  /home/dev/pi-go  ", "π Pi-rate - pi-go | /clear"},
 
 		// Control characters are scrubbed the same way as the old path.
-		{"control in command is replaced", "with\nnewline", "/home/dev/pi-go", "π - pi-go | with newline"},
+		{"control in command is replaced", "with\nnewline", "/home/dev/pi-go", "π Pi-rate - pi-go | with newline"},
 
 		// The command is "stripped" — capped at terminalTitleCmdMax runes
 		// so a 200-char prompt does not eat the entire tab width on top
 		// of the CWD prefix.
 		{"long command is stripped", strings.Repeat("x", terminalTitleCmdMax+20), "/home/dev/pi-go",
-			"π - pi-go | " + strings.Repeat("x", terminalTitleCmdMax-1) + "…"},
+			"π Pi-rate - pi-go | " + strings.Repeat("x", terminalTitleCmdMax-1) + "…"},
 
 		// The CWD basename must go through the same control-character scrub
 		// as the command, otherwise a directory whose name contains ESC or
@@ -186,9 +186,9 @@ func TestFormatTerminalTitleWithCWD(t *testing.T) {
 		// scrub, an all-control folder resolves to "" and the title falls
 		// back to the no-context shape.
 		{"folder with control char is scrubbed", "/clear", "/tmp/evil\x1b]0;PWNED\x07",
-			"π - evil ]0;PWNED | /clear"},
+			"π Pi-rate - evil ]0;PWNED | /clear"},
 		{"folder that is all controls falls back", "/clear", "/tmp/\x1b\x07",
-			"π - /clear"},
+			"π Pi-rate - /clear"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -202,18 +202,18 @@ func TestFormatTerminalTitleWithCWD(t *testing.T) {
 
 // TestView_CarriesWindowTitle_WithCWD exercises the new View() wiring: when
 // the model has a WorkDir, the OSC 0 payload carries the CWD anchor alongside
-// the prompt-derived title so the tab bar shows "π - <folder> | <title>".
+// the prompt-derived title so the tab bar shows "π Pi-rate - <folder> | <title>".
 func TestView_CarriesWindowTitle_WithCWD(t *testing.T) {
 	m, _ := newTitleTestModel(t)
 	m.cfg.WorkDir = "/home/dev/pi-go"
 
-	if got := m.View().WindowTitle; got != "π - pi-go" {
-		t.Errorf("WindowTitle before any prompt = %q, want %q", got, "π - pi-go")
+	if got := m.View().WindowTitle; got != "π Pi-rate - pi-go" {
+		t.Errorf("WindowTitle before any prompt = %q, want %q", got, "π Pi-rate - pi-go")
 	}
 
 	m.applySessionTitle("fix the top-level render")
-	if got := m.View().WindowTitle; got != "π - pi-go | fix the top-level render" {
-		t.Errorf("WindowTitle = %q, want %q", got, "π - pi-go | fix the top-level render")
+	if got := m.View().WindowTitle; got != "π Pi-rate - pi-go | fix the top-level render" {
+		t.Errorf("WindowTitle = %q, want %q", got, "π Pi-rate - pi-go | fix the top-level render")
 	}
 }
 
@@ -271,13 +271,13 @@ func TestApplySessionTitle_MultilinePrompt_TruncatesToFirstLine(t *testing.T) {
 func TestView_CarriesWindowTitle(t *testing.T) {
 	m, _ := newTitleTestModel(t)
 
-	if got := m.View().WindowTitle; got != "π -" {
-		t.Errorf("WindowTitle before any prompt = %q, want %q", got, "π -")
+	if got := m.View().WindowTitle; got != "π Pi-rate -" {
+		t.Errorf("WindowTitle before any prompt = %q, want %q", got, "π Pi-rate -")
 	}
 
 	m.applySessionTitle("fix the top-level render")
-	if got := m.View().WindowTitle; got != "π - fix the top-level render" {
-		t.Errorf("WindowTitle = %q, want %q", got, "π - fix the top-level render")
+	if got := m.View().WindowTitle; got != "π Pi-rate - fix the top-level render" {
+		t.Errorf("WindowTitle = %q, want %q", got, "π Pi-rate - fix the top-level render")
 	}
 }
 
@@ -295,7 +295,7 @@ func TestView_FrameHasNoOSCTitleSequence(t *testing.T) {
 
 // When the deferred-init goroutine hands the TUI a freshly created session,
 // the default title (git repo / CWD basename) the agent applied should seed
-// m.sessionTitle — so the very first View() already emits "π - <default>"
+// m.sessionTitle — so the very first View() already emits "π Pi-rate - <default>"
 // as the OSC 0 payload, before any user prompt arrives.
 func TestHandleInitEvent_SeedsDefaultTitle(t *testing.T) {
 	// width must be set: View() takes a fast path before the first
@@ -327,9 +327,9 @@ func TestHandleInitEvent_SeedsDefaultTitle(t *testing.T) {
 	}
 	// View() must carry the title so Bubble Tea's renderer emits the OSC 0
 	// envelope in-band with the next frame. formatTerminalTitle is what
-	// applies the "π - " prefix and strips control characters.
-	if got := mm.View().WindowTitle; got != "π - piname" {
-		t.Errorf("WindowTitle after init = %q, want %q", got, "π - piname")
+	// applies the "π Pi-rate - " prefix and strips control characters.
+	if got := mm.View().WindowTitle; got != "π Pi-rate - piname" {
+		t.Errorf("WindowTitle after init = %q, want %q", got, "π Pi-rate - piname")
 	}
 }
 
@@ -363,7 +363,7 @@ func TestHandleInitEvent_DoesNotOverwriteExistingTitle(t *testing.T) {
 }
 
 // /clear must reset the terminal window/tab title to the app default so the
-// next View() emits the OSC 0 sequence with the default payload ("π -")
+// next View() emits the OSC 0 sequence with the default payload ("π Pi-rate -")
 // instead of the title derived from the previous turn's prompt.
 func TestHandleSlashCommand_Clear_ResetsWindowTitleToDefault(t *testing.T) {
 	m, svc := newTitleTestModel(t)
@@ -373,7 +373,7 @@ func TestHandleSlashCommand_Clear_ResetsWindowTitleToDefault(t *testing.T) {
 	if got := m.sessionTitle; got != "fix the linter issue in agent.go" {
 		t.Fatalf("setup: sessionTitle = %q, want prompt-derived value", got)
 	}
-	if got := m.View().WindowTitle; got != "π - fix the linter issue in agent.go" {
+	if got := m.View().WindowTitle; got != "π Pi-rate - fix the linter issue in agent.go" {
 		t.Fatalf("setup: WindowTitle = %q, want prompt-derived title", got)
 	}
 
@@ -385,8 +385,8 @@ func TestHandleSlashCommand_Clear_ResetsWindowTitleToDefault(t *testing.T) {
 	if got := mm.sessionTitle; got != "" {
 		t.Errorf("after /clear: sessionTitle = %q, want empty (default)", got)
 	}
-	if got := mm.View().WindowTitle; got != "π -" {
-		t.Errorf("after /clear: WindowTitle = %q, want %q (default)", got, "π -")
+	if got := mm.View().WindowTitle; got != "π Pi-rate -" {
+		t.Errorf("after /clear: WindowTitle = %q, want %q (default)", got, "π Pi-rate -")
 	}
 	if got := svc.lastTitle(); got != "" {
 		t.Errorf("after /clear: SetSessionTitle recorded %q, want empty (default)", got)
@@ -417,8 +417,8 @@ func TestHandleSlashCommand_UpdatesWindowTitleToCommand(t *testing.T) {
 			if got := mm.sessionTitle; got != tc.input {
 				t.Errorf("sessionTitle = %q, want %q", got, tc.input)
 			}
-			if got := mm.View().WindowTitle; got != "π - "+tc.input {
-				t.Errorf("WindowTitle = %q, want %q", got, "π - "+tc.input)
+			if got := mm.View().WindowTitle; got != "π Pi-rate - "+tc.input {
+				t.Errorf("WindowTitle = %q, want %q", got, "π Pi-rate - "+tc.input)
 			}
 			if got := svc.lastTitle(); got != tc.input {
 				t.Errorf("SetSessionTitle recorded %q, want %q", got, tc.input)
@@ -450,16 +450,17 @@ func TestHandleSlashCommand_ExitAndQuit_DoNotChangeTitle(t *testing.T) {
 }
 
 // While a turn runs, the title's prefix symbol rotates so a backgrounded tab
-// shows the session is still working. Idle keeps the static "π -".
+// shows the session is still working. Idle keeps the static "π Pi-rate -".
 func TestTerminalTitlePrefix(t *testing.T) {
-	if got := terminalTitlePrefix(false, 2); got != "π -" {
-		t.Errorf("idle prefix = %q, want %q", got, "π -")
+	if got := terminalTitlePrefix(false, 2); got != "π Pi-rate -" {
+		t.Errorf("idle prefix = %q, want %q", got, "π Pi-rate -")
 	}
 	seen := map[string]bool{}
 	for i := range terminalTitleWorkingSymbols {
 		got := terminalTitlePrefix(true, i)
-		if len([]rune(got)) != 3 || !strings.HasPrefix(got, "π ") {
-			t.Errorf("running prefix at spin %d = %q, want %q + one symbol", i, got, "π ")
+		want := "π Pi-rate "
+		if len([]rune(got)) != len([]rune(want))+1 || !strings.HasPrefix(got, want) {
+			t.Errorf("running prefix at spin %d = %q, want %q + one symbol", i, got, want)
 		}
 		seen[got] = true
 	}
@@ -515,8 +516,8 @@ func TestView_WindowTitle_AnimatesWhileRunning(t *testing.T) {
 	// Turn over: the prefix goes back to being static, whatever phase the
 	// animation stopped on.
 	m.running = false
-	if got := m.View().WindowTitle; got != "π - fix the top-level render" {
-		t.Errorf("idle WindowTitle = %q, want %q", got, "π - fix the top-level render")
+	if got := m.View().WindowTitle; got != "π Pi-rate - fix the top-level render" {
+		t.Errorf("idle WindowTitle = %q, want %q", got, "π Pi-rate - fix the top-level render")
 	}
 }
 

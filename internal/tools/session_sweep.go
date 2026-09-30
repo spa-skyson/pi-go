@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spa-skyson/pi-rate/internal/config"
+
 	_ "modernc.org/sqlite" // Pure Go SQLite driver, for the pipeline-health probes.
 )
 
@@ -290,13 +292,12 @@ func renderSweepSpend(b *strings.Builder, totals *sweepTotals, sessions int) {
 // thousands of sessions is broken in the way that looks healthiest.
 func renderPipelineHealth(b *strings.Builder, sessions int, since time.Time) {
 	b.WriteString("\n## Pipeline health\n\n")
-	home, err := os.UserHomeDir()
-	if err != nil {
+	if _, err := os.UserHomeDir(); err != nil {
 		b.WriteString("- home directory unavailable; skipped\n")
 		return
 	}
 
-	memPath := filepath.Join(home, ".pi-go", "memory", "claude-mem.db")
+	memPath := filepath.Join(config.PirateHome(), "memory", "claude-mem.db")
 	if _, statErr := os.Stat(memPath); statErr != nil {
 		b.WriteString("- **observations**: no database yet\n")
 	} else if recent, total, err := countObservations(memPath, since); err != nil {
@@ -318,8 +319,8 @@ func renderPipelineHealth(b *strings.Builder, sessions int, since time.Time) {
 	}
 
 	for _, p := range []struct{ label, path string }{
-		{"palace (home)", filepath.Join(home, ".pi-go", "palace.db")},
-		{"palace (project)", filepath.Join(".pi-go", "palace.db")},
+		{"palace (home)", filepath.Join(config.PirateHome(), "palace.db")},
+		{"palace (project)", filepath.Join(config.ProjectDirName, "palace.db")},
 	} {
 		info, statErr := os.Stat(p.path)
 		if statErr != nil {

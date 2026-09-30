@@ -9,9 +9,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/dimetron/pi-go/internal/mermaid/diagram"
-	"github.com/dimetron/pi-go/internal/mermaid/graph"
-	"github.com/dimetron/pi-go/internal/mermaid/renderer"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/diagram"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/graph"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/renderer"
 )
 
 // themeSample is a diagram exercising enough shapes and edges that a theme has

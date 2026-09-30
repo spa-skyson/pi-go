@@ -6,20 +6,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
-// loadFromGlobalConfig writes configJSON as the global ~/.pi-go/config.json
+// loadFromGlobalConfig writes configJSON as the global ~/.pirate/config.json
 // and loads it from a project-free directory, so the merge sees exactly this
-// file and nothing from a .pi-go directory above the checkout.
+// file and nothing from a .pirate directory above the checkout.
 func loadFromGlobalConfig(t *testing.T, configJSON string) (Config, error) {
 	t.Helper()
 	home := t.TempDir()
 	testenv.SetHome(t, home)
-	if err := os.MkdirAll(filepath.Join(home, ".pi-go"), 0o700); err != nil {
-		t.Fatalf("mkdir ~/.pi-go: %v", err)
+	if err := os.MkdirAll(filepath.Join(home, ".pirate"), 0o700); err != nil {
+		t.Fatalf("mkdir ~/.pirate: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(home, ".pi-go", "config.json"), []byte(configJSON), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(home, ".pirate", "config.json"), []byte(configJSON), 0o600); err != nil {
 		t.Fatalf("write config.json: %v", err)
 	}
 	return LoadFrom(t.TempDir())

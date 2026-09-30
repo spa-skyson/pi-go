@@ -14,8 +14,8 @@ import (
 	adksession "google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
 
-	acpserver "github.com/dimetron/pi-go/internal/acp/server"
-	acpadapter "github.com/dimetron/pi-go/internal/acp/server/adapter"
+	acpserver "github.com/spa-skyson/pi-rate/internal/acp/server"
+	acpadapter "github.com/spa-skyson/pi-rate/internal/acp/server/adapter"
 )
 
 // startTestServer runs Serve on an ephemeral port with the echo handler and

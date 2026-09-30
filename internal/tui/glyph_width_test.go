@@ -37,10 +37,10 @@ var ambiguousChrome = map[rune]string{
 	'╯': "popup border",
 	'├': "popup border",
 	'┤': "popup border",
-	'█': "progress bar fill",
+	'█': "progress bar fill; the pirate's eye patch",
 	'░': "progress bar track",
 	'▌': "block marker",
-	'π': "the mascot's nose — the product's name, kept deliberately",
+	'π': "the pirate's hat insignia — the product's name, kept deliberately",
 }
 
 // widthSafe reports whether r is guaranteed to occupy exactly one cell in any

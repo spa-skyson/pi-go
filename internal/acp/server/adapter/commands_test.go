@@ -3,8 +3,8 @@ package adapter
 import (
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/extension"
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 func TestBuildAvailableCommands_MetaOnlyWhenEmpty(t *testing.T) {

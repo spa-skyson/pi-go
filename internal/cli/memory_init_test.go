@@ -87,8 +87,8 @@ func TestRunMemoryInit_WithWing(t *testing.T) {
 
 func TestRunMemoryInit_ExistingYAML(t *testing.T) {
 	dir := t.TempDir()
-	// Create .pi-go dir first.
-	os.MkdirAll(filepath.Join(dir, ".pi-go"), 0755)
+	// Create .pirate dir first.
+	os.MkdirAll(filepath.Join(dir, ".pirate"), 0755)
 	// Create existing mempalace.yaml.
 	yamlPath := filepath.Join(dir, "mempalace.yaml")
 	os.WriteFile(yamlPath, []byte("existing"), 0644)
@@ -200,7 +200,7 @@ func TestScanRoomCandidates_EmptyDir(t *testing.T) {
 
 func TestScanRoomCandidates_OnlySkippedDirs(t *testing.T) {
 	dir := t.TempDir()
-	for _, name := range []string{".git", "node_modules", "vendor", "__pycache__", ".pi-go", "dist", "build", ".idea", ".vscode"} {
+	for _, name := range []string{".git", "node_modules", "vendor", "__pycache__", ".pirate", "dist", "build", ".idea", ".vscode"} {
 		os.Mkdir(filepath.Join(dir, name), 0o755)
 	}
 	rooms := scanRoomCandidates(dir)

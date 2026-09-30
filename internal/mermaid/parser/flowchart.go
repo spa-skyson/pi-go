@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/dimetron/pi-go/internal/mermaid/graph"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/graph"
 )
 
 // segment is a piece of a parsed line: either a node group or an arrow.

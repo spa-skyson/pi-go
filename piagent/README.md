@@ -1,20 +1,20 @@
 # piagent
 
-Embed pi-go's coding agent in your own Go program.
+Embed the Pi-rate coding agent in your own Go program.
 
 Every other package in this module is under `internal/`, so `piagent` is the
-only importable surface. It assembles the same agent the `pi` CLI runs
+only importable surface. It assembles the same agent the `pirate` CLI runs
 headlessly (`--mode print`), minus the terminal UI.
 
 ```bash
-go get github.com/dimetron/pi-go
+go get github.com/spa-skyson/pi-rate
 ```
 
 ## The model comes from outside
 
 `piagent` **never constructs a provider**. The model arrives through
 `WithModel` as an ADK `model.LLM` — the interface the agent already runs on —
-and `New` returns `ErrNoModel` without one. pi-go's providers (credentials,
+and `New` returns `ErrNoModel` without one. the pi-rate providers (credentials,
 base URLs, transport options, thinking level, token metering) live in a
 separate package:
 
@@ -38,7 +38,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/dimetron/pi-go/piagent"
+	"github.com/spa-skyson/pi-rate/piagent"
 )
 
 func main() {
@@ -72,17 +72,17 @@ func main() {
 
 | Concern | Behaviour |
 |---|---|
-| Config | Hooks, MCP, A2A, memory, palace and compactor settings from `~/.pi-go/config.json` plus any project override |
-| Filesystem | Sandbox rooted at the working directory, plus `~/.pi-go` |
+| Config | Hooks, MCP, A2A, memory, palace and compactor settings from `~/.pirate/config.json` plus any project override |
+| Filesystem | Sandbox rooted at the working directory, plus the Pi-rate home (`~/.pirate`) |
 | Tools | read, write, edit, bash (+ supervisor and control tools), grep, find, ls, tree, git tools, session-stats |
-| Skills | `.pi-go/skills/`, the user directory and the bundled set, summarized into the prompt |
-| Subagents | `.pi-go/agents` plus the bundled set, exposed as tools |
-| Project rules | `AGENT.md` / `AGENTS.md` / `CLAUDE.md` / `.pi-go/AGENTS.md`, discovered upward from the working directory |
+| Skills | `.pirate/skills/`, the user directory and the bundled set, summarized into the prompt |
+| Subagents | `.pirate/agents` plus the bundled set, exposed as tools |
+| Project rules | `AGENT.md` / `AGENTS.md` / `CLAUDE.md` / `.pirate/AGENTS.md`, discovered upward from the working directory |
 | Toolsets | MCP servers and A2A agents from configuration |
 | Memory | **Off by default** — see below. `WithMemory(true)` opts in |
 | Palace | **Off by default.** Once on, tools register only when it holds drawers |
 | LSP | Registered only when a language server is installed; two tools by default |
-| Sessions | Persisted under `~/.pi-go/sessions`, so `pi --resume` can pick one up |
+| Sessions | Persisted under `~/.pirate/sessions`, so `pirate --resume` can pick one up |
 
 ## Options
 
@@ -110,7 +110,7 @@ ag, err := piagent.New(ctx,
 | `WithBeforeToolCallbacks(...)` / `WithAfterToolCallbacks(...)` | Observe or rewrite tool calls |
 | `WithBeforeModelCallbacks(...)` / `WithAfterModelCallbacks(...)` | Observe or rewrite LLM calls |
 | `WithLSP(mode)` | `LSPOff`, `LSPMin` (default) or `LSPFull` |
-| `WithMemory(bool)` / `WithPalace(bool)` | Opt in to the shared `~/.pi-go` stores (off by default) |
+| `WithMemory(bool)` / `WithPalace(bool)` | Opt in to the shared Pi-rate home stores (off by default) |
 | `WithSkills(bool)` / `WithSubagents(bool)` | Toggle discovery (on by default) |
 | `WithAgentEvents(fn)` | Receive subagent and background-bash progress |
 | `WithSummarizer(m)` | Model that writes compaction summaries (default: the session model) |
@@ -152,7 +152,7 @@ The notifier runs on the goroutine driving the turn, so keep it quick.
 ## Callbacks
 
 ADK ends its after-tool callback chain at the first callback returning a
-non-nil result. pi-go registers several that all return the result map, so a
+non-nil result. piagent registers several that all return the result map, so a
 plain slice would run only the first — a defect that silently disabled the
 compactor, dedup, the LSP hook and memory recording for months.
 
@@ -167,7 +167,7 @@ func(ctx agent.Context, t tool.Tool, args, result map[string]any, toolErr error)
 - `(m, nil)` — `m` becomes the result for every later callback and for the model.
 - `(_, err)` — abort the chain; the error surfaces on the turn.
 
-Your callbacks run after pi-go's, so they see the compacted and deduplicated
+Your callbacks run after the Pi-rate's, so they see the compacted and deduplicated
 result. Before-tool and model callbacks are handed to ADK as slices, where
 "run until one intervenes" is already the semantics you want.
 
@@ -207,7 +207,7 @@ session log. Always defer it.
 - A process-global HTTP trace sink. A library has no business claiming one.
 - The daily-token guardrail, which wraps the model rather than the agent.
 - Config-driven shell hooks as a programmatic option. They still load from
-  `~/.pi-go/config.json`, but an embedder writing Go gets a Go func rather than
+  `~/.pirate/config.json`, but an embedder writing Go gets a Go func rather than
   a subprocess.
 - The subagent orchestrator. Subagents are reachable as tools; direct
   orchestration would be a much larger compatibility commitment.
@@ -250,7 +250,7 @@ Three behaviours worth knowing, because each is a bug if you assume otherwise:
   request is made and there is nothing to report, so the after-turn hook is
   not called.
 
-This is the headless equivalent of pi-go's `turn_complete` lifecycle hook,
+This is the headless equivalent of the Pi-rate's `turn_complete` lifecycle hook,
 which is otherwise dispatched only from the TUI.
 
 ## One deliberate difference from the CLI
@@ -259,8 +259,8 @@ which is otherwise dispatched only from the TUI.
 the only place `piagent` departs from it.
 
 They are the only subsystems that *write* to state shared with the user:
-`~/.pi-go/memory/claude-mem.db` and `~/.pi-go/palace.db` are the same stores a
-real `pi` session reads and writes. An embedder's process is not a `pi`
+`~/.pirate/memory/claude-mem.db` and `~/.pirate/palace.db` are the same stores a
+real `pirate` session reads and writes. An embedder's process is not a `pirate`
 session, and quietly interleaving its observations with the user's is a
 surprise documentation cannot undo. Opt in when your embed is meant to
 contribute:
@@ -269,7 +269,7 @@ contribute:
 piagent.New(ctx, piagent.WithModel(m), piagent.WithMemory(true))
 ```
 
-Skills and subagent discovery stay **on**. Those *read* `.pi-go/`, which is the
+Skills and subagent discovery stay **on**. Those *read* `.pirate/`, which is the
 whole reason to embed this agent rather than write your own. Reading a
 convention and writing to someone's store are different things.
 

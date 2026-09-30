@@ -3,7 +3,7 @@ package tui
 import (
 	"google.golang.org/adk/v2/session"
 
-	"github.com/dimetron/pi-go/internal/sop/exec"
+	"github.com/spa-skyson/pi-rate/internal/sop/exec"
 )
 
 // stageTracker turns the workflow engine's event stream into the status map the

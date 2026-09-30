@@ -5,14 +5,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // writeSessionMeta creates a session directory whose meta.json records model.
 func writeSessionMeta(t *testing.T, dir, sessionID, model string) {
 	t.Helper()
-	sessionDir := filepath.Join(dir, ".pi-go", "sessions", sessionID)
+	sessionDir := filepath.Join(dir, ".pirate", "sessions", sessionID)
 	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func writeSessionMeta(t *testing.T, dir, sessionID, model string) {
 
 func writeSessionBackendMeta(t *testing.T, dir, sessionID, model, provider, baseURL string) {
 	t.Helper()
-	sessionDir := filepath.Join(dir, ".pi-go", "sessions", sessionID)
+	sessionDir := filepath.Join(dir, ".pirate", "sessions", sessionID)
 	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

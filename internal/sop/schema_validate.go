@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dimetron/pi-go/internal/sop/validate"
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/sop/validate"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 // LintDefinition statically checks a SOP definition before anything runs.

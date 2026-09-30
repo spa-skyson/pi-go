@@ -12,8 +12,8 @@ import (
 	llmmodel "google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 )
 
 // fnLLM is a fully scriptable mock LLM: gen is called once per turn with the

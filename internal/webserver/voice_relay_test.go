@@ -22,7 +22,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/dimetron/pi-go/internal/voicegemini"
+	"github.com/spa-skyson/pi-rate/internal/voicegemini"
 )
 
 // fakeProvider is a stand-in for the Gemini Live endpoint. It records every

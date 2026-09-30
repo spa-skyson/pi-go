@@ -7,7 +7,7 @@ import (
 
 	"google.golang.org/adk/v2/model"
 
-	"github.com/dimetron/pi-go/internal/retry"
+	"github.com/spa-skyson/pi-rate/internal/retry"
 )
 
 // streamAttempt runs one streaming request, forwarding responses to yield.

@@ -20,7 +20,7 @@ import (
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/notice"
+	"github.com/spa-skyson/pi-rate/internal/notice"
 )
 
 // captureNotices installs a sink that records notices for the duration of the

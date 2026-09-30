@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/atif"
+	"github.com/spa-skyson/pi-rate/internal/atif"
 )
 
 func TestInventory_CoreAndOptionalGroups(t *testing.T) {

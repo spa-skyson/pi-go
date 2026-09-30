@@ -20,9 +20,9 @@ import (
 	"google.golang.org/adk/v2/tool/functiontool"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/logger"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/logger"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // scriptedLLM is an adkmodel.LLM whose reply depends on which invocation it is.
@@ -624,7 +624,7 @@ func TestStateAdvertisesSessionFileOnlyWhenItExists(t *testing.T) {
 		t.Error("sessionFile advertised for a session with no file on disk")
 	}
 
-	dir := filepath.Join(home, ".pi-go", "sessions")
+	dir := filepath.Join(home, ".pirate", "sessions")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatalf("creating session dir: %v", err)
 	}

@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/dimetron/pi-go/internal/auth"
+	"github.com/spa-skyson/pi-rate/internal/auth"
 )
 
 // codexBackendBaseURL is the ChatGPT backend that accepts codex OAuth

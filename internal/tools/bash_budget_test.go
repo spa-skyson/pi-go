@@ -16,13 +16,13 @@ import (
 // that began mid-stream was indistinguishable from output that began at the
 // beginning. The model then reasons about "the output" as if it saw all of it.
 func TestBash_OversizedOutputReportsWhatItLost(t *testing.T) {
-	const verdict = "FAIL github.com/dimetron/pi-go/internal/tools [build failed]"
+	const verdict = "FAIL github.com/spa-skyson/pi-rate/internal/tools [build failed]"
 
 	sup := NewBashSupervisor()
 	t.Cleanup(sup.KillAll)
 
 	// Well over one buffer's worth, then the line that actually matters.
-	script := `for i in $(seq 1 20000); do echo "ok   github.com/dimetron/pi-go/internal/pkg$i	0.01s"; done; echo "` + verdict + `"`
+	script := `for i in $(seq 1 20000); do echo "ok   github.com/spa-skyson/pi-rate/internal/pkg$i	0.01s"; done; echo "` + verdict + `"`
 
 	out, err := sup.Run(context.Background(), runRequest{
 		dir:     t.TempDir(),

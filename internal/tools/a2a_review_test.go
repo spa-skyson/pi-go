@@ -11,7 +11,7 @@ import (
 	"github.com/a2aproject/a2a-go/v2/a2a"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/dimetron/pi-go/internal/kagentapi"
+	"github.com/spa-skyson/pi-rate/internal/kagentapi"
 )
 
 // artifactEvent builds one artifact frame for the given artifact id.

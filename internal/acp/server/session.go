@@ -10,7 +10,7 @@ import (
 	acp "github.com/coder/acp-go-sdk"
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/dimetron/pi-go/internal/otel"
+	"github.com/spa-skyson/pi-rate/internal/otel"
 )
 
 // ServeConfig configures a server.Serve run.

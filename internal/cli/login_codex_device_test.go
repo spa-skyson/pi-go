@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/auth"
+	"github.com/spa-skyson/pi-rate/internal/auth"
 )
 
 // newCodexDeviceServer stands in for auth.openai.com's device endpoints.

@@ -14,9 +14,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/permission"
-	"github.com/dimetron/pi-go/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/permission"
+	"github.com/spa-skyson/pi-rate/internal/session"
 )
 
 // DefaultPoolSize is the default maximum number of concurrent subagents.

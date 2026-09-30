@@ -6,7 +6,7 @@ import (
 
 	"google.golang.org/adk/v2/session"
 
-	pisession "github.com/dimetron/pi-go/internal/session"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
 )
 
 func TestOpenSession(t *testing.T) {

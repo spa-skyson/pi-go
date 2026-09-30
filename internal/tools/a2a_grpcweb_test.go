@@ -15,7 +15,7 @@ import (
 	"github.com/a2aproject/a2a-go/v2/a2apb/v1"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/dimetron/pi-go/internal/kagentapi"
+	"github.com/spa-skyson/pi-rate/internal/kagentapi"
 )
 
 // grpcWebBody concatenates a data frame carrying msg with a success trailer,

@@ -41,31 +41,31 @@
 // conventions:
 //
 //   - Hooks, MCP servers, A2A agents, memory, palace and compactor settings
-//     from ~/.pi-go/config.json plus any project override.
-//   - A filesystem sandbox rooted at the working directory (plus ~/.pi-go), and
+//     from ~/.pirate/config.json plus any project override.
+//   - A filesystem sandbox rooted at the working directory (plus ~/.pirate), and
 //     the core tool set: read, write, edit, bash with its supervisor and the
 //     bash control tools, search, and the rest of pi-go's built-ins.
-//   - Skills discovered from .pi-go/skills/, the user directory and the bundled
+//   - Skills discovered from .pirate/skills/, the user directory and the bundled
 //     set, summarized into the system prompt.
-//   - Subagents discovered from .pi-go/agents plus the bundled set, wired to an
+//   - Subagents discovered from .pirate/agents plus the bundled set, wired to an
 //     orchestrator and exposed as tools.
-//   - Project context files (AGENT.md, AGENTS.md, CLAUDE.md, .pi-go/AGENTS.md)
+//   - Project context files (AGENT.md, AGENTS.md, CLAUDE.md, .pirate/AGENTS.md)
 //     discovered from the working directory up to the filesystem root.
 //   - MCP servers and A2A agents as ADK toolsets.
-//   - Sessions persisted under ~/.pi-go/sessions, so a session started by an
+//   - Sessions persisted under ~/.pirate/sessions, so a session started by an
 //     embedder is visible to `pi --resume` and vice versa.
 //
 // # One deliberate difference from the CLI
 //
 // Observation memory and the memory palace are OFF by default here, where the
 // CLI has both on. They are the only subsystems that write to state shared
-// with the user: ~/.pi-go/memory/claude-mem.db and ~/.pi-go/palace.db are the
+// with the user: ~/.pirate/memory/claude-mem.db and ~/.pirate/palace.db are the
 // same stores a real pi session reads and writes. An embedder's process is not
 // a pi session, and silently interleaving its observations with the user's is
 // a surprise that documentation cannot undo — so it is opt-in, via
 // [WithMemory] and [WithPalace].
 //
-// Skills and subagent discovery stay on. Those read .pi-go/, which is the
+// Skills and subagent discovery stay on. Those read .pirate/, which is the
 // whole reason to embed this agent instead of writing your own. Reading a
 // convention and writing to someone's store are different things.
 //
@@ -141,7 +141,7 @@
 // claiming one.
 //
 // Config-driven shell hooks as a programmatic option. Those still load from
-// ~/.pi-go/config.json and run for tool calls, but an embedder writing Go gets
+// ~/.pirate/config.json and run for tool calls, but an embedder writing Go gets
 // a Go func rather than a subprocess: [WithBeforeTurn] and
 // [WithAfterToolCallbacks] do the same work without the fork.
 //
@@ -158,7 +158,7 @@
 // transcript on every turn exactly as an interactive one does, so a long
 // session outgrows its context window just as fast.
 //
-// It reads its thresholds from the auto_compact block of ~/.pi-go/config.json
+// It reads its thresholds from the auto_compact block of ~/.pirate/config.json
 // and is on by default. Two things switch it off: setting auto_compact.enabled
 // to false, and a context window that cannot be resolved. The window comes
 // from the embedded model catalog, because piagent is handed a finished model

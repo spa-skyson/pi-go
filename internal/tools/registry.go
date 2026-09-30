@@ -85,7 +85,7 @@ func WithWebSearch() CoreOption {
 // webSearchEnvVar enables web_search process-wide.
 //
 // It exists alongside the CLI flag because a flag cannot reach everywhere the
-// tool is built. A subagent runs as a child `pi` process whose command line is
+// tool is built. A subagent runs as a child `pirate` process whose command line is
 // assembled by subagent.spawnArgs — model, url, headers, --lsp and the prompt,
 // nothing more — so a tool gated only on a flag would vanish in every subagent
 // while the parent kept it. subagent.FilterEnv forwards the whole PI_ prefix, so

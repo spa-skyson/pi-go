@@ -7,8 +7,8 @@ import (
 
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/permission"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/permission"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 )
 
 // TestAskingPermissionReachesModel runs a real ADK agent whose before-tool

@@ -1,15 +1,15 @@
-# pi-go installer for Windows.
+# pi-rate installer for Windows.
 #
 # Works on Windows PowerShell 5.1 (Windows 10/11 built-in) and PowerShell 7+;
 # no bash, curl aliases, or && chains — everything uses cmdlets available in
-# 5.1. Downloads the latest pi-go windows/amd64 release zip and installs
-# pi.exe into %LOCALAPPDATA%\Programs, adding that directory to the user PATH
+# 5.1. Downloads the latest pi-rate windows/amd64 release zip and installs
+# pirate.exe into %LOCALAPPDATA%\Programs, adding that directory to the user PATH
 # when missing.
 #
 # Usage:
 #   powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
 #   or one line from an existing shell:
-#   powershell -NoProfile -Command "iwr https://raw.githubusercontent.com/dimetron/pi-go/main/scripts/install.ps1 -UseBasicParsing | iex"
+#   powershell -NoProfile -Command "iwr https://raw.githubusercontent.com/spa-skyson/pi-rate/main/scripts/install.ps1 -UseBasicParsing | iex"
 
 $ErrorActionPreference = "Stop"
 
@@ -26,12 +26,12 @@ if ([Net.ServicePointManager]::SecurityProtocol -ne [Net.SecurityProtocolType]::
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 }
 
-$repo = "dimetron/pi-go"
+$repo = "spa-skyson/pi-rate"
 $installDir = Join-Path $env:LOCALAPPDATA "Programs"
 
 # --- Resolve the latest release tag via the GitHub API -----------------------
 $apiUrl = "https://api.github.com/repos/$repo/releases/latest"
-$headers = @{ "User-Agent" = "pi-go-installer" }
+$headers = @{ "User-Agent" = "pirate-installer" }
 $token = $env:GITHUB_TOKEN
 if (-not $token) { $token = $env:GH_TOKEN }
 if ($token) { $headers["Authorization"] = "Bearer $token" }
@@ -42,7 +42,7 @@ $tag = $release.tag_name
 Write-Host "Latest release: $tag"
 
 # --- Pick the windows amd64 asset --------------------------------------------
-$assetName = "pi-go_$($tag.TrimStart("v"))_windows_amd64.zip"
+$assetName = "pi-rate_$($tag.TrimStart("v"))_windows_amd64.zip"
 $asset = $release.assets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
 if (-not $asset) {
     # Fall back to any windows amd64 zip in case naming changes.
@@ -54,7 +54,7 @@ if (-not $asset) {
 
 # --- Download ------------------------------------------------------------------
 $zipPath = Join-Path $env:TEMP $asset.name
-$extractDir = Join-Path $env:TEMP ("pi-go-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
+$extractDir = Join-Path $env:TEMP ("pirate-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
 
 Write-Host "Downloading $($asset.name)..."
 Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -UseBasicParsing
@@ -65,7 +65,7 @@ Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -UseBasicPa
 # and a swapped asset, which is what an installer can check on its own.
 #
 # It is not proof of origin: checksums.txt travels the same path as the archive,
-# so anyone who could substitute one could substitute both. `pi verify` is the
+# so anyone who could substitute one could substitute both. `pirate verify` is the
 # check that answers that — it looks the binary's digest up in GitHub's
 # attestations API and verifies the Sigstore bundle against this repo's release
 # workflow. The last line of this script points at it.
@@ -80,7 +80,7 @@ if (-not $sumAsset) {
 }
 
 Write-Host "Verifying checksum..."
-$sumsPath = Join-Path $env:TEMP "pi-go-checksums-$tag.txt"
+$sumsPath = Join-Path $env:TEMP "pirate-checksums-$tag.txt"
 Invoke-WebRequest -Uri $sumAsset.browser_download_url -OutFile $sumsPath -UseBasicParsing
 
 # Lines are "<hex>  <name>"; split on whitespace rather than a fixed width so a
@@ -112,12 +112,12 @@ Write-Host "Extracting..."
 New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
 Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
 
-$exe = Get-ChildItem -Path $extractDir -Filter "pi.exe" -Recurse | Select-Object -First 1
-if (-not $exe) { throw "pi.exe not found in archive" }
+$exe = Get-ChildItem -Path $extractDir -Filter "pirate.exe" -Recurse | Select-Object -First 1
+if (-not $exe) { throw "pirate.exe not found in archive" }
 
 # --- Install -------------------------------------------------------------------
 New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-$dest = Join-Path $installDir "pi.exe"
+$dest = Join-Path $installDir "pirate.exe"
 Copy-Item -Path $exe.FullName -Destination $dest -Force
 Remove-Item -Recurse -Force $extractDir
 Remove-Item -Force $zipPath
@@ -148,4 +148,4 @@ if (-not $present) {
 Write-Host ""
 Write-Host (& $dest --version)
 Write-Host "Installed to $dest" -ForegroundColor Green
-Write-Host "Run 'pi verify' to check this binary against its build provenance."
+Write-Host "Run 'pirate verify' to check this binary against its build provenance."

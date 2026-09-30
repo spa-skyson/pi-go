@@ -14,13 +14,13 @@
 # what it compiled.
 GO_BUILD_FLAGS := -v $(if $(filter-out 0,$(V)),-x,)
 
-# Stamped into `pi version`. Kept in a variable so build and install cannot
+# Stamped into `pirate version`. Kept in a variable so build and install cannot
 # drift into producing differently-stamped binaries.
-GO_LDFLAGS := -X github.com/dimetron/pi-go/internal/cli.BuildTag=$$(git rev-parse --short HEAD 2>/dev/null || echo local)
+GO_LDFLAGS := -X github.com/spa-skyson/pi-rate/internal/cli.BuildTag=$$(git rev-parse --short HEAD 2>/dev/null || echo local)
 
 build: cache-clean
-	go build $(GO_BUILD_FLAGS) -ldflags "$(GO_LDFLAGS)" ./cmd/pi
-	go build $(GO_BUILD_FLAGS) ./cmd/pi-sandbox
+	go build $(GO_BUILD_FLAGS) -ldflags "$(GO_LDFLAGS)" ./cmd/pirate
+	go build $(GO_BUILD_FLAGS) ./cmd/pirate-sandbox
 
 # Clean the golangci-lint cache before building. The pre-commit hook runs
 # golangci-lint, and a full lint cache (hundreds of MB) can fill the disk and
@@ -34,10 +34,10 @@ cache-clean:
 
 # Install onto PATH, i.e. $(go env GOBIN) or $GOPATH/bin. This used to be a bare
 # `install: build`, which has no recipe — it dropped the binaries in the repo
-# root and left nothing on PATH, so `pi` was never a command anywhere.
+# root and left nothing on PATH, so `pirate` was never a command anywhere.
 install:
-	go install $(GO_BUILD_FLAGS) -ldflags "$(GO_LDFLAGS)" ./cmd/pi
-	go install $(GO_BUILD_FLAGS) ./cmd/pi-sandbox
+	go install $(GO_BUILD_FLAGS) -ldflags "$(GO_LDFLAGS)" ./cmd/pirate
+	go install $(GO_BUILD_FLAGS) ./cmd/pirate-sandbox
 
 # hooks: point core.hooksPath at the versioned .githooks/ directory.
 #
@@ -57,7 +57,7 @@ hooks:
 #
 # OPT-IN ONLY. The default `make build` stays pure Go: no cgo, no native
 # libraries, `go install` works with nothing but a Go toolchain. This target
-# trades that away for roughly 3x faster embedding in `pi memory mine`.
+# trades that away for roughly 3x faster embedding in `pirate memory mine`.
 #
 # One-time setup:
 #   brew install onnxruntime
@@ -65,24 +65,24 @@ hooks:
 build-accel: deps-accel
 	CGO_ENABLED=1 \
 	CGO_CFLAGS="-I$$(brew --prefix onnxruntime)/include" \
-	CGO_LDFLAGS="-L$$(brew --prefix onnxruntime)/lib -lonnxruntime -L$$HOME/.pi-go/lib" \
-	go build $(GO_BUILD_FLAGS) -tags ORT -o pi ./cmd/pi
+	CGO_LDFLAGS="-L$$(brew --prefix onnxruntime)/lib -lonnxruntime -L$$HOME/.pirate/lib" \
+	go build $(GO_BUILD_FLAGS) -tags ORT -o pirate ./cmd/pirate
 
 # hugot's ORT/XLA paths statically link the Rust HF tokenizers; only the pure-Go
 # path uses the Go tokenizer. Prebuilt for darwin-arm64.
 deps-accel:
-	@mkdir -p $$HOME/.pi-go/lib
-	@test -f $$HOME/.pi-go/lib/libtokenizers.a || ( \
+	@mkdir -p $$HOME/.pirate/lib
+	@test -f $$HOME/.pirate/lib/libtokenizers.a || ( \
 	  echo "fetching libtokenizers..." && \
 	  curl -sL -o /tmp/tok.tar.gz https://github.com/daulet/tokenizers/releases/download/v1.27.0/libtokenizers.darwin-arm64.tar.gz && \
-	  tar xzf /tmp/tok.tar.gz -C $$HOME/.pi-go/lib && rm -f /tmp/tok.tar.gz )
+	  tar xzf /tmp/tok.tar.gz -C $$HOME/.pirate/lib && rm -f /tmp/tok.tar.gz )
 	@echo "accel deps ready (onnxruntime via brew + libtokenizers)"
 
-	go install ./cmd/pi/
-	go install ./cmd/pi-sandbox
+	go install ./cmd/pirate/
+	go install ./cmd/pirate-sandbox
 
 run: install
-	pi --model minimax-m3:cloud
+	pirate --model minimax-m3:cloud
 
 test: test-unit
 
@@ -103,12 +103,12 @@ e2e: test-e2e
 # so re-runs are comparable. See internal/eval/eval.md for env knobs, the
 # golden baseline flow and the LLM judge.
 eval-run: build
-	PI_EVAL_RUN=1 PI_BINARY=$(abspath ./pi) go test -tags e2e -v -run '^TestEvalRun$$' ./internal/tui/ -timeout 45m
+	PI_EVAL_RUN=1 PI_BINARY=$(abspath ./pirate) go test -tags e2e -v -run '^TestEvalRun$$' ./internal/tui/ -timeout 45m
 
 # Pin the eval starting point at the current HEAD (tag eval/base) and run.
 # Do this once when establishing a baseline, or deliberately to move it.
 eval-pin: build
-	PI_EVAL_RUN=1 PI_EVAL_PIN_BASE=1 PI_EVAL_SAVE_GOLDEN=1 PI_BINARY=$(abspath ./pi) \
+	PI_EVAL_RUN=1 PI_EVAL_PIN_BASE=1 PI_EVAL_SAVE_GOLDEN=1 PI_BINARY=$(abspath ./pirate) \
 		go test -tags e2e -v -run '^TestEvalRun$$' ./internal/tui/ -timeout 45m
 
 # Re-evaluate against the recorded golden baseline, with the LLM judge on.
@@ -116,44 +116,44 @@ eval-pin: build
 PI_EVAL_JUDGE_MODEL ?= claude-sonnet-4-6
 eval-judge: build
 	PI_EVAL_RUN=1 PI_EVAL_BASELINE=eval/golden PI_EVAL_JUDGE_MODEL=$(PI_EVAL_JUDGE_MODEL) \
-		PI_BINARY=$(abspath ./pi) go test -tags e2e -v -run '^TestEvalRun$$' ./internal/tui/ -timeout 45m
+		PI_BINARY=$(abspath ./pirate) go test -tags e2e -v -run '^TestEvalRun$$' ./internal/tui/ -timeout 45m
 
-# Tool-coverage eval: one headless `pi --mode print` scenario per tool family,
+# Tool-coverage eval: one headless `pirate --mode print` scenario per tool family,
 # graded deterministically and rolled up into a coverage matrix over every
 # registered tool. Requires a built binary and an LLM API key. Knobs:
 # PI_EVAL_MODEL, PI_EVAL_SCENARIO=<name,...>, PI_EVAL_THINKING, PI_EVAL_TIMEOUT,
 # PI_EVAL_STRICT=1, PI_EVAL_SERIAL=1. See internal/eval/scenarios/README.md.
 eval-tools: build
-	PI_EVAL_TOOLS=1 PI_BINARY=$(abspath ./pi) go test -tags e2e -v -run '^TestEvalTools$$' \
+	PI_EVAL_TOOLS=1 PI_BINARY=$(abspath ./pirate) go test -tags e2e -v -run '^TestEvalTools$$' \
 		./internal/eval/scenarios/ -parallel 4 -timeout 60m
 
 # Same, with the LLM judge grading the suite (PI_EVAL_JUDGE_MODEL to override).
 eval-tools-judge: build
-	PI_EVAL_TOOLS=1 PI_EVAL_JUDGE_MODEL=$(PI_EVAL_JUDGE_MODEL) PI_BINARY=$(abspath ./pi) \
+	PI_EVAL_TOOLS=1 PI_EVAL_JUDGE_MODEL=$(PI_EVAL_JUDGE_MODEL) PI_BINARY=$(abspath ./pirate) \
 		go test -tags e2e -v -run '^TestEvalTools$$' ./internal/eval/scenarios/ -parallel 4 -timeout 60m
 
 # Record a PGO profile: run the tool-coverage eval suite with --cpuprofile on
-# every scenario's pi process, plus the TUI render benchmarks, then merge all
-# profiles into cmd/pi/default.pgo. `go build` auto-detects default.pgo in the
+# every scenario's pirate process, plus the TUI render benchmarks, then merge all
+# profiles into cmd/pirate/default.pgo. `go build` auto-detects default.pgo in the
 # main package dir and enables PGO, so this is the one step that keeps the
 # profile fresh.
 #
 # Two workloads are merged so the profile covers both of the binary's hot
-# paths: the headless agent/tool loop (one `pi --mode print` per tool family)
+# paths: the headless agent/tool loop (one `pirate --mode print` per tool family)
 # and the TUI render loop (RenderMessages / collapseBlankLines / matchLexer,
 # which a live profile attributed ~24% of CPU to — bubbletea calls View() once
 # per token during streaming). A single-workload profile would optimize only
 # one half of the program. Requires a built binary and an LLM API key (see
 # eval-tools). Knobs: PI_EVAL_MODEL, PI_EVAL_SCENARIO, PI_EVAL_TIMEOUT,
-# PI_EVAL_SERIAL=1. See .pi-go/skills/pgo/SKILL.md.
+# PI_EVAL_SERIAL=1. See .pirate/skills/pgo/SKILL.md.
 record-pgo: build
 	@mkdir -p tmp/pgo
-	PI_EVAL_TOOLS=1 PI_EVAL_CPU_PROFILE=$(abspath tmp/pgo) PI_BINARY=$(abspath ./pi) \
+	PI_EVAL_TOOLS=1 PI_EVAL_CPU_PROFILE=$(abspath tmp/pgo) PI_BINARY=$(abspath ./pirate) \
 		go test -tags e2e -v -run '^TestEvalTools$$' ./internal/eval/scenarios/ -parallel 4 -timeout 60m
 	@go test -tags e2e -run '^$$' -bench 'BenchmarkRenderMessagesRunningCached|BenchmarkCollapseBlankLines|BenchmarkMatchLexerCached' \
 		-benchtime 2s -cpuprofile $(abspath tmp/pgo)/render.pprof ./internal/tui/
-	@go tool pprof -proto tmp/pgo/*.pprof > cmd/pi/default.pgo
-	@echo "PGO profile written to cmd/pi/default.pgo ($$(ls -la cmd/pi/default.pgo | awk '{print $$5}') bytes)"
+	@go tool pprof -proto tmp/pgo/*.pprof > cmd/pirate/default.pgo
+	@echo "PGO profile written to cmd/pirate/default.pgo ($$(ls -la cmd/pirate/default.pgo | awk '{print $$5}') bytes)"
 	@rm -rf tmp/pgo
 
 test-all: test-unit test-integration test-e2e
@@ -186,7 +186,7 @@ scan:
 # Same invocation the release workflow uses for the aggregate SBOM, so a
 # release-time syft failure can be reproduced locally.
 sbom:
-	syft scan dir:. --exclude './hack/**' --source-name pi-go \
+	syft scan dir:. --exclude './hack/**' --source-name pi-rate \
 		--source-version "$$(git describe --tags --always)" \
 		--output spdx-json=sbom.spdx.json
 
@@ -197,14 +197,14 @@ vet:
 	go vet ./...
 
 clean:
-	rm -f pi coverage.out sbom.spdx.json cmd/pi/default.pgo
+	rm -f pirate coverage.out sbom.spdx.json cmd/pirate/default.pgo
 
-## OSX sandbox — pi-sandbox embeds pi-profile.sb, resolves params, tails denial logs automatically
+## OSX sandbox — pirate-sandbox embeds pirate-profile.sb, resolves params, tails denial logs automatically
 sandbox-run: install
 ifeq ($(shell uname),Darwin)
-	pi-sandbox --model glm-5.2:cloud
+	pirate-sandbox --model glm-5.2:cloud
 else
-	pi --model glm-5.2:cloud
+	pirate --model glm-5.2:cloud
 endif
 
 sandbox-log:

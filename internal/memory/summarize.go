@@ -12,7 +12,7 @@ import (
 // LLMSummarizer writes session summaries with an in-process model call.
 //
 // The alternative is [SubagentCompressor.SummarizeSession], which spawns the
-// `memory-compressor` subagent as a child `pi` process. That path is measurably
+// `memory-compressor` subagent as a child `pirate` process. That path is measurably
 // unusable for summarization at session end: specs/memory-fixes/research/
 // findings.md F2 measures 5.6s per spawned observation against a 5s shutdown
 // budget, and records the `sql: database is closed` errors that follow when the

@@ -8,7 +8,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/dimetron/pi-go/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/palace"
 )
 
 // memoryTickInterval is how often the sidebar memory status refreshes.
@@ -24,7 +25,7 @@ type memoryTickMsg struct {
 // status (the sidebar section is hidden).
 func memoryTickCmd(workDir string) tea.Cmd {
 	return func() tea.Msg {
-		dbPath := filepath.Join(workDir, ".pi-go", "palace.db")
+		dbPath := filepath.Join(workDir, config.ProjectDirName, "palace.db")
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 			return memoryTickMsg{status: nil}
 		}

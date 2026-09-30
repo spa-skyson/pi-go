@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/retry"
+	"github.com/spa-skyson/pi-rate/internal/retry"
 )
 
 // bytesPerToken converts a serialized request body to an input-token estimate.

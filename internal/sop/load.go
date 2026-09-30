@@ -7,7 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dimetron/pi-go/internal/sop/validate"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/sop/validate"
 )
 
 //go:embed plan.sop.yaml
@@ -22,8 +23,8 @@ var defaultPRAutofixSOP []byte
 // LoadDefinition returns the declarative SOP named `name` ("plan", "run" or
 // "pr-autofix").
 //
-// Resolution mirrors LoadPDD: project .pi-go/sops/<name>.sop.yaml → global
-// ~/.pi-go/sops/<name>.sop.yaml → embedded default. An override that fails to
+// Resolution mirrors LoadPDD: project .pirate/sops/<name>.sop.yaml → global
+// ~/.pirate/sops/<name>.sop.yaml → embedded default. An override that fails to
 // parse or lint is reported rather than silently ignored — a SOP that does not
 // compile is a SOP that would schedule nothing.
 func LoadDefinition(workDir, name string) (*Definition, error) {
@@ -76,15 +77,13 @@ func LintDefinitionFile(path string) (validate.Findings, error) {
 func resolveDefinition(workDir, name string) (data []byte, source string) {
 	file := name + ".sop.yaml"
 
-	projectPath := filepath.Join(workDir, ".pi-go", "sops", file)
+	projectPath := filepath.Join(workDir, config.ProjectDirName, "sops", file)
 	if b, err := os.ReadFile(projectPath); err == nil {
 		return b, projectPath
 	}
-	if home, err := os.UserHomeDir(); err == nil {
-		globalPath := filepath.Join(home, ".pi-go", "sops", file)
-		if b, err := os.ReadFile(globalPath); err == nil {
-			return b, globalPath
-		}
+	globalPath := filepath.Join(config.PirateHome(), "sops", file)
+	if b, err := os.ReadFile(globalPath); err == nil {
+		return b, globalPath
 	}
 	return embeddedDefinition(name)
 }

@@ -12,8 +12,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 
-	"github.com/dimetron/pi-go/internal/extension"
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 // plain strips styling so assertions can look at the text alone.
@@ -510,7 +510,7 @@ func TestSidebarPlanLines_Hidden(t *testing.T) {
 //
 // The row is the only place the configured level is visible: it is threaded
 // into provider.NewLLM at startup and never surfaced again, so a level set in
-// ~/.pi-go/config.json was previously unverifiable from inside a session — the
+// ~/.pirate/config.json was previously unverifiable from inside a session — the
 // sidebar claimed to show it (Config.ThinkingLevel's comment) and did not.
 func TestSidebarModelLinesThinkingLevel(t *testing.T) {
 	t.Parallel()

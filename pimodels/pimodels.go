@@ -47,9 +47,9 @@ import (
 
 	"google.golang.org/adk/v2/model"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/httplog"
-	"github.com/dimetron/pi-go/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/httplog"
+	"github.com/spa-skyson/pi-rate/internal/provider"
 )
 
 // ProviderNamer reports which provider family serves a model.
@@ -121,7 +121,7 @@ type Info struct {
 // ThinkingLevel is the reasoning effort to ask a model for.
 //
 // The vocabulary is pi-go's: the same five levels the TUI's sidebar indicator
-// and `thinkingLevel` in ~/.pi-go/config.json use. A provider maps them onto
+// and `thinkingLevel` in ~/.pirate/config.json use. A provider maps them onto
 // its own wire vocabulary, and providers differ in how much of the range they
 // preserve. Choosing a level is therefore a request, not a guarantee, and the
 // README carries the per-provider table.
@@ -426,7 +426,7 @@ func NewFromInfo(ctx context.Context, info Info, opts ...Option) (Model, error) 
 }
 
 // FromConfig builds the model a `pi` session would use for the given role,
-// reading ~/.pi-go/config.json and any project config.
+// reading ~/.pirate/config.json and any project config.
 //
 // An empty role means "default". This is the one function here that touches
 // pi-go's own configuration; [New] is self-contained and takes an explicit name.

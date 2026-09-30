@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/permission"
+	"github.com/spa-skyson/pi-rate/internal/permission"
 )
 
 // TestOrchestratorForwardsAgentPermission drives the env handoff end to end:

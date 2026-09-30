@@ -390,7 +390,7 @@ func TestSaveMCPOAuthToken_MkdirError(t *testing.T) {
 	home := setTestHome(t)
 	// A regular file where the cache directory's parent should be makes
 	// MkdirAll fail on every platform.
-	if err := os.WriteFile(filepath.Join(home, ".pi-go"), []byte("x"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(home, ".pirate"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg := &oauth2.Config{}
@@ -433,7 +433,7 @@ func TestSaveMCPOAuthToken_FilePermissions(t *testing.T) {
 	if fi.Mode().Perm() != 0o600 {
 		t.Errorf("expected 0600 cache file, got %o", fi.Mode().Perm())
 	}
-	di, err := os.Stat(filepath.Join(home, ".pi-go", "mcp-oauth"))
+	di, err := os.Stat(filepath.Join(home, ".pirate", "mcp-oauth"))
 	if err != nil {
 		t.Fatal(err)
 	}

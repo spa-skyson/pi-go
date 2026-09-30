@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/sop/specdoc"
+	"github.com/spa-skyson/pi-rate/internal/sop/specdoc"
 )
 
 // ruleManifestValid is the gate that decides whether a spec's validation record

@@ -8,8 +8,8 @@ import (
 	llmmodel "google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/provider"
 )
 
 // ToolsJudgeDimensions are the axes the tool-coverage judge grades.

@@ -5,7 +5,7 @@ import (
 
 	adkagent "google.golang.org/adk/v2/agent"
 
-	"github.com/dimetron/pi-go/internal/sop"
+	"github.com/spa-skyson/pi-rate/internal/sop"
 )
 
 // Agent compiles a SOP definition with f and returns it as an ADK agent, ready

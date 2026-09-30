@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/voicegemini"
+	"github.com/spa-skyson/pi-rate/internal/voicegemini"
 )
 
 // Voice's tools onto the coding agent.

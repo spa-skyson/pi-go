@@ -8,8 +8,8 @@ import (
 
 	"google.golang.org/adk/v2/session"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/logger"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/logger"
 )
 
 // Grouping limits for streamed text in --mode json. A sentence boundary is the

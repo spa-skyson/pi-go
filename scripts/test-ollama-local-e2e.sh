@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# E2E test: run pi with Ollama local qwen3.5 model
+# E2E test: run pirate with Ollama local qwen3.5 model
 # Usage: ./scripts/test-ollama-local-e2e.sh
 #
 # Uses :cloud suffix for Ollama (Anthropic-compatible API) - works with qwen3.5

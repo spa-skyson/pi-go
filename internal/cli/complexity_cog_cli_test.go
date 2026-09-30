@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/attest"
+	"github.com/spa-skyson/pi-rate/internal/attest"
 )
 
 // These tests pin the exact bytes writeVerifyText produces — `pi verify` is a
@@ -27,7 +27,7 @@ func cogVerifyFullReport() verifyReport {
 	return verifyReport{
 		Path:     "/usr/local/bin/pi",
 		Digest:   "sha256:deadbeef",
-		Repo:     "dimetron/pi-go",
+		Repo:     "spa-skyson/pi-rate",
 		Verified: true,
 		Results: []*attest.Result{
 			{
@@ -35,11 +35,11 @@ func cogVerifyFullReport() verifyReport {
 				SignerIdentity: "signer-a",
 				SignedAt:       cogVerifySignedAt,
 				Provenance: &attest.Provenance{
-					Repository: "github.com/dimetron/pi-go",
+					Repository: "github.com/spa-skyson/pi-rate",
 					Workflow:   ".github/workflows/release.yml",
 					Ref:        "refs/tags/v0.0.74",
 					Commit:     "4086645",
-					RunURL:     "https://github.com/dimetron/pi-go/actions/runs/1234",
+					RunURL:     "https://github.com/spa-skyson/pi-rate/actions/runs/1234",
 				},
 			},
 			{
@@ -67,10 +67,10 @@ func TestWriteVerifyTextGoldenOutput(t *testing.T) {
 			reports: []verifyReport{cogVerifyFullReport()},
 			want: "/usr/local/bin/pi\n  sha256:deadbeef\n" +
 				"\n  ✓ build provenance\n" +
-				"      repository  github.com/dimetron/pi-go\n" +
+				"      repository  github.com/spa-skyson/pi-rate\n" +
 				"      workflow    .github/workflows/release.yml@refs/tags/v0.0.74\n" +
 				"      commit      4086645\n" +
-				"      run         https://github.com/dimetron/pi-go/actions/runs/1234\n" +
+				"      run         https://github.com/spa-skyson/pi-rate/actions/runs/1234\n" +
 				"      signer      signer-a\n" +
 				"      signed      2026-08-21T12:00:00Z\n" +
 				"\n  ✓ SBOM\n" +
@@ -82,19 +82,19 @@ func TestWriteVerifyTextGoldenOutput(t *testing.T) {
 		{
 			name: "no attestation carries the locally-built explanation",
 			reports: []verifyReport{{
-				Path: "./pi", Digest: "sha256:abc", Repo: "dimetron/pi-go",
+				Path: "./pi", Digest: "sha256:abc", Repo: "spa-skyson/pi-rate",
 				Error: "no attestations found", noAttestation: true,
 			}},
 			want: "./pi\n  sha256:abc\n" +
 				"\n  ✗ unverified: no attestations found\n" +
-				"\n    dimetron/pi-go holds no attestation for these bytes. A binary you\n" +
+				"\n    spa-skyson/pi-rate holds no attestation for these bytes. A binary you\n" +
 				"    built yourself never has one, and neither does one from a\n" +
 				"    release made before the workflow started attesting.\n",
 		},
 		{
 			name: "a real verification failure gets no explanation block",
 			reports: []verifyReport{{
-				Path: "./pi", Digest: "sha256:abc", Repo: "dimetron/pi-go", Error: "boom",
+				Path: "./pi", Digest: "sha256:abc", Repo: "spa-skyson/pi-rate", Error: "boom",
 			}},
 			want: "./pi\n  sha256:abc\n\n  ✗ unverified: boom\n",
 		},

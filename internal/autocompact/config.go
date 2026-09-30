@@ -1,8 +1,8 @@
 package autocompact
 
 import (
-	"github.com/dimetron/pi-go/internal/config"
-	pisession "github.com/dimetron/pi-go/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
 )
 
 // ConfigFrom maps the user's config.json settings onto an AutoCompactConfig,

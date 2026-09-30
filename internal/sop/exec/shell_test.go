@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/sop"
+	"github.com/spa-skyson/pi-rate/internal/sop"
 )
 
 // runStage is the shorthand every case here needs: one stage, one runner, one

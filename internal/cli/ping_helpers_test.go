@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/provider"
 )
 
 // captureWriter returns a pingWriter that accumulates everything written to it,

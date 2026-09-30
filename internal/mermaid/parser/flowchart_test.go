@@ -3,7 +3,7 @@ package parser
 import (
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/mermaid/graph"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/graph"
 )
 
 func TestParseSimpleLR(t *testing.T) {

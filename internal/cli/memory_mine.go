@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/palace"
 )
 
 // scanFiles returns a list of all files that would be mined, respecting
@@ -292,7 +292,7 @@ func runMemoryMine(dir, wing string, convos bool) error {
 	cfg := &palace.MineConfig{Wing: wing, Progress: progress, Phase: phase}
 	ctx := context.Background()
 
-	dbPath := filepath.Join(absDir, ".pi-go", "palace.db")
+	dbPath := filepath.Join(absDir, config.ProjectDirName, "palace.db")
 	modelPath := defaultPalaceModelPath()
 
 	palaceCfg := minePalaceConfig(dbPath, modelPath)
@@ -409,7 +409,7 @@ func printMineBanner(palaceCfg palace.PalaceConfig, dbPath, modelPath, wing stri
 }
 
 // ensureMineModel auto-inits: it creates the palace directory and fetches the
-// model if needed, so `pi memory mine` works on a fresh checkout without a
+// model if needed, so `pirate memory mine` works on a fresh checkout without a
 // separate `memory init` / `memory model download` step.
 //
 // ModelReady checks for the fp32 weights specifically, not just for the
@@ -462,7 +462,7 @@ func ollamaSetupError(cfg palace.PalaceConfig, cause error) error {
 	}
 
 	fmt.Fprintf(os.Stderr, `
-ollama is required for "pi memory mine" but is not available.
+ollama is required for "pirate memory mine" but is not available.
 
   cause: %v
 

@@ -1,7 +1,7 @@
 package logger
 
 import (
-	"github.com/dimetron/pi-go/internal/httplog"
+	"github.com/spa-skyson/pi-rate/internal/httplog"
 )
 
 // HTTPSink adapts a Logger to httplog's sink signature, so --trace-http entries

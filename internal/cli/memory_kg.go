@@ -8,7 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/palace"
 )
 
 func newMemoryKGCmd() *cobra.Command {
@@ -87,7 +88,7 @@ func newMemoryKGTimelineCmd() *cobra.Command {
 
 func openPalaceDB(dbPath string) (*palace.Palace, error) {
 	if dbPath == "" {
-		dbPath = filepath.Join(".pi-go", "palace.db")
+		dbPath = filepath.Join(config.ProjectDirName, "palace.db")
 	}
 	return palace.New(
 		palace.WithDBPath(dbPath),

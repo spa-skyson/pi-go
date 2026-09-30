@@ -6,7 +6,6 @@ import (
 	"iter"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -18,20 +17,20 @@ import (
 	adksession "google.golang.org/adk/v2/session"
 	adktool "google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/acp/server/adapter"
-	piagent "github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/autocompact"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/ctxwindow"
-	"github.com/dimetron/pi-go/internal/extension"
-	"github.com/dimetron/pi-go/internal/gitroot"
-	"github.com/dimetron/pi-go/internal/guardrail"
-	"github.com/dimetron/pi-go/internal/lsp"
-	"github.com/dimetron/pi-go/internal/otel"
-	"github.com/dimetron/pi-go/internal/provider"
-	pisession "github.com/dimetron/pi-go/internal/session"
-	"github.com/dimetron/pi-go/internal/subagent"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/acp/server/adapter"
+	piagent "github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/autocompact"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/ctxwindow"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/gitroot"
+	"github.com/spa-skyson/pi-rate/internal/guardrail"
+	"github.com/spa-skyson/pi-rate/internal/lsp"
+	"github.com/spa-skyson/pi-rate/internal/otel"
+	"github.com/spa-skyson/pi-rate/internal/provider"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 )
 
 // getwd wraps os.Getwd so tests can inject failures.
@@ -441,9 +440,7 @@ func buildSessionResources(rt RuntimeConfig, cfg config.Config, turn PromptTurn,
 		return nil, fmt.Errorf("creating sandbox: %w", err)
 	}
 	span.SetAttributes(attribute.String("session.sandbox_root", sandbox.Dir()))
-	if home, hErr := os.UserHomeDir(); hErr == nil {
-		_ = sandbox.AddExtraDir(filepath.Join(home, ".pi-go"))
-	}
+	_ = sandbox.AddExtraDir(config.PirateHome())
 
 	bashSup := tools.NewBashSupervisor()
 	coreTools, err := tools.CoreTools(sandbox, tools.WithBashSupervisor(bashSup))
@@ -521,7 +518,7 @@ func buildSessionResources(rt RuntimeConfig, cfg config.Config, turn PromptTurn,
 func newSessionOrchestrator(rt RuntimeConfig, cfg config.Config, cwd string) *subagent.Orchestrator {
 	discovery, err := subagent.DiscoverAgents(cwd, subagent.ScopeBoth)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "pi-go: warning: agent discovery failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "pirate: warning: agent discovery failed: %v\n", err)
 	}
 	var agentConfigs []subagent.AgentConfig
 	if discovery != nil {

@@ -14,9 +14,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/voicegemini"
-	"github.com/dimetron/pi-go/internal/webserver"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/voicegemini"
+	"github.com/spa-skyson/pi-rate/internal/webserver"
 )
 
 var (
@@ -48,7 +48,7 @@ Each browser tab gets its own isolated agent session.`,
 	cmd.Flags().StringVar(&flagServeURL, "url", "", "LLM API base URL to use for the web terminal")
 	cmd.Flags().StringArrayVar(&flagServeHeaders, "header", nil, "Extra HTTP header for LLM requests (key=value, repeatable)")
 	cmd.Flags().BoolVar(&flagServeInsecure, "insecure", false, "Skip TLS certificate verification for LLM API calls")
-	cmd.Flags().BoolVar(&flagServeVoice, "voice", false, "Talk to the coding agent from the browser: a Gemini Live session that types prompts into this project's pi terminal and reads its output back (needs GEMINI_API_KEY, from the environment or .env)")
+	cmd.Flags().BoolVar(&flagServeVoice, "voice", false, "Talk to the coding agent from the browser: a Gemini Live session that types prompts into this project's pirate terminal and reads its output back (needs GEMINI_API_KEY, from the environment or .env)")
 	cmd.Flags().StringVar(&flagServeVoiceModel, "voice-model", "", "Gemini Live model for voice (default "+voicegemini.DefaultModel+"; also GEMINI_LIVE_MODEL)")
 
 	return cmd
@@ -125,7 +125,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		fmt.Println("\nShutting down...")
 	case <-server.LockedOut():
 		fmt.Fprintln(os.Stderr, "\nToo many failed pairing attempts — shutting down.")
-		fmt.Fprintln(os.Stderr, "Restart pi serve to pair again.")
+		fmt.Fprintln(os.Stderr, "Restart pirate serve to pair again.")
 	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -188,7 +188,7 @@ func printServeBanner(w io.Writer, addr, project, code string) {
 		fmt.Fprintln(w, "TLS verification: disabled (--insecure)")
 	}
 	if flagServeVoice {
-		fmt.Fprintf(w, "Voice: enabled (%s) — speech drives the pi session in this project\n", serveVoiceModel())
+		fmt.Fprintf(w, "Voice: enabled (%s) — speech drives the pirate session in this project\n", serveVoiceModel())
 	}
 	fmt.Fprintf(w, "Pairing timeout: %s\n", flagServePairingTimeout)
 	fmt.Fprintf(w, "Pair code: %s\n", code)
@@ -246,7 +246,7 @@ func ParsePairingCode(input string) (code, token string, err error) {
 	return input, "", nil
 }
 
-// serveProjectDir is the directory `pi serve` is serving, which is where a
+// serveProjectDir is the directory `pirate serve` is serving, which is where a
 // project-local .env lives. It repeats the resolution runServe does because the
 // voice key is looked up before the server is built.
 func serveProjectDir() string {

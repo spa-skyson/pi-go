@@ -16,14 +16,14 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/dimetron/pi-go/internal/auth"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/extension"
-	"github.com/dimetron/pi-go/internal/palace"
-	"github.com/dimetron/pi-go/internal/permission"
-	"github.com/dimetron/pi-go/internal/sop"
-	"github.com/dimetron/pi-go/internal/subagent"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/auth"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/permission"
+	"github.com/spa-skyson/pi-rate/internal/sop"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 )
 
 // model is the Bubble Tea model for the interactive TUI.
@@ -130,8 +130,8 @@ type model struct {
 	// is surfaced to the terminal via View().WindowTitle so Bubble Tea's
 	// renderer emits the escape sequence in-band with the frame it draws.
 	sessionTitle string
-	// titleSpin is the phase of the animated title prefix ("π *", "π +",
-	// "π -") shown while a turn runs. It is advanced in Update from the
+	// titleSpin is the phase of the animated title prefix ("π Pi-rate ⠋",
+	// "π Pi-rate ⠙", …) shown while a turn runs. It is advanced in Update from the
 	// matrix tick, next to ToolDisplay.BlinkOn, so View stays a pure
 	// function of model state.
 	titleSpin int
@@ -630,7 +630,7 @@ func newModel(ctx context.Context, cancel context.CancelFunc, cfg Config) model 
 
 	renderer, _ := newMarkdownRenderer(100, palette)
 
-	// Load persistent command history from ~/.pi-go/history.jsonl.
+	// Load persistent command history from ~/.pirate/history.jsonl.
 	history := loadHistory()
 	if history == nil {
 		history = make([]HistoryEntry, 0)
@@ -1886,8 +1886,8 @@ func (m *model) View() tea.View {
 	// writes — writing it to os.Stdout directly races the renderer and lands
 	// mid-frame, which corrupts the drawn output.
 	//
-	// While a turn runs the "π -" prefix becomes a rotating
-	// "π * / π + / π ∙ / π -" so the tab shows progress even when the window
+	// While a turn runs the "π Pi-rate -" prefix becomes a rotating
+	// "π Pi-rate ⠋ / ⠙ / ⠹ / …" so the tab shows progress even when the window
 	// is not visible.
 	v.WindowTitle = formatTerminalTitleWithPrefix(
 		terminalTitlePrefix(m.running, m.titleSpin), m.sessionTitle, m.cfg.WorkDir)
@@ -1996,7 +1996,7 @@ func (m *model) sidebarRenderInput(sidebarWidth, panelRows int) SidebarRenderInp
 		ModelName:    m.cfg.ModelName,
 		// Read from cfg on every render rather than captured once. Nothing
 		// changes the level mid-session today — it is fixed at startup from
-		// ~/.pi-go/config.json — so this is not load-bearing yet. Reading it
+		// ~/.pirate/config.json — so this is not load-bearing yet. Reading it
 		// fresh keeps a future /thinking command from having to remember to
 		// republish the sidebar input as well.
 		ThinkingLevel: m.cfg.ThinkingLevel,

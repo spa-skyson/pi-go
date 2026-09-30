@@ -12,7 +12,7 @@ import (
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
 	a2ataskstore "github.com/a2aproject/a2a-go/v2/a2asrv/taskstore"
 
-	acpserver "github.com/dimetron/pi-go/internal/acp/server"
+	acpserver "github.com/spa-skyson/pi-rate/internal/acp/server"
 )
 
 // discardLogger returns a logger that drops every record.

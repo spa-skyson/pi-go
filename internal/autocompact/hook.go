@@ -13,10 +13,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/logger"
-	pisession "github.com/dimetron/pi-go/internal/session"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/logger"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 
 	llmmodel "google.golang.org/adk/v2/model"
 )
@@ -85,7 +85,7 @@ func BuildHook(deps Deps) agent.PreTurnHook {
 			// beats the alternative, which is a transcript that grows until
 			// the provider rejects it with nothing having warned anyone.
 			warnUnknownWindow.Do(func() {
-				deps.report("context window unknown for this model — auto-compaction is off; set context_window in ~/.pi-go/config.json")
+				deps.report("context window unknown for this model — auto-compaction is off; set context_window in ~/.pirate/config.json")
 			})
 			return nil
 		}

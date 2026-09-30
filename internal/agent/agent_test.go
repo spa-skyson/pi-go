@@ -18,10 +18,10 @@ import (
 	"google.golang.org/adk/v2/tool"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/extension"
-	pisession "github.com/dimetron/pi-go/internal/session"
-	"github.com/dimetron/pi-go/internal/testenv"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 )
 
 func testSandbox(t *testing.T, dir string) *tools.Sandbox {
@@ -539,7 +539,7 @@ func TestLoadInstruction(t *testing.T) {
 
 func TestLoadInstructionWithAgentsFile(t *testing.T) {
 	dir := t.TempDir()
-	agentsDir := filepath.Join(dir, ".pi-go")
+	agentsDir := filepath.Join(dir, ".pirate")
 	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll() error: %v", err)
 	}
@@ -592,7 +592,7 @@ func TestLoadInstructionPrefersAgentFileInCurrentDirectory(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "AGENT.md"), []byte("# Local Rules\n- Local"), 0o644); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
-	agentsDir := filepath.Join(dir, ".pi-go")
+	agentsDir := filepath.Join(dir, ".pirate")
 	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll() error: %v", err)
 	}
@@ -612,7 +612,7 @@ func TestLoadInstructionPrefersAgentFileInCurrentDirectory(t *testing.T) {
 		t.Errorf("LoadInstruction() should prefer AGENT.md content, got %q", result)
 	}
 	if strings.Contains(result, "- Project") {
-		t.Errorf("LoadInstruction() should not append .pi-go/AGENTS.md when AGENT.md exists, got %q", result)
+		t.Errorf("LoadInstruction() should not append .pirate/AGENTS.md when AGENT.md exists, got %q", result)
 	}
 }
 
@@ -654,13 +654,13 @@ func TestLoadInstructionMergesGlobalAndParentContext(t *testing.T) {
 	home := t.TempDir()
 	dir := t.TempDir()
 	child := filepath.Join(dir, "internal", "agent")
-	if err := os.MkdirAll(filepath.Join(home, ".pi-go"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, ".pirate"), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error: %v", err)
 	}
 	if err := os.MkdirAll(child, 0o755); err != nil {
 		t.Fatalf("MkdirAll() error: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(home, ".pi-go", "AGENTS.md"), []byte("# Global Rules\n- Global"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(home, ".pirate", "AGENTS.md"), []byte("# Global Rules\n- Global"), 0o644); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("# Repo Rules\n- Repo"), 0o644); err != nil {
@@ -709,7 +709,7 @@ func TestLoadInstructionSkipsOversizedParentContext(t *testing.T) {
 
 func TestLoadInstructionWithOversizedAgentsFile(t *testing.T) {
 	dir := t.TempDir()
-	agentsDir := filepath.Join(dir, ".pi-go")
+	agentsDir := filepath.Join(dir, ".pirate")
 	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll() error: %v", err)
 	}
@@ -740,7 +740,7 @@ func TestLoadInstructionWithOversizedAgentsFile(t *testing.T) {
 
 func TestLoadInstructionWithSkills(t *testing.T) {
 	dir := t.TempDir()
-	skillDir := filepath.Join(dir, ".pi-go", "skills", "lint")
+	skillDir := filepath.Join(dir, ".pirate", "skills", "lint")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll() error: %v", err)
 	}
@@ -760,7 +760,7 @@ description: Run lint checks before finishing.
 	defer os.Chdir(origDir)
 
 	result := LoadInstruction("Base instruction.")
-	if skills, err := extension.LoadSkills(filepath.Join(dir, ".pi-go", "skills")); err != nil {
+	if skills, err := extension.LoadSkills(filepath.Join(dir, ".pirate", "skills")); err != nil {
 		t.Fatalf("LoadSkills() error: %v", err)
 	} else if len(skills) == 0 {
 		t.Fatalf("LoadSkills() returned no skills")

@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 const (
@@ -21,13 +23,12 @@ type HistoryEntry struct {
 	Mentions []string `json:"mentions,omitempty"`
 }
 
-// historyDir returns the path to ~/.pi-go/.
+// historyDir returns the path to ~/.pirate/.
 func historyDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
+	if _, err := os.UserHomeDir(); err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".pi-go")
+	return config.PirateHome()
 }
 
 // historyPathJSON returns the path to the JSONL history file.

@@ -15,7 +15,7 @@ import (
 // os.UserHomeDir reads $HOME on Unix but %USERPROFILE% on Windows, so a test
 // that sets only HOME still resolves to the real profile directory there --
 // which makes the test read and write the developer's (or CI runner's) actual
-// ~/.pi-go instead of its sandbox.
+// ~/.pirate instead of its sandbox.
 func SetHome(t *testing.T, dir string) {
 	t.Helper()
 	t.Setenv("HOME", dir)

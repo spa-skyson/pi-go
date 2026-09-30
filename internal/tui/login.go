@@ -8,9 +8,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/dimetron/pi-go/internal/auth"
-	"github.com/dimetron/pi-go/internal/browser"
-	"github.com/dimetron/pi-go/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/auth"
+	"github.com/spa-skyson/pi-rate/internal/browser"
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 // loginState tracks the /login interactive flow.
@@ -175,7 +175,7 @@ func (m *model) loginStartManual(prov auth.Provider) (tea.Model, tea.Cmd) {
 		content: fmt.Sprintf(
 			"Opening **%s** API key page in your browser...\n\n"+
 				"Paste your API key and press **Enter** to save, or **Esc** to cancel.\n\n"+
-				"The key will be saved to `~/.pi-go/.env` as `%s`.",
+				"The key will be saved to `~/.pirate/.env` as `%s`.",
 			prov.Name, prov.EnvVar),
 	})
 
@@ -394,14 +394,14 @@ func (m *model) handleLoginSSOResult(msg loginSSOResultMsg) (tea.Model, tea.Cmd)
 	m.chatModel.Messages = append(m.chatModel.Messages, message{
 		role: "assistant",
 		content: fmt.Sprintf(
-			"Login successful! Saved **%s** key `%s` to `~/.pi-go/.env`.\n\n"+
+			"Login successful! Saved **%s** key `%s` to `~/.pirate/.env`.\n\n"+
 				"The key is active for this session.",
 			r.Provider, masked),
 	})
 	return m, nil
 }
 
-// handleLoginSave saves a manually entered API key to ~/.pi-go/.env.
+// handleLoginSave saves a manually entered API key to ~/.pirate/.env.
 func (m *model) handleLoginSave(apiKey string) (tea.Model, tea.Cmd) {
 	provName := m.login.provider
 	m.login = nil
@@ -427,7 +427,7 @@ func (m *model) handleLoginSave(apiKey string) (tea.Model, tea.Cmd) {
 	m.chatModel.Messages = append(m.chatModel.Messages, message{
 		role: "assistant",
 		content: fmt.Sprintf(
-			"Saved **%s** key `%s` to `~/.pi-go/.env`.\n\nThe key is active for this session.",
+			"Saved **%s** key `%s` to `~/.pirate/.env`.\n\nThe key is active for this session.",
 			provName, masked),
 	})
 	return m, nil

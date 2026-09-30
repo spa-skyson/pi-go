@@ -8,7 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/palace"
 )
 
 func newMemoryModelCmd() *cobra.Command {
@@ -38,13 +39,13 @@ By default, auto-selects the optimal ONNX file for your platform:
   - Other: model.onnx
 
 Use --onnx to specify a specific ONNX file, e.g.:
-  pi memory model download --onnx onnx/model.onnx`,
+  pirate memory model download --onnx onnx/model.onnx`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runMemoryModelDownload(flagDest, flagOnnx)
 		},
 	}
 
-	cmd.Flags().StringVar(&flagDest, "dest", "", "Destination directory (default: ~/.pi-go/models/)")
+	cmd.Flags().StringVar(&flagDest, "dest", "", "Destination directory (default: ~/.pirate/models/)")
 	cmd.Flags().StringVar(&flagOnnx, "onnx", "", "ONNX file path within the model (e.g., onnx/model.onnx). Default: auto-detect for platform")
 
 	return cmd
@@ -57,11 +58,7 @@ var downloadModel = palace.DownloadModel
 
 func runMemoryModelDownload(dest string, onnxFilePath string) error {
 	if dest == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("determining home directory: %w", err)
-		}
-		dest = filepath.Join(home, ".pi-go", "models")
+		dest = filepath.Join(config.PirateHome(), "models")
 	}
 
 	if err := os.MkdirAll(dest, 0o755); err != nil {
@@ -96,18 +93,14 @@ func newMemoryModelStatusCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&flagPath, "path", "", "Model directory (default: ~/.pi-go/models/)")
+	cmd.Flags().StringVar(&flagPath, "path", "", "Model directory (default: ~/.pirate/models/)")
 
 	return cmd
 }
 
 func runMemoryModelStatus(modelPath string) error {
 	if modelPath == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("determining home directory: %w", err)
-		}
-		modelPath = filepath.Join(home, ".pi-go", "models")
+		modelPath = filepath.Join(config.PirateHome(), "models")
 	}
 
 	// Check for model directory with the expected name.
@@ -117,7 +110,7 @@ func runMemoryModelStatus(modelPath string) error {
 		if os.IsNotExist(err) {
 			fmt.Println("Model: not downloaded")
 			fmt.Printf("Path:  %s\n", modelDir)
-			fmt.Println("\nRun 'pi memory model download' to fetch the embedding model.")
+			fmt.Println("\nRun 'pirate memory model download' to fetch the embedding model.")
 			return nil
 		}
 		return fmt.Errorf("checking model: %w", err)

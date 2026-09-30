@@ -13,20 +13,20 @@ const slsaV1Predicate = `{
     "externalParameters": {
       "workflow": {
         "ref": "refs/tags/v0.0.74",
-        "repository": "https://github.com/dimetron/pi-go",
+        "repository": "https://github.com/spa-skyson/pi-rate",
         "path": ".github/workflows/release.yml"
       }
     },
     "resolvedDependencies": [
       {
-        "uri": "git+https://github.com/dimetron/pi-go@refs/tags/v0.0.74",
+        "uri": "git+https://github.com/spa-skyson/pi-rate@refs/tags/v0.0.74",
         "digest": {"gitCommit": "4086645aa1f2c3d4e5f60718293a4b5c6d7e8f90"}
       }
     ]
   },
   "runDetails": {
-    "builder": {"id": "https://github.com/dimetron/pi-go/.github/workflows/release.yml@refs/tags/v0.0.74"},
-    "metadata": {"invocationId": "https://github.com/dimetron/pi-go/actions/runs/1234/attempts/1"}
+    "builder": {"id": "https://github.com/spa-skyson/pi-rate/.github/workflows/release.yml@refs/tags/v0.0.74"},
+    "metadata": {"invocationId": "https://github.com/spa-skyson/pi-rate/actions/runs/1234/attempts/1"}
   }
 }`
 
@@ -37,11 +37,11 @@ func TestParseProvenance(t *testing.T) {
 	}
 
 	want := &Provenance{
-		Repository: "github.com/dimetron/pi-go",
+		Repository: "github.com/spa-skyson/pi-rate",
 		Workflow:   ".github/workflows/release.yml",
 		Ref:        "refs/tags/v0.0.74",
 		Commit:     "4086645aa1f2c3d4e5f60718293a4b5c6d7e8f90",
-		RunURL:     "https://github.com/dimetron/pi-go/actions/runs/1234/attempts/1",
+		RunURL:     "https://github.com/spa-skyson/pi-rate/actions/runs/1234/attempts/1",
 		BuildType:  "https://actions.github.io/buildtypes/workflow/v1",
 	}
 	if !reflect.DeepEqual(got, want) {

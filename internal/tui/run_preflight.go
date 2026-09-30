@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/sop"
-	"github.com/dimetron/pi-go/internal/sop/specdoc"
-	"github.com/dimetron/pi-go/internal/sop/validate"
+	"github.com/spa-skyson/pi-rate/internal/sop"
+	"github.com/spa-skyson/pi-rate/internal/sop/specdoc"
+	"github.com/spa-skyson/pi-rate/internal/sop/validate"
 )
 
 // runPreflight checks a spec before /run spawns anything.

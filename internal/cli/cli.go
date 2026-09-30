@@ -26,29 +26,29 @@ import (
 	"google.golang.org/adk/v2/session"
 	adktool "google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/autocompact"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/ctxwindow"
-	"github.com/dimetron/pi-go/internal/extension"
-	"github.com/dimetron/pi-go/internal/gitroot"
-	"github.com/dimetron/pi-go/internal/guardrail"
-	"github.com/dimetron/pi-go/internal/httplog"
-	"github.com/dimetron/pi-go/internal/jsonrpc"
-	"github.com/dimetron/pi-go/internal/logger"
-	"github.com/dimetron/pi-go/internal/lsp"
-	"github.com/dimetron/pi-go/internal/memory"
-	"github.com/dimetron/pi-go/internal/otel"
-	"github.com/dimetron/pi-go/internal/palace"
-	"github.com/dimetron/pi-go/internal/permission"
-	"github.com/dimetron/pi-go/internal/pirpc"
-	"github.com/dimetron/pi-go/internal/provider"
-	"github.com/dimetron/pi-go/internal/ratelimit"
-	"github.com/dimetron/pi-go/internal/retry"
-	pisession "github.com/dimetron/pi-go/internal/session"
-	"github.com/dimetron/pi-go/internal/subagent"
-	"github.com/dimetron/pi-go/internal/tools"
-	"github.com/dimetron/pi-go/internal/tui"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/autocompact"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/ctxwindow"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/gitroot"
+	"github.com/spa-skyson/pi-rate/internal/guardrail"
+	"github.com/spa-skyson/pi-rate/internal/httplog"
+	"github.com/spa-skyson/pi-rate/internal/jsonrpc"
+	"github.com/spa-skyson/pi-rate/internal/logger"
+	"github.com/spa-skyson/pi-rate/internal/lsp"
+	"github.com/spa-skyson/pi-rate/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/otel"
+	"github.com/spa-skyson/pi-rate/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/permission"
+	"github.com/spa-skyson/pi-rate/internal/pirpc"
+	"github.com/spa-skyson/pi-rate/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/ratelimit"
+	"github.com/spa-skyson/pi-rate/internal/retry"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/tui"
 
 	"github.com/spf13/cobra"
 )
@@ -94,10 +94,22 @@ var (
 	flagA2AAddr      string
 	flagA2AReadyAddr string
 
-	// lastSessionFile persists the last session start metadata across invocations.
-	// Used to detect rapid restart loops (e.g. print mode crashes).
-	lastSessionFile = filepath.Join(os.Getenv("HOME"), ".pi-go", "last-session.json")
+	// lastSessionFileOverride redirects lastSessionFile() in tests. The path
+	// itself is resolved lazily (see lastSessionFile) so it honors PIRATE_HOME /
+	// PI_GO_HOME set after package init — the legacy-home migration runs inside
+	// Execute, after init.
+	lastSessionFileOverride string
 )
+
+// lastSessionFile returns the path of the last-session metadata file under the
+// Pi-rate home. Resolved on call, not at package init, so env overrides set
+// after init are honored.
+func lastSessionFile() string {
+	if lastSessionFileOverride != "" {
+		return lastSessionFileOverride
+	}
+	return filepath.Join(config.PirateHome(), "last-session.json")
+}
 
 // lastSessionData is written to lastSessionFile on each print-mode start.
 type lastSessionData struct {
@@ -122,8 +134,8 @@ func versionString() string {
 
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "pi [prompt]",
-		Short: "pi-go coding agent",
+		Use:   "pirate [prompt]",
+		Short: "Pi-rate coding agent",
 		Long: `A Go coding agent with multi-provider LLM support, tool calling, and interactive TUI.
 
 Run with no prompt for the interactive TUI; pass a prompt to answer once and exit.
@@ -147,60 +159,60 @@ routing you need:
 A name with no recognized prefix is rejected rather than guessed at — reach for
 the ollama/ prefix or the :cloud suffix to name an Ollama model explicitly.
 
-Set a default in ~/.pi-go/config.json so --model is only needed to deviate;
+Set a default in ~/.pirate/config.json so --model is only needed to deviate;
 --smol, --slow and --plan switch between the roles configured there.`,
 		Example: `  # Anthropic
-  pi --model claude-sonnet-5 "explain what this repo does"
+  pirate --model claude-sonnet-5 "explain what this repo does"
 
   # OpenAI
-  pi --model gpt-5.2 "add a table-driven test for the parser"
+  pirate --model gpt-5.2 "add a table-driven test for the parser"
 
   # Google Gemini
-  pi --model gemini-3.5-pro "review the diff on this branch"
+  pirate --model gemini-3.5-pro "review the diff on this branch"
 
   # Mistral
-  pi --model mistral-large-latest "summarize the changelog"
+  pirate --model mistral-large-latest "summarize the changelog"
 
   # xAI
-  pi --model grok-4.6 "trace where this request handler blocks"
+  pirate --model grok-4.6 "trace where this request handler blocks"
 
   # OpenRouter — any model in the OpenRouter catalog, vendor-prefixed ID
-  pi --model openrouter/google/gemini-3.7-flash "compare these two APIs"
+  pirate --model openrouter/google/gemini-3.7-flash "compare these two APIs"
 
   # Ollama against a local daemon — no API key needed
-  pi --model ollama/gemma4:e4b "rename this symbol everywhere"
+  pirate --model ollama/gemma4:e4b "rename this symbol everywhere"
 
   # Ollama Cloud — the :cloud tag routes to api.ollama.com with OLLAMA_API_KEY
   # set; without one it falls back to the local daemon, which serves cloud
   # models on your "ollama signin" identity. The ollama/ prefix forces local.
-  pi --model minimax-m3:cloud "port this module to generics"
+  pirate --model minimax-m3:cloud "port this module to generics"
 
   # Azure OpenAI — the deployment name follows azure/
-  pi --model azure/my-gpt5-deployment "draft release notes"
+  pirate --model azure/my-gpt5-deployment "draft release notes"
 
   # OpenCode
-  pi --model opencode/claude-sonnet-5 "find the goroutine leak"
+  pirate --model opencode/claude-sonnet-5 "find the goroutine leak"
 
   # agentgateway — a local OpenAI-compatible gateway, no API key needed
-  pi --model agentgateway/deepseek-v4-flash:0731-cloud "draft release notes"
+  pirate --model agentgateway/deepseek-v4-flash:0731-cloud "draft release notes"
 
   # Any OpenAI-compatible gateway, with an extra header and a corporate CA
-  pi --url https://llm.corp.internal/v1 --model gpt-5.2 \
+  pirate --url https://llm.corp.internal/v1 --model gpt-5.2 \
      --header X-Team=platform --ca-cert /etc/ssl/corp.pem "run the tests"
 
   # One-shot answer instead of the TUI, and resuming a session
-  pi --mode print "what changed in the last commit?"
-  pi --continue
-  pi --session 01JQ8Z... "carry on where we left off"
+  pirate --mode print "what changed in the last commit?"
+  pirate --continue
+  pirate --session 01JQ8Z... "carry on where we left off"
 
   # Diagnosing a provider
-  pi ping                                 # DNS/TCP/TLS/HTTP trace, curl -v style
-  pi ping --model minimax-m3:cloud        # check one model end to end
-  pi --trace-http "why was that rejected?"  # full request/response in the session log`,
+  pirate ping                                 # DNS/TCP/TLS/HTTP trace, curl -v style
+  pirate ping --model minimax-m3:cloud        # check one model end to end
+  pirate --trace-http "why was that rejected?"  # full request/response in the session log`,
 		Version: versionString(),
 		Args:    cobra.ArbitraryArgs,
-		// Start pprof here rather than in runRoot: subcommands (`pi memory mine`,
-		// `pi audit`, ...) have their own RunE and never reach runRoot, so
+		// Start pprof here rather than in runRoot: subcommands (`pirate memory mine`,
+		// `pirate audit`, ...) have their own RunE and never reach runRoot, so
 		// profiling them was impossible. PersistentPreRun runs for the root and
 		// every subcommand alike.
 		PersistentPreRun: func(*cobra.Command, []string) {
@@ -249,7 +261,7 @@ Set a default in ~/.pi-go/config.json so --model is only needed to deviate;
 	cmd.Flags().Float64Var(&flagTemperature, "temperature", 0, "LLM sampling temperature (0 keeps the provider default)")
 	cmd.Flags().StringVar(&flagThinking, "thinking", "", "Reasoning effort: none, low, medium, high, or max (overrides config thinking level)")
 	cmd.Flags().IntVar(&flagSteps, "steps", 0, "Max tool-call iterations per run (0 = no limit)")
-	// Persistent, not local: `pi memory mine . --pprof true` and every other
+	// Persistent, not local: `pirate memory mine . --pprof true` and every other
 	// subcommand must accept these too. As local flags they were rejected with
 	// "unknown flag: --pprof" the moment a subcommand was used.
 	cmd.PersistentFlags().StringVar(&flagPprof, "pprof", "", "Enable pprof profiling (serves /debug/pprof; any non-empty value enables it)")
@@ -270,7 +282,7 @@ Set a default in ~/.pi-go/config.json so --model is only needed to deviate;
 	// guide inlining and layout. Collect it from a representative workload —
 	// the eval-tools suite (`make record-pgo`) — not from a microbenchmark.
 	cmd.PersistentFlags().StringVar(&flagCPUProfile, "cpuprofile", "", "Write a CPU profile to this path for the process lifetime (PGO input)")
-	// Persistent for the same reason as --pprof: `pi ping --trace-http` and the
+	// Persistent for the same reason as --pprof: `pirate ping --trace-http` and the
 	// other subcommands that reach a provider all need it.
 	cmd.PersistentFlags().BoolVar(&flagTraceHTTP, "trace-http", false,
 		"Log full LLM request/response headers and bodies to the session log and OTel spans (credentials masked; prompts are not)")
@@ -278,7 +290,7 @@ Set a default in ~/.pi-go/config.json so --model is only needed to deviate;
 	// Append the resolved role table to `pi --help`. A help func set on the
 	// root is inherited by every subcommand, so this reproduces the default
 	// output and only adds the footer when help was asked for the root itself
-	// — `pi audit --help` has no use for it.
+	// — `pirate audit --help` has no use for it.
 	defaultHelp := cmd.HelpFunc()
 	cmd.SetHelpFunc(func(c *cobra.Command, args []string) {
 		defaultHelp(c, args)
@@ -732,7 +744,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	// here because buildRootRuntime below reads the result.
 	flagTemperatureChanged = cmd.Flags().Changed("temperature")
 
-	// Load API keys from ~/.pi-go/.env (set by /login command).
+	// Load API keys from ~/.pirate/.env (set by /login command).
 	loadDotEnv()
 
 	// Normally started by the root's PersistentPreRun; harmless if already up.
@@ -800,10 +812,8 @@ func initNonInteractiveRuntime(ctx context.Context, cfg *config.Config, cwd, san
 		return nil, fmt.Errorf("creating sandbox: %w", err)
 	}
 
-	if home, hErr := os.UserHomeDir(); hErr == nil {
-		if aErr := sandbox.AddExtraDir(filepath.Join(home, ".pi-go")); aErr != nil {
-			fmt.Fprintf(os.Stderr, "pi-go: warning: could not add ~/.pi-go to sandbox: %v\n", aErr)
-		}
+	if aErr := sandbox.AddExtraDir(config.PirateHome()); aErr != nil {
+		fmt.Fprintf(os.Stderr, "pirate: warning: could not add %s to sandbox: %v\n", config.PirateHome(), aErr)
 	}
 
 	bashSup := tools.NewBashSupervisor()
@@ -822,7 +832,7 @@ func initNonInteractiveRuntime(ctx context.Context, cfg *config.Config, cwd, san
 	repoRoot := detectGitRoot(ctx, cwd)
 	discovery, err := subagent.DiscoverAgents(cwd, subagent.ScopeBoth)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "pi-go: warning: agent discovery failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "pirate: warning: agent discovery failed: %v\n", err)
 	}
 	var agentConfigs []subagent.AgentConfig
 	if discovery != nil {
@@ -1000,7 +1010,7 @@ func runNonInteractive(
 	}
 
 	// Gemini search grounding. Always on for the Gemini provider; kill
-	// switch via PI_NO_GROUNDING=1 (propagates to subagent pi processes via
+	// switch via PI_NO_GROUNDING=1 (propagates to subagent pirate processes via
 	// FilterEnv's PI_ prefix allowlist).
 	//
 	// APPEND — never replace. See the matching note in interactive.go: replacing
@@ -1023,7 +1033,7 @@ func runNonInteractive(
 	// below once the session ID is resolved.
 	sessionLog, err := logger.New()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "pi-go: warning: could not create session log: %v\n", err)
+		fmt.Fprintf(os.Stderr, "pirate: warning: could not create session log: %v\n", err)
 	}
 	// --trace-http entries are dropped until this point, because the transport
 	// is built well before the log file exists. In practice the only requests
@@ -1069,7 +1079,7 @@ func runNonInteractive(
 		Cfg:           autocompact.ConfigFrom(cfg),
 		Log:           sessionLog,
 		SummarizerLLM: llm,
-		Notify:        func(msg string) { fmt.Fprintf(os.Stderr, "pi-go: %s\n", msg) },
+		Notify:        func(msg string) { fmt.Fprintf(os.Stderr, "pirate: %s\n", msg) },
 	}); hook != nil {
 		ag.SetPreTurnHook(hook)
 	}
@@ -1092,7 +1102,7 @@ func appendNonInteractiveMemoryTools(coreTools []adktool.Tool, memStore memory.S
 	}
 	memTools, memErr := tools.MemoryTools(memStore)
 	if memErr != nil {
-		fmt.Fprintf(os.Stderr, "pi-go: warning: memory tools disabled: %v\n", memErr)
+		fmt.Fprintf(os.Stderr, "pirate: warning: memory tools disabled: %v\n", memErr)
 		return coreTools
 	}
 	if memTools != nil {
@@ -1171,7 +1181,7 @@ func loadNonInteractiveSkills(mode string) {
 		fmt.Fprint(os.Stderr, formatPrintSkillLoad(len(skills), err))
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "pi-go: warning: skills disabled: %v\n", err)
+		fmt.Fprintf(os.Stderr, "pirate: warning: skills disabled: %v\n", err)
 	}
 }
 
@@ -1188,7 +1198,7 @@ func memoryInstructionContext(ctx context.Context, store memory.Store, cfg confi
 
 	memContext, err := memory.NewContextGenerator(store, budget).Generate(ctx, project)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "pi-go: warning: memory context generation failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "pirate: warning: memory context generation failed: %v\n", err)
 		return ""
 	}
 	if memContext == "" {
@@ -1200,17 +1210,13 @@ func memoryInstructionContext(ctx context.Context, store memory.Store, cfg confi
 // sessionsDir is the directory FileService keeps one subdirectory per session
 // in. Startup reaches for it before any session service exists, so it cannot
 // be asked of the service itself. PI_SESSIONS_DIR overrides the default of
-// $HOME/.pi-go/sessions — a server whose home is not durable storage points
+// $PIRATE_HOME/sessions — a server whose home is not durable storage points
 // it at a directory that is.
 func sessionsDir() (string, error) {
 	if dir := strings.TrimSpace(os.Getenv("PI_SESSIONS_DIR")); dir != "" {
 		return dir, nil
 	}
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("getting home dir: %w", err)
-	}
-	return filepath.Join(homeDir, ".pi-go", "sessions"), nil
+	return filepath.Join(config.PirateHome(), "sessions"), nil
 }
 
 // resolveResumeSession turns --continue into an explicit --session value, so
@@ -1285,7 +1291,7 @@ func resolveSessionID(ctx context.Context, ag *agent.Agent, sessionSvc *pisessio
 		if lastID == "" {
 			return "", fmt.Errorf("no previous session found to continue")
 		}
-		fmt.Fprintf(os.Stderr, "pi-go: continuing session %s\n", lastID)
+		fmt.Fprintf(os.Stderr, "pirate: continuing session %s\n", lastID)
 		return lastID, nil
 	}
 	if flagSession != "" {
@@ -1314,7 +1320,7 @@ func dispatchMode(ctx context.Context, mode, prompt string, ag *agent.Agent, ses
 	// stdio server and leaving the caller's socket client hanging.
 	if mode == "rpc" && flagSocketChanged {
 		fmt.Fprintln(os.Stderr,
-			"pi-go: `--mode rpc --socket` is deprecated and will be removed; use `--mode socket`.")
+			"pirate: `--mode rpc --socket` is deprecated and will be removed; use `--mode socket`.")
 		mode = "socket"
 	}
 	if mode == "socket" {
@@ -1350,7 +1356,7 @@ func dispatchMode(ctx context.Context, mode, prompt string, ag *agent.Agent, ses
 		}).Run(ctx)
 	}
 	if prompt == "" {
-		fmt.Fprintf(os.Stderr, "pi-go: no prompt provided (model: %s, mode: %s)\n", modelName, mode)
+		fmt.Fprintf(os.Stderr, "pirate: no prompt provided (model: %s, mode: %s)\n", modelName, mode)
 		return nil
 	}
 	if mode == "json" {
@@ -1423,14 +1429,12 @@ func setupMemory(ctx context.Context, cfg config.Config, orch *subagent.Orchestr
 	memCfg := deferredMemoryConfig(cfg)
 	dbPath := memCfg.DBPath
 	if dbPath == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			dbPath = filepath.Join(home, ".pi-go", "memory", "claude-mem.db")
-		}
+		dbPath = filepath.Join(config.PirateHome(), "memory", "claude-mem.db")
 	}
 
 	memDB, err := memory.OpenDB(dbPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "pi-go: warning: memory system disabled: %v\n", err)
+		fmt.Fprintf(os.Stderr, "pirate: warning: memory system disabled: %v\n", err)
 		return nil, nil, noop
 	}
 
@@ -1517,7 +1521,7 @@ func summarizeSessionAfterDrain(p summarizeParams, drainErr error, modelAvailabl
 func resolveLSPMode() tools.LSPMode {
 	mode, ok := tools.ParseLSPMode(flagLSP)
 	if !ok {
-		fmt.Fprintf(os.Stderr, "pi-go: warning: unknown --lsp value %q; using %q\n", flagLSP, mode)
+		fmt.Fprintf(os.Stderr, "pirate: warning: unknown --lsp value %q; using %q\n", flagLSP, mode)
 	}
 	return mode
 }
@@ -1552,7 +1556,7 @@ func applyToolAllowlist(list []adktool.Tool) []adktool.Tool {
 		for i, t := range list {
 			available[i] = t.Name()
 		}
-		fmt.Fprintf(os.Stderr, "pi-go: warning: --tools %v matched nothing; available: %s\n",
+		fmt.Fprintf(os.Stderr, "pirate: warning: --tools %v matched nothing; available: %s\n",
 			unknown, strings.Join(available, ", "))
 	}
 	return kept
@@ -1626,7 +1630,7 @@ func setupPalace(cfg config.Config, memWorker *memory.Worker) ([]adktool.Tool, s
 		palace.WithModelPath(palaceCfg.ModelPath),
 	)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "pi-go: warning: palace tools disabled: %v\n", err)
+		fmt.Fprintf(os.Stderr, "pirate: warning: palace tools disabled: %v\n", err)
 		return nil, "", noop
 	}
 	closePalace := func() { _ = p.Close() }
@@ -1634,7 +1638,7 @@ func setupPalace(cfg config.Config, memWorker *memory.Worker) ([]adktool.Tool, s
 	// Eleven palace tool declarations cost ~1.6k tokens on every request. An
 	// empty palace has nothing for them to find, so searching it is a wasted
 	// call and the tokens buy nothing — the same trade the LSP gate makes. An
-	// existing file is not evidence of content: `pi memory init` creates one
+	// existing file is not evidence of content: `pirate memory init` creates one
 	// with zero drawers. Gate on drawers, not on the file.
 	//
 	// The palace is still opened when empty: the bridge below fills it, and the
@@ -1650,7 +1654,7 @@ func setupPalace(cfg config.Config, memWorker *memory.Worker) ([]adktool.Tool, s
 	// the wake-up context below, so it only costs the tools.
 	palaceTools, err := palace.PalaceTools(p)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "pi-go: warning: palace tools disabled: %v\n", err)
+		fmt.Fprintf(os.Stderr, "pirate: warning: palace tools disabled: %v\n", err)
 		palaceTools = nil
 	}
 
@@ -1774,17 +1778,17 @@ func writeLastSession(workDir, provider, model string) error {
 	if err != nil {
 		return err
 	}
-	dir := filepath.Dir(lastSessionFile)
+	dir := filepath.Dir(lastSessionFile())
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(lastSessionFile, blob, 0o600)
+	return os.WriteFile(lastSessionFile(), blob, 0o600)
 }
 
 // readLastSession reads the last session metadata, or nil if unavailable.
 func readLastSession() (*lastSessionData, error) {
 	data := &lastSessionData{}
-	blob, err := os.ReadFile(lastSessionFile)
+	blob, err := os.ReadFile(lastSessionFile())
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -1807,28 +1811,24 @@ func checkForRapidRestartAndWarn(workDir string) {
 	elapsed := time.Since(prev.Timestamp)
 	if elapsed < 3*time.Second {
 		fmt.Fprintf(os.Stderr,
-			"pi-go: warning: rapid restart detected (%.0fs since last session). "+
-				"If init keeps failing, check ~/.pi-go/log/ for errors.\n",
+			"pirate: warning: rapid restart detected (%.0fs since last session). "+
+				"If init keeps failing, check ~/.pirate/log/ for errors.\n",
 			elapsed.Seconds())
 		path, msg, readErr := lastLoggedError()
 		switch {
 		case readErr != nil:
-			fmt.Fprintf(os.Stderr, "pi-go: warning: failed to inspect session logs: %v\n", readErr)
+			fmt.Fprintf(os.Stderr, "pirate: warning: failed to inspect session logs: %v\n", readErr)
 		case msg != "":
-			fmt.Fprintf(os.Stderr, "pi-go: last logged error (%s): %s\n", path, msg)
+			fmt.Fprintf(os.Stderr, "pirate: last logged error (%s): %s\n", path, msg)
 		default:
-			fmt.Fprintln(os.Stderr, "pi-go: no recent logged errors found.")
+			fmt.Fprintln(os.Stderr, "pirate: no recent logged errors found.")
 		}
 	}
 }
 
 // lastLoggedError returns the most recent "error" entry from session logs.
 func lastLoggedError() (path, msg string, err error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", "", fmt.Errorf("getting home dir: %w", err)
-	}
-	logRoot := filepath.Join(home, ".pi-go", "log")
+	logRoot := filepath.Join(config.PirateHome(), "log")
 	dateDirs, err := os.ReadDir(logRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -2225,7 +2225,7 @@ func runJSONTurn(ctx context.Context, ag *agent.Agent, sessionID, msg string, em
 	}
 	em.flush()
 	if !started {
-		const warn = "pi-go: warning: no assistant events received before message_end"
+		const warn = "pirate: warning: no assistant events received before message_end"
 		fmt.Fprintln(os.Stderr, warn)
 		log.Error(warn)
 	}
@@ -2521,23 +2521,21 @@ func detectGitRoot(ctx context.Context, dir string) string {
 	return gitroot.Detect(ctx, dir)
 }
 
-// LoadDotEnv loads environment variables from ~/.pi-go/.env and the nearest
-// project .pi-go/.env. Project values override global values and both override
+// LoadDotEnv loads environment variables from ~/.pirate/.env and the nearest
+// project .pirate/.env. Project values override global values and both override
 // the inherited shell environment.
 func LoadDotEnv() {
 	loadDotEnv()
 }
 
-// loadDotEnv loads environment variables from ~/.pi-go/.env and project
-// .pi-go/.env. These files are written by login/config flows and take
+// loadDotEnv loads environment variables from ~/.pirate/.env and project
+// .pirate/.env. These files are written by login/config flows and take
 // precedence over the inherited shell environment — a user who ran `/login`
 // expects the saved credential to be used even if their shell still exports a
 // different API key from earlier. Lines in the files override the process env;
 // missing keys fall through to whatever the shell set.
 func loadDotEnv() {
-	if home, err := os.UserHomeDir(); err == nil {
-		loadDotEnvFile(filepath.Join(home, ".pi-go", ".env"))
-	}
+	loadDotEnvFile(filepath.Join(config.PirateHome(), ".env"))
 	if cwd, err := os.Getwd(); err == nil {
 		if projectEnv := findNearestDotEnv(cwd); projectEnv != "" {
 			loadDotEnvFile(projectEnv)
@@ -2574,7 +2572,7 @@ func findNearestDotEnv(start string) string {
 		return ""
 	}
 	for {
-		candidate := filepath.Join(dir, ".pi-go", ".env")
+		candidate := filepath.Join(dir, config.ProjectDirName, ".env")
 		if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
 			return candidate
 		}
@@ -2594,19 +2592,20 @@ func palaceConfigFromCLI(cfg *config.Config) struct{ DBPath, ModelPath string } 
 		modelPath = cfg.Palace.ModelPath
 	}
 	if dbPath == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			dbPath = filepath.Join(home, ".pi-go", "palace.db")
-		}
+		dbPath = filepath.Join(config.PirateHome(), "palace.db")
 	}
 	if modelPath == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			modelPath = filepath.Join(home, ".pi-go", "models", "KnightsAnalytics_all-MiniLM-L6-v2")
-		}
+		modelPath = filepath.Join(config.PirateHome(), "models", "KnightsAnalytics_all-MiniLM-L6-v2")
 	}
 	return struct{ DBPath, ModelPath string }{dbPath, modelPath}
 }
 
 // Execute runs the root command.
 func Execute() error {
+	// Before anything reads the home directory: a legacy ~/.pirate is copied to
+	// ~/.pirate once, and every later lookup (config, sessions, logs, memory)
+	// sees the new home. Covers both the interactive and print modes, which
+	// share this entry point.
+	config.MigrateLegacyHome()
 	return newRootCmd().Execute()
 }

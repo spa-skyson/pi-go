@@ -14,8 +14,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/provider"
 )
 
 func newModelCmd() *cobra.Command {
@@ -53,15 +53,15 @@ and capabilities, reported by the provider itself.
 Providers: anthropic, openai, gemini, mistral, xai, ollama, openrouter, agentgateway
 
 Examples:
-  pi model list                 # list models for all configured providers
-  pi model list anthropic       # list models from Anthropic
-  pi model list openai          # list models from OpenAI
-  pi model list gemini          # list models from Gemini
-  pi model list mistral         # list models from Mistral
-  pi model list xai             # list models from xAI
-  pi model list ollama          # list locally installed Ollama models
-  pi model list openrouter      # list models from OpenRouter
-  pi model list agentgateway    # list models from the local agentgateway`,
+  pirate model list                 # list models for all configured providers
+  pirate model list anthropic       # list models from Anthropic
+  pirate model list openai          # list models from OpenAI
+  pirate model list gemini          # list models from Gemini
+  pirate model list mistral         # list models from Mistral
+  pirate model list xai             # list models from xAI
+  pirate model list ollama          # list locally installed Ollama models
+  pirate model list openrouter      # list models from OpenRouter
+  pirate model list agentgateway    # list models from the local agentgateway`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runModelList,
 	}
@@ -96,7 +96,7 @@ func namedListProviders(cfg config.Config) []modelListProvider {
 	return out
 }
 
-// flagModelListOutput is the --output flag value for `pi model list`.
+// flagModelListOutput is the --output flag value for `pirate model list`.
 var flagModelListOutput string
 
 // modelListJSONDoc is the per-provider JSON document emitted by `-o json`.
@@ -265,7 +265,7 @@ func selectModelListProviders(out io.Writer, args []string, keys, baseURLs map[s
 		printAzureDeployments(out)
 	}
 	if len(providers) == 0 && !azureConfigured {
-		return nil, fmt.Errorf("no providers configured; set an API key (e.g. OPENAI_API_KEY) or specify a provider: pi model list <provider>")
+		return nil, fmt.Errorf("no providers configured; set an API key (e.g. OPENAI_API_KEY) or specify a provider: pirate model list <provider>")
 	}
 	return providers, nil
 }

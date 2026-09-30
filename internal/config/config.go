@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dimetron/pi-go/internal/notice"
-	"github.com/dimetron/pi-go/internal/permission"
+	"github.com/spa-skyson/pi-rate/internal/notice"
+	"github.com/spa-skyson/pi-rate/internal/permission"
 )
 
 // HookConfig defines a shell command hook for tool call events.
@@ -123,7 +123,7 @@ type Config struct {
 	DefaultModel    string                `json:"defaultModel,omitempty"` // deprecated: use roles
 	DefaultProvider string                `json:"defaultProvider"`
 	// DefaultAgent names the primary agent (frontmatter `mode: primary` or
-	// `all` in ~/.pi-go/agents/*.md) that the interactive session starts in.
+	// `all` in ~/.pirate/agents/*.md) that the interactive session starts in.
 	// Unknown or non-primary names fall back to the built-in agent with a
 	// notice. An explicit --model keeps the flag's model and takes only the
 	// agent's prompt.
@@ -256,10 +256,10 @@ type MCPServer struct {
 	Headers map[string]string `json:"headers,omitempty"` // Custom HTTP headers for the URL (Streamable HTTP) transport
 	OAuth   bool              `json:"oauth,omitempty"`   // run the OAuth authorization-code flow on first connect
 
-	// fromStandaloneFile marks a server that was loaded from a .pi-go/mcp.json
+	// fromStandaloneFile marks a server that was loaded from a .pirate/mcp.json
 	// file rather than declared in config.json. Such servers live in memory
 	// only: Save serializes the whole Config, so without this marker a merged
-	// project server would be copied into ~/.pi-go/config.json on the next
+	// project server would be copied into ~/.pirate/config.json on the next
 	// save and leak into every other project. Unexported, so json.Marshal
 	// skips it.
 	fromStandaloneFile bool
@@ -403,15 +403,15 @@ func autoDetectProvider(modelName string) string {
 	return ""
 }
 
-// Load reads config from global (~/.pi-go/config.json) and project
-// (.pi-go/config.json) relative to the current process working directory.
+// Load reads config from global (~/.pirate/config.json) and project
+// (.pirate/config.json) relative to the current process working directory.
 func Load() (Config, error) {
 	return LoadFrom(".")
 }
 
-// LoadFrom reads config from global (~/.pi-go/config.json) and the nearest
-// project .pi-go/config.json relative to cwd, merging project overrides onto
-// global. MCP servers are also loaded from separate .pi-go/mcp.json files if
+// LoadFrom reads config from global (~/.pirate/config.json) and the nearest
+// project .pirate/config.json relative to cwd, merging project overrides onto
+// global. MCP servers are also loaded from separate .pirate/mcp.json files if
 // present.
 func LoadFrom(cwd string) (Config, error) {
 	cfg := Defaults()
@@ -445,17 +445,15 @@ func LoadFrom(cwd string) (Config, error) {
 	return cfg, nil
 }
 
-// loadConfigFiles overlays the nearest project .pi-go/config.json onto the
-// global ~/.pi-go/config.json on top of cfg. A missing file is not an error;
+// loadConfigFiles overlays the nearest project .pirate/config.json onto the
+// global ~/.pirate/config.json on top of cfg. A missing file is not an error;
 // any other read or parse failure is.
 func loadConfigFiles(cfg *Config, cwd string) error {
-	if home, err := os.UserHomeDir(); err == nil {
-		globalPath := filepath.Join(home, ".pi-go", "config.json")
-		if err := loadFile(globalPath, cfg); err != nil && !os.IsNotExist(err) {
-			return err
-		}
+	globalPath := filepath.Join(PirateHome(), "config.json")
+	if err := loadFile(globalPath, cfg); err != nil && !os.IsNotExist(err) {
+		return err
 	}
-	if projectPath := findNearestProjectFile(cwd, filepath.Join(".pi-go", "config.json")); projectPath != "" {
+	if projectPath := findNearestProjectFile(cwd, filepath.Join(ProjectDirName, "config.json")); projectPath != "" {
 		if err := loadFile(projectPath, cfg); err != nil && !os.IsNotExist(err) {
 			return err
 		}
@@ -517,20 +515,18 @@ func LoadMCPServers() []MCPServer {
 }
 
 // LoadMCPServersFrom reads MCP server configurations from standalone mcp.json
-// files relative to cwd. Resolution order: project .pi-go/mcp.json overrides
-// global ~/.pi-go/mcp.json. Supports both the Claude Desktop object format
+// files relative to cwd. Resolution order: project .pirate/mcp.json overrides
+// global ~/.pirate/mcp.json. Supports both the Claude Desktop object format
 // (servers keyed by name) and the legacy array format.
 func LoadMCPServersFrom(cwd string) []MCPServer {
 	var servers []MCPServer
 
 	// Try global path first.
-	if home, err := os.UserHomeDir(); err == nil {
-		globalPath := filepath.Join(home, ".pi-go", "mcp.json")
-		servers = loadMCPServersFromFile(globalPath)
-	}
+	globalPath := filepath.Join(PirateHome(), "mcp.json")
+	servers = loadMCPServersFromFile(globalPath)
 
 	// Project path overrides global (only if project file exists).
-	if projectPath := findNearestProjectFile(cwd, filepath.Join(".pi-go", "mcp.json")); projectPath != "" {
+	if projectPath := findNearestProjectFile(cwd, filepath.Join(ProjectDirName, "mcp.json")); projectPath != "" {
 		if projectServers := loadMCPServersFromFile(projectPath); projectServers != nil {
 			servers = projectServers
 		}
@@ -581,7 +577,7 @@ func loadMCPServersFromFile(path string) []MCPServer {
 }
 
 // SubstituteEnvVars replaces ${VAR} patterns in server URLs with values from
-// ~/.pi-go/.env (or project .pi-go/.env). Secrets stay in the file and are
+// ~/.pirate/.env (or project .pirate/.env). Secrets stay in the file and are
 // never exposed in logs or TUI.
 func substituteEnvVars(servers []MCPServer) []MCPServer {
 	return substituteEnvVarsFrom(".", servers)
@@ -602,10 +598,8 @@ func substituteEnvVarsFrom(cwd string, servers []MCPServer) []MCPServer {
 
 func loadEnvFileFrom(cwd string) map[string]string {
 	result := make(map[string]string)
-	if home, err := os.UserHomeDir(); err == nil {
-		mergeEnvFile(result, filepath.Join(home, ".pi-go", ".env"))
-	}
-	if projectEnv := findNearestProjectFile(cwd, filepath.Join(".pi-go", ".env")); projectEnv != "" {
+	mergeEnvFile(result, filepath.Join(PirateHome(), ".env"))
+	if projectEnv := findNearestProjectFile(cwd, filepath.Join(ProjectDirName, ".env")); projectEnv != "" {
 		mergeEnvFile(result, projectEnv)
 	}
 	return result
@@ -842,16 +836,12 @@ func (c *Config) ResolveBaseURLs() map[string]string {
 	return urls
 }
 
-// Save writes the config to the global ~/.pi-go/config.json file.
+// Save writes the config to the global ~/.pirate/config.json file.
 // It does not overwrite project-level config.
 func (c *Config) Save() error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("user home dir: %w", err)
-	}
-	path := filepath.Join(home, ".pi-go", "config.json")
+	path := filepath.Join(PirateHome(), "config.json")
 
-	// Servers merged in from .pi-go/mcp.json are project-scoped and live in
+	// Servers merged in from .pirate/mcp.json are project-scoped and live in
 	// memory only; strip them before serializing so a save (e.g. from
 	// SaveDefaultRole) does not copy them into the global config.
 	snapshot := *c

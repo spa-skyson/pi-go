@@ -16,7 +16,7 @@ import (
 //
 // It exists so a SOP can be compiled, linted and inspected without a provider,
 // a worktree or a running agent — which is what makes the definitions testable
-// and what lets `pi` report the shape of a SOP before executing one. Phase 3
+// and what lets `pirate` report the shape of a SOP before executing one. Phase 3
 // supplies the factory that runs real agents; the graph it produces is the
 // same graph.
 type DescribeFactory struct{}

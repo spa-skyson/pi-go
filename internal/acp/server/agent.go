@@ -17,10 +17,10 @@ import (
 	acp "github.com/coder/acp-go-sdk"
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/dimetron/pi-go/internal/acp/server/adapter"
-	"github.com/dimetron/pi-go/internal/extension"
-	"github.com/dimetron/pi-go/internal/otel"
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/acp/server/adapter"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/otel"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 // PromptHandler runs one ACP prompt turn for a session. The skeleton uses

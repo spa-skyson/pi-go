@@ -10,7 +10,7 @@ import (
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/lsp"
+	"github.com/spa-skyson/pi-rate/internal/lsp"
 )
 
 // lspFileAliases maps common LLM parameter name mistakes to canonical names.

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/lsp"
+	"github.com/spa-skyson/pi-rate/internal/lsp"
 )
 
 func TestParseLSPMode(t *testing.T) {

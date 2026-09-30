@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/plugin"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/plugin"
 )
 
 // pluginTimeout bounds a whole plugin command. Installing clones one or two
@@ -17,17 +17,18 @@ import (
 // CLI invocation forever.
 const pluginTimeout = 6 * time.Minute
 
-// pluginHome returns the pi-go home directory, honoring PI_GO_HOME so a test
-// (or a user with a relocated install) can point plugin operations elsewhere.
+// pluginHome returns the Pi-rate home directory, honoring PIRATE_HOME and
+// PI_GO_HOME (legacy) so a test (or a user with a relocated install) can point
+// plugin operations elsewhere. It still fails when no home can be resolved at
+// all, so subcommands report the problem up front instead of operating on a
+// relative fallback path.
 func pluginHome() (string, error) {
-	if override := os.Getenv("PI_GO_HOME"); override != "" {
-		return override, nil
+	if os.Getenv("PIRATE_HOME") == "" && os.Getenv("PI_GO_HOME") == "" {
+		if _, err := os.UserHomeDir(); err != nil {
+			return "", fmt.Errorf("locating home directory: %w", err)
+		}
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("locating home directory: %w", err)
-	}
-	return filepath.Join(home, ".pi-go"), nil
+	return config.PirateHome(), nil
 }
 
 // newPluginManager builds a Manager rooted at the resolved pi-go home and a
@@ -48,7 +49,7 @@ func newPluginManager(cmd *cobra.Command) (*plugin.Manager, context.Context, con
 	return m, ctx, cancel, nil
 }
 
-// newPluginCmd wires up `pi plugin`, which installs skills published through a
+// newPluginCmd wires up `pirate plugin`, which installs skills published through a
 // Claude Code-compatible plugin marketplace.
 func newPluginCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -60,12 +61,12 @@ marketplace.
 pi-go reads the same .claude-plugin/marketplace.json manifest other coding
 agents use, so existing marketplaces work unchanged:
 
-    pi plugin marketplace add obra/superpowers-marketplace
-    pi plugin install superpowers@superpowers-marketplace
+    pirate plugin marketplace add obra/superpowers-marketplace
+    pirate plugin install superpowers@superpowers-marketplace
 
-Installed plugins live in ~/.pi-go/plugins, and their skills are discovered
+Installed plugins live in ~/.pirate/plugins, and their skills are discovered
 automatically. Plugin skills have lower precedence than your own: a skill in
-~/.pi-go/skills or .pi-go/skills with the same name always wins.`,
+~/.pirate/skills or .pirate/skills with the same name always wins.`,
 	}
 
 	cmd.AddCommand(newPluginMarketplaceCmd())
@@ -130,7 +131,7 @@ func newPluginMarketplaceListCmd() *cobra.Command {
 			}
 			out := cmd.OutOrStdout()
 			if len(records) == 0 {
-				fmt.Fprintln(out, "No marketplaces registered. Add one with:\n  pi plugin marketplace add obra/superpowers-marketplace")
+				fmt.Fprintln(out, "No marketplaces registered. Add one with:\n  pirate plugin marketplace add obra/superpowers-marketplace")
 				return nil
 			}
 			for _, rec := range records {
@@ -186,7 +187,7 @@ func newPluginListCmd() *cobra.Command {
 			}
 			out := cmd.OutOrStdout()
 			if len(installed) == 0 {
-				fmt.Fprintln(out, "No plugins installed. Install one with:\n  pi plugin install superpowers@superpowers-marketplace")
+				fmt.Fprintln(out, "No plugins installed. Install one with:\n  pirate plugin install superpowers@superpowers-marketplace")
 				return nil
 			}
 			for _, p := range installed {

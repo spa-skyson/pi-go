@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 func TestParseAgentFile(t *testing.T) {
@@ -195,14 +195,14 @@ func TestLoadAgentsFromDir_NonExistent(t *testing.T) {
 }
 
 func TestDiscoverAgents_ProjectDir(t *testing.T) {
-	// DiscoverAgents reads ~/.pi-go/agents via os.UserHomeDir; point HOME at
+	// DiscoverAgents reads ~/.pirate/agents via os.UserHomeDir; point HOME at
 	// a tempdir so the developer's real user agents cannot leak into All.
 	testenv.SetHome(t, t.TempDir())
 
-	// Create a proper project structure: .pi-go/agents inside a project dir
+	// Create a proper project structure: .pirate/agents inside a project dir
 	tmpDir := t.TempDir()
 	projectRoot := filepath.Join(tmpDir, "myproject")
-	agentsDir := filepath.Join(projectRoot, ".pi-go", "agents")
+	agentsDir := filepath.Join(projectRoot, ".pirate", "agents")
 	os.MkdirAll(agentsDir, 0755)
 
 	// Project has explore agent

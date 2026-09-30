@@ -1,16 +1,16 @@
-// pi-go configuration example — copy what you need into ~/.pi-go/config.json
-// (global) or .pi-go/config.json (project-local). Line comments (//) are
+// Pi-rate configuration example — copy what you need into ~/.pirate/config.json
+// (global) or .pirate/config.json (project-local). Line comments (//) are
 // allowed in the real config files as well; block comments are not.
 //
-// Note: pi-go itself saves config.json as plain JSON without comments (e.g.
+// Note: Pi-rate itself saves config.json as plain JSON without comments (e.g.
 // after choosing a model with /model), so a save drops every comment in the
 // file. Comments are safest in the sections the program never rewrites on its
 // own — providers, permission — but keep a commented copy if you edit often.
 // "$schema" below enables editor autocompletion and validation.
 {
-  "$schema": "https://raw.githubusercontent.com/spa-skyson/pi-go/main/schemas/config.schema.json",
+  "$schema": "https://raw.githubusercontent.com/spa-skyson/pi-rate/main/schemas/config.schema.json",
 
-  // Which agent (.pi-go/agents/*.md, frontmatter mode: primary) the
+  // Which agent (.pirate/agents/*.md, frontmatter mode: primary) the
   // interactive session starts in. Unknown names fall back to the built-in.
   "defaultAgent": "build",
 
@@ -41,7 +41,7 @@
     "corp-claude": {
       // Wire protocol: "anthropic" or "openai-compatible" (the default).
       "type": "anthropic",
-      // Endpoint. ${VAR} expands at load from .pi-go/.env or the environment,
+      // Endpoint. ${VAR} expands at load from .pirate/.env or the environment,
       // so the URL can stay out of a committed config.
       "baseURL": "${CORP_LLM_URL}",
       // Read the key from this environment variable when "apiKey" is empty.
@@ -86,7 +86,7 @@
   },
 
   // MCP servers. stdio servers spawn a command; HTTP servers use "url".
-  // ${VAR} in url/headers expands from .pi-go/.env or the environment.
+  // ${VAR} in url/headers expands from .pirate/.env or the environment.
   "mcp": {
     "servers": [
       { "name": "context7", "command": "npx", "args": ["-y", "@upstash/context7-mcp"] },

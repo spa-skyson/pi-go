@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/dimetron/pi-go/internal/sop/specdoc"
-	"github.com/dimetron/pi-go/internal/sop/validate"
+	"github.com/spa-skyson/pi-rate/internal/sop/specdoc"
+	"github.com/spa-skyson/pi-rate/internal/sop/validate"
 )
 
 func main() {

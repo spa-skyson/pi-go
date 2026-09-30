@@ -13,7 +13,7 @@ import (
 // instead of inline.
 func providerErr(msg string) error { return errors.New(msg) }
 
-// The messages below are verbatim from ~/.pi-go/sessions/*/events.jsonl, so the
+// The messages below are verbatim from ~/.pirate/sessions/*/events.jsonl, so the
 // classifier is tested against the failures pi-go actually records rather than
 // invented ones.
 func TestIsTransient(t *testing.T) {

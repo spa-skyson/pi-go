@@ -15,7 +15,7 @@ func TestEmbedder_Integration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		modelDir = filepath.Join(homeDir, ".pi-go", "models", "sentence-transformers", "all-MiniLM-L6-v2")
+		modelDir = filepath.Join(homeDir, ".pirate", "models", "sentence-transformers", "all-MiniLM-L6-v2")
 	}
 
 	if _, err := os.Stat(modelDir); os.IsNotExist(err) {

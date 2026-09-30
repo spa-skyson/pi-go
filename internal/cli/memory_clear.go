@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 func newMemoryClearCmd() *cobra.Command {
@@ -41,8 +43,8 @@ func runMemoryClear(dir string, force bool, in io.Reader, out io.Writer) error {
 	}
 
 	paths := []string{
-		filepath.Join(absDir, ".pi-go", "memory", "claude-mem.db"),
-		filepath.Join(absDir, ".pi-go", "palace.db"),
+		filepath.Join(absDir, config.ProjectDirName, "memory", "claude-mem.db"),
+		filepath.Join(absDir, config.ProjectDirName, "palace.db"),
 	}
 	var existing []string
 	for _, path := range paths {

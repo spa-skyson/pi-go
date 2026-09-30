@@ -1,12 +1,14 @@
 version: 2
 
+project_name: pi-rate
+
 before:
   hooks:
     - go mod tidy
 
 builds:
-  - main: ./cmd/pi
-    binary: pi
+  - main: ./cmd/pirate
+    binary: pirate
     env:
       - CGO_ENABLED=0
       # No GOEXPERIMENT=simd: Go 1.27 changed the simd/archsimd intrinsics API
@@ -14,8 +16,8 @@ builds:
       # compile against it yet. The kernels' benefit was noise anyway.
     ldflags:
       - -s -w
-      - -X github.com/dimetron/pi-go/internal/cli.Version={{.Version}}
-      - -X github.com/dimetron/pi-go/internal/cli.BuildTag={{.ShortCommit}}
+      - -X github.com/spa-skyson/pi-rate/internal/cli.Version={{.Version}}
+      - -X github.com/spa-skyson/pi-rate/internal/cli.BuildTag={{.ShortCommit}}
     goos:
       - linux
       - darwin
@@ -68,8 +70,8 @@ changelog:
 
 release:
   github:
-    owner: dimetron
-    name: pi-go
+    owner: spa-skyson
+    name: pi-rate
   # This repository has immutable releases enabled, so a release is sealed the
   # moment it is published: no asset can be added afterwards, and the `vscode`
   # and `kagent-manifest` jobs both need to attach one (`HTTP 422: Cannot upload

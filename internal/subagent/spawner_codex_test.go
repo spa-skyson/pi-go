@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/codex"
+	"github.com/spa-skyson/pi-rate/internal/codex"
 )
 
 // fakeCodexSession stands in for a real codex.Session so dispatchCodex and

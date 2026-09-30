@@ -174,7 +174,7 @@ func TestToolResultMatching_SubagentSplitCards(t *testing.T) {
 // parallelReadEvents mirrors what a real session records for two concurrent
 // `read` calls: one model event carrying both calls, then one merged user event
 // carrying both responses, every part tagged with the call ID that pairs them.
-// Taken from the shape in ~/.pi-go/sessions/*/events.jsonl.
+// Taken from the shape in ~/.pirate/sessions/*/events.jsonl.
 func parallelReadEvents() []*session.Event {
 	call := func(id, path string) *genai.Part {
 		return &genai.Part{FunctionCall: &genai.FunctionCall{

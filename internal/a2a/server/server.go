@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc/health"
 	grpc_health_v1 "google.golang.org/grpc/health/grpc_health_v1"
 
-	acpserver "github.com/dimetron/pi-go/internal/acp/server"
+	acpserver "github.com/spa-skyson/pi-rate/internal/acp/server"
 )
 
 // heartbeatInterval is how long the executor lets a turn's stream stay silent

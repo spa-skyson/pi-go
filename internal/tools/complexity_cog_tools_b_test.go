@@ -645,7 +645,7 @@ func TestCogBShouldSkipPathGolden(t *testing.T) {
 		{path: "build", isDir: false, want: false},
 		{path: "a.go", isDir: false, want: false},
 		{path: ".hidden", isDir: false, want: true},
-		{path: ".pi-go", isDir: true, want: false},
+		{path: ".pirate", isDir: true, want: false},
 		{path: ".claude", isDir: true, want: false},
 		{path: ".cursor", isDir: true, want: false},
 		{path: "node_modules", isDir: true, want: true},

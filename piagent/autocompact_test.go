@@ -8,13 +8,13 @@ import (
 
 	adkmodel "google.golang.org/adk/v2/model"
 
-	"github.com/dimetron/pi-go/internal/autocompact"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/autocompact"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // newEmbeddedAgent builds an agent the way an embedder would, rooted in temp
-// directories so the test never touches the developer's real ~/.pi-go.
+// directories so the test never touches the developer's real ~/.pirate.
 func newEmbeddedAgent(t *testing.T, opts ...Option) *Agent {
 	t.Helper()
 	testenv.SetHome(t, t.TempDir())

@@ -59,37 +59,37 @@ func TestWorkflowSANPattern(t *testing.T) {
 	}{
 		{
 			name: "release workflow on a tag",
-			san:  "https://github.com/dimetron/pi-go/.github/workflows/release.yml@refs/tags/v0.0.74",
+			san:  "https://github.com/spa-skyson/pi-rate/.github/workflows/release.yml@refs/tags/v0.0.74",
 			want: true,
 		},
 		{
 			name: "a different workflow in the same repo",
-			san:  "https://github.com/dimetron/pi-go/.github/workflows/ci.yml@refs/tags/v0.0.74",
+			san:  "https://github.com/spa-skyson/pi-rate/.github/workflows/ci.yml@refs/tags/v0.0.74",
 			want: false,
 		},
 		{
 			name: "release workflow on a branch, not a tag",
-			san:  "https://github.com/dimetron/pi-go/.github/workflows/release.yml@refs/heads/main",
+			san:  "https://github.com/spa-skyson/pi-rate/.github/workflows/release.yml@refs/heads/main",
 			want: false,
 		},
 		{
 			name: "a repo whose name merely starts with ours",
-			san:  "https://github.com/dimetron/pi-go-evil/.github/workflows/release.yml@refs/tags/v1",
+			san:  "https://github.com/spa-skyson/pi-rate-evil/.github/workflows/release.yml@refs/tags/v1",
 			want: false,
 		},
 		{
 			name: "our path nested under someone else's repo",
-			san:  "https://github.com/evil/repo/dimetron/pi-go/.github/workflows/release.yml@refs/tags/v1",
+			san:  "https://github.com/evil/repo/spa-skyson/pi-rate/.github/workflows/release.yml@refs/tags/v1",
 			want: false,
 		},
 		{
 			name: "a lookalike host",
-			san:  "https://github.com.evil.example/dimetron/pi-go/.github/workflows/release.yml@refs/tags/v1",
+			san:  "https://github.com.evil.example/spa-skyson/pi-rate/.github/workflows/release.yml@refs/tags/v1",
 			want: false,
 		},
 		{
 			name: "trailing content after the tag",
-			san:  "https://github.com/dimetron/pi-go/.github/workflows/release.yml@refs/tags/v1\nhttps://evil",
+			san:  "https://github.com/spa-skyson/pi-rate/.github/workflows/release.yml@refs/tags/v1\nhttps://evil",
 			want: false,
 		},
 	}
@@ -310,7 +310,7 @@ func TestTUFCacheDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TUFCacheDir: %v", err)
 	}
-	want := filepath.Join(home, ".pi-go", "sigstore")
+	want := filepath.Join(home, ".pirate", "sigstore")
 	if got != want {
 		t.Errorf("TUFCacheDir() = %q, want %q", got, want)
 	}
@@ -450,7 +450,7 @@ func structPredicate(t *testing.T, raw string) *structpb.Struct {
 // pins each branch without needing a signed bundle per case.
 func TestNewResult(t *testing.T) {
 	signedAt := time.Date(2025, 6, 1, 12, 0, 0, 0, time.UTC)
-	const san = "https://github.com/dimetron/pi-go/.github/workflows/release.yml@refs/tags/v0.0.74"
+	const san = "https://github.com/spa-skyson/pi-rate/.github/workflows/release.yml@refs/tags/v0.0.74"
 
 	t.Run("nil statement", func(t *testing.T) {
 		if _, err := newResult(&verify.VerificationResult{}); err == nil ||
@@ -482,11 +482,11 @@ func TestNewResult(t *testing.T) {
 			t.Errorf("SignedAt = %v, want %v", got.SignedAt, signedAt)
 		}
 		want := &Provenance{
-			Repository: "github.com/dimetron/pi-go",
+			Repository: "github.com/spa-skyson/pi-rate",
 			Workflow:   ".github/workflows/release.yml",
 			Ref:        "refs/tags/v0.0.74",
 			Commit:     "4086645aa1f2c3d4e5f60718293a4b5c6d7e8f90",
-			RunURL:     "https://github.com/dimetron/pi-go/actions/runs/1234/attempts/1",
+			RunURL:     "https://github.com/spa-skyson/pi-rate/actions/runs/1234/attempts/1",
 			BuildType:  "https://actions.github.io/buildtypes/workflow/v1",
 		}
 		if !reflect.DeepEqual(got.Provenance, want) {

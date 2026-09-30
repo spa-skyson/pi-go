@@ -7,17 +7,17 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/voicegemini"
-	"github.com/dimetron/pi-go/internal/webserver"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/voicegemini"
+	"github.com/spa-skyson/pi-rate/internal/webserver"
 )
 
 // enableServeVoice turns on the browser voice session, failing with an
 // actionable message when the key is absent.
 //
 // The key is resolved through config.LookupEnvFrom rather than os.Getenv so
-// that the file `pi login` writes it to counts. Requiring an export for voice
-// alone — when every other pi command finds the same key in ~/.pi-go/.env —
+// that the file `pirate login` writes it to counts. Requiring an export for voice
+// alone — when every other pi command finds the same key in ~/.pirate/.env —
 // reads as "voice is broken", and the operator has no way to tell an unset key
 // from an unread one.
 //
@@ -26,7 +26,7 @@ import (
 func enableServeVoice(ctx context.Context, server *webserver.ServerV2, extra ...voicegemini.Option) error {
 	key, source := config.LookupEnvFrom(serveProjectDir(), "GEMINI_API_KEY", "GOOGLE_API_KEY")
 	if key == "" {
-		return fmt.Errorf("--voice needs GEMINI_API_KEY: export it, or put it in .pi-go/.env, .env, or ~/.pi-go/.env")
+		return fmt.Errorf("--voice needs GEMINI_API_KEY: export it, or put it in .pirate/.env, .env, or ~/.pirate/.env")
 	}
 	fmt.Printf("Voice: GEMINI_API_KEY from %s\n", source)
 

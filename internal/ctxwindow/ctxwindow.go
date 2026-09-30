@@ -11,8 +11,8 @@ package ctxwindow
 import (
 	"context"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/provider"
 )
 
 // Resolve reports the context window the running model actually

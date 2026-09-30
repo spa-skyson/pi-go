@@ -11,7 +11,7 @@ import (
 // package.
 //
 // Code under test resolves paths through os.UserHomeDir and writes there —
-// ~/.pi-go/config.json, session history, logs. Tests that exercise those paths
+// ~/.pirate/config.json, session history, logs. Tests that exercise those paths
 // without isolating HOME first will overwrite the developer's real
 // configuration: running "go test ./..." was enough to rewrite the default
 // model role and theme of the machine running it. Isolating at package scope
@@ -44,17 +44,17 @@ func TestMain(m *testing.M) {
 	// lastSessionFile is a package-level var resolved from $HOME at init time,
 	// which happens before TestMain runs — setting HOME above cannot reach it.
 	// Repoint it explicitly so print-mode tests that do not already override it
-	// cannot write to the developer's real ~/.pi-go.
-	lastSessionFile = filepath.Join(dir, ".pi-go", "last-session.json")
+	// cannot write to the developer's real ~/.pirate.
+	lastSessionFileOverride = filepath.Join(dir, ".pirate", "last-session.json")
 
-	// Isolating HOME is not enough: loadDotEnv also looks for .pi-go/.env by
+	// Isolating HOME is not enough: loadDotEnv also looks for .pirate/.env by
 	// walking from the working directory up to the filesystem root, which does
 	// not consult the home directory at all. Run from a directory with no
-	// .pi-go above it, so that walk finds nothing.
+	// .pirate above it, so that walk finds nothing.
 	//
 	// Whether it finds anything depends on where the checkout sits. A CI
-	// runner's workspace has no .pi-go on the path to the root and every test
-	// passes; a developer's checkout under ~ reaches the real ~/.pi-go/.env,
+	// runner's workspace has no .pirate on the path to the root and every test
+	// passes; a developer's checkout under ~ reaches the real ~/.pirate/.env,
 	// and loadDotEnv exports its contents with os.Setenv — process-wide, past
 	// the end of the test that triggered it. Four unrelated tests in this
 	// package then fail on that machine alone.

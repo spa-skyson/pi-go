@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // -----------------------------------------------------------------------
@@ -16,7 +16,7 @@ import (
 // -----------------------------------------------------------------------
 
 func TestLastLoggedError_NoLogDir(t *testing.T) {
-	// Fresh HOME with no ~/.pi-go/log directory => returns "", "", nil.
+	// Fresh HOME with no ~/.pirate/log directory => returns "", "", nil.
 	testenv.SetHome(t, t.TempDir())
 	path, msg, err := lastLoggedError()
 	if err != nil {
@@ -39,7 +39,7 @@ func TestLastLoggedError_EmptyLogDir(t *testing.T) {
 	tmpDir := t.TempDir()
 	testenv.SetHome(t, tmpDir)
 	// Create empty log dir.
-	logDir := filepath.Join(tmpDir, ".pi-go", "log")
+	logDir := filepath.Join(tmpDir, ".pirate", "log")
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestLastLoggedError_WithErrorEntry(t *testing.T) {
 	testenv.SetHome(t, tmpDir)
 
 	// Create a dated log directory with a session file.
-	dateDir := filepath.Join(tmpDir, ".pi-go", "log", "2024-01-15")
+	dateDir := filepath.Join(tmpDir, ".pirate", "log", "2024-01-15")
 	if err := os.MkdirAll(dateDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestLastLoggedError_WithErrorEntry(t *testing.T) {
 func TestLastLoggedError_NoErrorEntries(t *testing.T) {
 	tmpDir := t.TempDir()
 	testenv.SetHome(t, tmpDir)
-	dateDir := filepath.Join(tmpDir, ".pi-go", "log", "2024-01-15")
+	dateDir := filepath.Join(tmpDir, ".pirate", "log", "2024-01-15")
 	if err := os.MkdirAll(dateDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestLastLoggedError_NoErrorEntries(t *testing.T) {
 func TestLastLoggedError_SkipsNonSessionFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	testenv.SetHome(t, tmpDir)
-	dateDir := filepath.Join(tmpDir, ".pi-go", "log", "2024-02-20")
+	dateDir := filepath.Join(tmpDir, ".pirate", "log", "2024-02-20")
 	if err := os.MkdirAll(dateDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestLastLoggedError_SkipsNonSessionFiles(t *testing.T) {
 func TestLastLoggedError_MultipleDateDirsUsesLast(t *testing.T) {
 	tmpDir := t.TempDir()
 	testenv.SetHome(t, tmpDir)
-	logRoot := filepath.Join(tmpDir, ".pi-go", "log")
+	logRoot := filepath.Join(tmpDir, ".pirate", "log")
 
 	// Older directory with an error.
 	oldDir := filepath.Join(logRoot, "2023-01-01")
@@ -200,12 +200,12 @@ func TestCheckForRapidRestartAndWarn_WithLoggedError(t *testing.T) {
 	if err := os.WriteFile(f, []byte(lastSessionJSON(t, tmpDir)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	orig := lastSessionFile
-	lastSessionFile = f
-	defer func() { lastSessionFile = orig }()
+	orig := lastSessionFileOverride
+	lastSessionFileOverride = f
+	defer func() { lastSessionFileOverride = orig }()
 
 	// Populate a log with a recent error.
-	dateDir := filepath.Join(tmpDir, ".pi-go", "log", "2024-06-01")
+	dateDir := filepath.Join(tmpDir, ".pirate", "log", "2024-06-01")
 	_ = os.MkdirAll(dateDir, 0o755)
 	_ = os.WriteFile(filepath.Join(dateDir, "session-01-02-03.log"),
 		[]byte(`{"type":"error","content":"previous crash"}`+"\n"), 0o644)
@@ -229,9 +229,9 @@ func TestCheckForRapidRestartAndWarn_NoLoggedError(t *testing.T) {
 	if err := os.WriteFile(f, []byte(lastSessionJSON(t, tmpDir)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	orig := lastSessionFile
-	lastSessionFile = f
-	defer func() { lastSessionFile = orig }()
+	orig := lastSessionFileOverride
+	lastSessionFileOverride = f
+	defer func() { lastSessionFileOverride = orig }()
 
 	// No log directory => lastLoggedError returns "", "", nil.
 	stderr := captureStderr(t, func() {

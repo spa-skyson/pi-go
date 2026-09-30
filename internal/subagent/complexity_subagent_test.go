@@ -19,10 +19,10 @@ import (
 	"testing"
 	"time"
 
-	sharedacp "github.com/dimetron/pi-go/internal/acp"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/session"
-	"github.com/dimetron/pi-go/internal/testenv"
+	sharedacp "github.com/spa-skyson/pi-rate/internal/acp"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // ---------------------------------------------------------------------------
@@ -247,7 +247,7 @@ func TestMergeAgentsByName_EmptyInputIsNoOp(t *testing.T) {
 func TestClaimExistingWorktree(t *testing.T) {
 	repo := initTestRepo(t)
 	mgr := NewWorktreeManager(repo)
-	wtPath := filepath.Join(repo, ".pi-go", "tasks", "x")
+	wtPath := filepath.Join(repo, ".pirate", "tasks", "x")
 
 	t.Run("branch attached at the expected path is reused", func(t *testing.T) {
 		reuse, err := mgr.claimExistingWorktree("agent-1", "br", wtPath, true, wtPath)
@@ -364,7 +364,7 @@ func TestAddWorktree(t *testing.T) {
 	repo := initTestRepo(t)
 	mgr := NewWorktreeManager(repo)
 
-	fresh := filepath.Join(repo, ".pi-go", "tasks", "fresh")
+	fresh := filepath.Join(repo, ".pirate", "tasks", "fresh")
 	if err := os.MkdirAll(filepath.Dir(fresh), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -378,7 +378,7 @@ func TestAddWorktree(t *testing.T) {
 	}
 
 	// A second add on the same branch fails, and the error names the step.
-	err := mgr.addWorktree(filepath.Join(repo, ".pi-go", "tasks", "dup"), "wt-new", true)
+	err := mgr.addWorktree(filepath.Join(repo, ".pirate", "tasks", "dup"), "wt-new", true)
 	if err == nil {
 		t.Fatal("expected an error re-adding an attached branch")
 	}
@@ -395,7 +395,7 @@ func TestAddWorktree_AttachesExistingBranch(t *testing.T) {
 		t.Fatalf("creating branch: %v: %s", err, out)
 	}
 
-	wt := filepath.Join(repo, ".pi-go", "tasks", "attach")
+	wt := filepath.Join(repo, ".pirate", "tasks", "attach")
 	if err := os.MkdirAll(filepath.Dir(wt), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1055,9 +1055,9 @@ func TestSpawnEnv(t *testing.T) {
 	t.Run("adds sandbox and worktree roots", func(t *testing.T) {
 		o := &Orchestrator{worktree: NewWorktreeManager("/repo")}
 		in := []string{"A=1"}
-		got := o.spawnEnv(in, "/repo/.pi-go/tasks/x", nil)
+		got := o.spawnEnv(in, "/repo/.pirate/tasks/x", nil)
 
-		want := []string{"A=1", "PI_SANDBOX_ROOT=/repo", "PI_WORKTREE_ROOT=/repo/.pi-go/tasks/x"}
+		want := []string{"A=1", "PI_SANDBOX_ROOT=/repo", "PI_WORKTREE_ROOT=/repo/.pirate/tasks/x"}
 		if len(got) != len(want) {
 			t.Fatalf("env = %v, want %v", got, want)
 		}
@@ -1082,7 +1082,7 @@ func TestSpawnEnv(t *testing.T) {
 
 	t.Run("attribution is forwarded to the child", func(t *testing.T) {
 		o := &Orchestrator{worktree: NewWorktreeManager("/repo")}
-		got := o.spawnEnv(nil, "/repo/.pi-go/tasks/x", &session.AgentContext{
+		got := o.spawnEnv(nil, "/repo/.pirate/tasks/x", &session.AgentContext{
 			AgentID: "worker-3", AgentType: "worker", RunID: "run-1",
 			SpecName: "features/x", Slice: 3, Cycle: 2, ParentID: "sess-parent",
 		})
@@ -1125,7 +1125,7 @@ func TestAttributionFor(t *testing.T) {
 		Agent:       AgentConfig{Name: "worker"},
 		Attribution: &session.AgentContext{RunID: "run-1", SpecName: "features/x", Slice: 4},
 	}
-	got := attributionFor(in, "agent-77", "/repo/.pi-go/tasks/x")
+	got := attributionFor(in, "agent-77", "/repo/.pirate/tasks/x")
 
 	if got.RunID != "run-1" || got.SpecName != "features/x" || got.Slice != 4 {
 		t.Errorf("caller fields were lost: %+v", got)
@@ -1136,7 +1136,7 @@ func TestAttributionFor(t *testing.T) {
 	if got.AgentType != "worker" {
 		t.Errorf("AgentType = %q, want worker", got.AgentType)
 	}
-	if got.Worktree != "/repo/.pi-go/tasks/x" {
+	if got.Worktree != "/repo/.pirate/tasks/x" {
 		t.Errorf("Worktree = %q", got.Worktree)
 	}
 
@@ -1181,7 +1181,7 @@ func TestResolveWorkDir(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolveWorkDir: %v", err)
 		}
-		want := filepath.Join(repo, ".pi-go", "tasks", "named")
+		want := filepath.Join(repo, ".pirate", "tasks", "named")
 		if got != want {
 			t.Errorf("workDir = %q, want %q", got, want)
 		}

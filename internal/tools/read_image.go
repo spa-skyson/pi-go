@@ -32,15 +32,15 @@ const maxImageBytes = 20 * 1024 * 1024 // 20 MB
 const imageFetchTimeout = 30 * time.Second
 
 // imageCacheDir is the sandbox-relative directory where remote images are
-// cached. It lives under .pi-go/ alongside config.json, mcp.json, and .env
-// so the agent's writable state is co-located (and the whole .pi-go/ is
+// cached. It lives under .pirate/ alongside config.json, mcp.json, and .env
+// so the agent's writable state is co-located (and the whole .pirate/ is
 // already covered by the project's .gitignore). The file name is a content
 // hash so identical URLs resolve to the same cached file within a session.
-const imageCacheDir = ".pi-go/cache/read_image"
+const imageCacheDir = ".pirate/cache/read_image"
 
 // readImageUserAgent identifies pi-go to remote image hosts. Some CDNs
 // (Cloudflare, hotlink-protected buckets) refuse requests without a UA.
-const readImageUserAgent = "pi-go/1.0 (+https://github.com/dimetron/pi-go)"
+const readImageUserAgent = "pirate/1.0 (+https://github.com/spa-skyson/pi-rate)"
 
 // allowedImageSchemes is the set of URL schemes read_image will fetch. http://
 // is deliberately excluded: vision fetches should always go over TLS so that
@@ -81,7 +81,7 @@ type ReadImageInput struct {
 // injects the bytes as an InlineData part that a vision model can actually see.
 //
 // When the input was a URL, Path contains the cached local file path (a
-// content-addressed entry under .pi-go-image-cache/) and SourceURL is the
+// content-addressed entry under .pirate-image-cache/) and SourceURL is the
 // original URL the caller provided. This makes the response self-describing
 // without bloating the text tool result.
 type ReadImageOutput struct {

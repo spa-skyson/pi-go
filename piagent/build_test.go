@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/memory"
-	"github.com/dimetron/pi-go/internal/palace"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 )
 
 func TestResolveWorkDir(t *testing.T) {
@@ -51,7 +51,7 @@ func TestResolveSessionDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveSessionDir(\"\"): %v", err)
 	}
-	if want := filepath.Join(home, ".pi-go", "sessions"); got != want {
+	if want := filepath.Join(home, ".pirate", "sessions"); got != want {
 		t.Errorf("resolveSessionDir(\"\") = %q, want %q", got, want)
 	}
 
@@ -188,7 +188,7 @@ func TestMemoryConfigResolution(t *testing.T) {
 	home := isolate(t)
 
 	empty := config.Config{}
-	if got, want := memoryDBPath(empty), filepath.Join(home, ".pi-go", "memory", "claude-mem.db"); got != want {
+	if got, want := memoryDBPath(empty), filepath.Join(home, ".pirate", "memory", "claude-mem.db"); got != want {
 		t.Errorf("memoryDBPath(empty) = %q, want %q", got, want)
 	}
 	if memoryTokenBudget(empty) != config.MemoryDefaults().TokenBudget {
@@ -267,7 +267,7 @@ func TestPalacePaths(t *testing.T) {
 	home := isolate(t)
 
 	dbPath, modelPath := palacePaths(config.Config{})
-	if dbPath != filepath.Join(home, ".pi-go", "palace.db") {
+	if dbPath != filepath.Join(home, ".pirate", "palace.db") {
 		t.Errorf("default palace db = %q", dbPath)
 	}
 	if !strings.Contains(modelPath, "MiniLM") {
@@ -433,7 +433,7 @@ func TestConvertHooks(t *testing.T) {
 func TestBuildSubagentsTolerateBrokenDefinitions(t *testing.T) {
 	isolate(t)
 	workDir := t.TempDir()
-	agentsDir := filepath.Join(workDir, ".pi-go", "agents")
+	agentsDir := filepath.Join(workDir, ".pirate", "agents")
 	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}

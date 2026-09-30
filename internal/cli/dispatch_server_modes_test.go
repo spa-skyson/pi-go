@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/guardrail"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/guardrail"
 )
 
 // withStdinLines replaces os.Stdin with a pipe carrying the given NDJSON lines

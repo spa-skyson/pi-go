@@ -14,7 +14,7 @@ import (
 
 	a2apb "github.com/a2aproject/a2a-go/v2/a2apb/v1"
 
-	acpserver "github.com/dimetron/pi-go/internal/acp/server"
+	acpserver "github.com/spa-skyson/pi-rate/internal/acp/server"
 )
 
 // freeAddr returns a loopback address that was bound and released, so Serve

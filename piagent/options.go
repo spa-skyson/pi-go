@@ -60,9 +60,9 @@ type options struct {
 // defaultOptions splits pi-go's conventions along one line: reading them is on
 // by default, writing to shared state is not.
 //
-// Skills and subagents read .pi-go/, which is the whole point of embedding
+// Skills and subagents read .pirate/, which is the whole point of embedding
 // this agent rather than writing your own. Memory and palace write to
-// ~/.pi-go/memory and ~/.pi-go/palace.db — the same stores the user's real pi
+// ~/.pirate/memory and ~/.pirate/palace.db — the same stores the user's real pi
 // sessions use — and an embedder's process is not a pi session. Silently
 // interleaving its observations with the user's is a surprise no amount of
 // documentation fixes, so it is opt-in. This is the one place piagent
@@ -90,13 +90,13 @@ func WithWorkingDir(dir string) Option {
 
 // WithExtraSandboxDirs grants the agent's file tools access to directories
 // outside the working directory. Without this, everything outside the sandbox
-// root (and ~/.pi-go, which is always added) is denied.
+// root (and ~/.pirate, which is always added) is denied.
 func WithExtraSandboxDirs(dirs ...string) Option {
 	return func(o *options) { o.extraSandbox = append(o.extraSandbox, dirs...) }
 }
 
 // WithSessionDir overrides where sessions are persisted. The default,
-// ~/.pi-go/sessions, is what the pi CLI reads, so leaving it alone lets `pi
+// ~/.pirate/sessions, is what the pi CLI reads, so leaving it alone lets `pi
 // --resume` pick up a session an embedder started.
 func WithSessionDir(dir string) Option {
 	return func(o *options) { o.sessionDir = dir }
@@ -205,7 +205,7 @@ func WithLSP(mode LSPMode) Option {
 }
 
 // WithMemory turns on observation memory — the SQLite store under
-// ~/.pi-go/memory, its background worker, and the memory search tools.
+// ~/.pirate/memory, its background worker, and the memory search tools.
 //
 // Off by default, unlike the CLI. That store is shared with the user's real pi
 // sessions, and an embedder's process is not one of them; opt in when the
@@ -215,7 +215,7 @@ func WithMemory(enabled bool) Option {
 }
 
 // WithPalace turns on the memory palace. Off by default for the same reason as
-// [WithMemory] — ~/.pi-go/palace.db is the user's. Once on, its tools still
+// [WithMemory] — ~/.pirate/palace.db is the user's. Once on, its tools still
 // only register when the palace holds at least one drawer.
 func WithPalace(enabled bool) Option {
 	return func(o *options) { o.palaceEnabled = enabled }
@@ -253,7 +253,7 @@ func WithAgentEvents(fn AgentEventFunc) Option {
 //		piagent.WithContextWindow(provider.ContextWindowSizeFor("gemini", m.Name())),
 //	)
 //
-// Without it, and without context_window in ~/.pi-go/config.json, the window
+// Without it, and without context_window in ~/.pirate/config.json, the window
 // is unknown and compaction never fires — the transcript grows until the
 // provider rejects it. A non-positive size is ignored.
 func WithContextWindow(tokens int64) Option {

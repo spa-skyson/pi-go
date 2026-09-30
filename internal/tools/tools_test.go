@@ -1026,8 +1026,8 @@ func TestFindIncludesAgentDirs(t *testing.T) {
 	// Create files in agent directories that should NOT be skipped
 	os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0o644)
 
-	// Create .pi-go, .cursor, .claude directories with files
-	piGoFile := filepath.Join(dir, ".pi-go", "config.json")
+	// Create .pirate, .cursor, .claude directories with files
+	piGoFile := filepath.Join(dir, ".pirate", "config.json")
 	os.MkdirAll(filepath.Dir(piGoFile), 0o755)
 	os.WriteFile(piGoFile, []byte(`{"key": "value"}`), 0o644)
 
@@ -1051,16 +1051,16 @@ func TestFindIncludesAgentDirs(t *testing.T) {
 		foundFiles[f] = true
 	}
 
-	// Check .pi-go is included
+	// Check .pirate is included
 	hasPiGo := false
 	for _, f := range out.Files {
-		if strings.Contains(f, ".pi-go") {
+		if strings.Contains(f, ".pirate") {
 			hasPiGo = true
 			break
 		}
 	}
 	if !hasPiGo {
-		t.Errorf(".pi-go directory should NOT be skipped, but found no files in it")
+		t.Errorf(".pirate directory should NOT be skipped, but found no files in it")
 	}
 
 	// Check .cursor is included
@@ -1095,8 +1095,8 @@ func TestGrepIncludesAgentDirs(t *testing.T) {
 	// Create files in agent directories that should NOT be skipped
 	os.WriteFile(filepath.Join(dir, "main.go"), []byte("func main() {}\n"), 0o644)
 
-	// Create .pi-go, .cursor, .claude directories with files containing the pattern
-	piGoFile := filepath.Join(dir, ".pi-go", "config.json")
+	// Create .pirate, .cursor, .claude directories with files containing the pattern
+	piGoFile := filepath.Join(dir, ".pirate", "config.json")
 	os.MkdirAll(filepath.Dir(piGoFile), 0o755)
 	os.WriteFile(piGoFile, []byte(`{"agent": "pi"}`), 0o644)
 
@@ -1118,7 +1118,7 @@ func TestGrepIncludesAgentDirs(t *testing.T) {
 	foundCursor := false
 	foundClaude := false
 	for _, m := range out.Matches {
-		if strings.Contains(m.File, ".pi-go") {
+		if strings.Contains(m.File, ".pirate") {
 			foundPiGo = true
 		}
 		if strings.Contains(m.File, ".cursor") {
@@ -1130,7 +1130,7 @@ func TestGrepIncludesAgentDirs(t *testing.T) {
 	}
 
 	if !foundPiGo {
-		t.Errorf(".pi-go directory should NOT be skipped, but found no matches in it")
+		t.Errorf(".pirate directory should NOT be skipped, but found no matches in it")
 	}
 	if !foundCursor {
 		t.Errorf(".cursor directory should NOT be skipped, but found no matches in it")

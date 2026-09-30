@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/httplog"
+	"github.com/spa-skyson/pi-rate/internal/httplog"
 )
 
 // traceTransport records every request and response passing through it —

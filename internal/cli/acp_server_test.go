@@ -281,7 +281,7 @@ func TestRunACPServer_AvailableCommandsUseSessionCWD(t *testing.T) {
 	if err := os.MkdirAll(sessionCWD, 0o755); err != nil {
 		t.Fatalf("MkdirAll(sessionCWD) error = %v", err)
 	}
-	skillDir := filepath.Join(projectRoot, ".pi-go", "skills", "session-skill")
+	skillDir := filepath.Join(projectRoot, ".pirate", "skills", "session-skill")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(skillDir) error = %v", err)
 	}

@@ -13,10 +13,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"google.golang.org/adk/v2/session"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/sop"
-	sopexec "github.com/dimetron/pi-go/internal/sop/exec"
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/sop"
+	sopexec "github.com/spa-skyson/pi-rate/internal/sop/exec"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 // TestPRTargetAccepted pins which forms name a pull request. gh accepts a URL,
@@ -27,13 +27,13 @@ func TestPRTargetAccepted(t *testing.T) {
 		in   string
 		want bool
 	}{
-		{"https://github.com/dimetron/pi-go/pull/253", true},
+		{"https://github.com/spa-skyson/pi-rate/pull/253", true},
 		{"#253", true},
 		{"253", true},
 		{"", false},
 		{"main", false},
-		{"https://github.com/dimetron/pi-go/issues/253", false},
-		{"https://example.com/dimetron/pi-go/pull/253", false},
+		{"https://github.com/spa-skyson/pi-rate/issues/253", false},
+		{"https://example.com/spa-skyson/pi-rate/pull/253", false},
 		{"253; rm -rf /", false},
 	}
 
@@ -233,7 +233,7 @@ func lastAssistant(t *testing.T, m *model) string {
 // LoadDefinition prefers over the embedded copy.
 func writeSOPOverride(t *testing.T, workDir, body string) {
 	t.Helper()
-	dir := filepath.Join(workDir, ".pi-go", "sops")
+	dir := filepath.Join(workDir, ".pirate", "sops")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir sops: %v", err)
 	}
@@ -328,7 +328,7 @@ func TestPRAutofixCommandStartsRun(t *testing.T) {
 	m := prAutofixModel(t.TempDir())
 	writeSOPOverride(t, m.cfg.WorkDir, trivialSOP)
 
-	_, cmd := m.handlePRAutofixCommand([]string{"https://github.com/dimetron/pi-go/pull/253"})
+	_, cmd := m.handlePRAutofixCommand([]string{"https://github.com/spa-skyson/pi-rate/pull/253"})
 	if cmd == nil {
 		t.Fatal("an accepted target must start a run")
 	}
@@ -352,7 +352,7 @@ func TestPRAutofixCommandStartsRun(t *testing.T) {
 		t.Errorf("run error = %v, want a clean finish", m.prAutofix.err)
 	}
 	transcript := allAssistant(m)
-	if !strings.Contains(transcript, "Watching https://github.com/dimetron/pi-go/pull/253") {
+	if !strings.Contains(transcript, "Watching https://github.com/spa-skyson/pi-rate/pull/253") {
 		t.Error("transcript should announce what is being watched")
 	}
 	if !strings.Contains(transcript, "pr-autofix finished in") {

@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dimetron/pi-go/internal/mermaid/graph"
-	"github.com/dimetron/pi-go/internal/mermaid/renderer"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/graph"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/renderer"
 )
 
 // ── model ────────────────────────────────────────────────────────

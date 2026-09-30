@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/mermaid/renderer"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/renderer"
 )
 
 // blockDrawRoutedLine and blockDrawLink are the only code that draws a block

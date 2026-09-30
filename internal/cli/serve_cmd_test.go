@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/webserver"
+	"github.com/spa-skyson/pi-rate/internal/webserver"
 )
 
 func TestRunServe_ValidHeadersShortRun(t *testing.T) {

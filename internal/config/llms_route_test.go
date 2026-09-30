@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/notice"
+	"github.com/spa-skyson/pi-rate/internal/notice"
 )
 
 func TestIsLLMSDocsURL(t *testing.T) {
@@ -164,7 +164,7 @@ func TestNotifyReroutedLLMSSilentWhenNothingMoved(t *testing.T) {
 
 func writeProjectMCPFile(t *testing.T, dir, body string) {
 	t.Helper()
-	piDir := filepath.Join(dir, ".pi-go")
+	piDir := filepath.Join(dir, ".pirate")
 	if err := os.MkdirAll(piDir, 0o755); err != nil {
 		t.Fatalf("creating %s: %v", piDir, err)
 	}

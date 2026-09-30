@@ -11,8 +11,8 @@ import (
 	llmmodel "google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 )
 
 // loopLLM emits the same bash function call with empty args on every turn,

@@ -14,7 +14,7 @@ import (
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/memory"
 )
 
 // sessionSummarizerLLM stands in for the summary model. It exists alongside
@@ -74,7 +74,7 @@ var _ model.LLM = (*sessionSummarizerLLM)(nil)
 // HOME set by isolate() will use.
 func memoryDBPathFor(t *testing.T, home string) string {
 	t.Helper()
-	return filepath.Join(home, ".pi-go", "memory", "claude-mem.db")
+	return filepath.Join(home, ".pirate", "memory", "claude-mem.db")
 }
 
 // openMemoryStore opens the store the agent has been writing to, so the test can

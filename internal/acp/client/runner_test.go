@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	shared "github.com/dimetron/pi-go/internal/acp"
+	shared "github.com/spa-skyson/pi-rate/internal/acp"
 )
 
 func TestRunnerStartRejectsInvalidRequest(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/dimetron/pi-go/internal/mermaid/diagram"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/diagram"
 )
 
 // update regenerates every golden file from the current renderer output. The

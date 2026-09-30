@@ -1,7 +1,7 @@
 #!/bin/sh
 # Install the pi-go Harness and AgentTemplate into a kagent cluster.
 #
-#   curl -fsSL https://raw.githubusercontent.com/dimetron/pi-go/main/scripts/install-kagent.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/spa-skyson/pi-go/main/scripts/install-kagent.sh | sh
 #
 # Applies the kagent-manifests.yaml asset from a pi-go release — already
 # pinned to the digest of the image that release built, which is what
@@ -19,7 +19,7 @@
 #   curl -fsSL .../install.sh | sh -s -- --tag v0.1.6 --dry-run
 set -eu
 
-REPO="${PI_GO_REPO:-dimetron/pi-go}"
+REPO="${PI_GO_REPO:-spa-skyson/pi-go}"
 ASSET="kagent-manifests.yaml"
 HARNESS="pi-go"
 
@@ -41,7 +41,7 @@ usage() {
   cat <<'USAGE'
 Install the pi-go Harness and AgentTemplate into a kagent cluster.
 
-  curl -fsSL https://raw.githubusercontent.com/dimetron/pi-go/main/scripts/install-kagent.sh | sh
+  curl -fsSL https://raw.githubusercontent.com/spa-skyson/pi-go/main/scripts/install-kagent.sh | sh
 
 Applies the kagent-manifests.yaml asset from a pi-go release, already pinned to
 the digest of the image that release built (Substrate requires one). Needs curl

@@ -20,7 +20,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/dimetron/pi-go/internal/mermaid"
+	"github.com/spa-skyson/pi-rate/internal/mermaid"
 )
 
 func main() {

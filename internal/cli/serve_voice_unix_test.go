@@ -8,14 +8,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/voicegemini"
-	"github.com/dimetron/pi-go/internal/webserver"
+	"github.com/spa-skyson/pi-rate/internal/voicegemini"
+	"github.com/spa-skyson/pi-rate/internal/webserver"
 )
 
 // enableServeVoice is the startup gate for --voice: no key is a usage error
 // that names the key, and a key the provider rejects is a boot error rather
 // than a dead microphone. Both are exercised without the network — the key
-// lookup is isolated from the developer's own ~/.pi-go/.env and the verify
+// lookup is isolated from the developer's own ~/.pirate/.env and the verify
 // round-trip is pointed at a fake models endpoint.
 func TestEnableServeVoice(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())

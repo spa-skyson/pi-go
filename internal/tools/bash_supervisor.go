@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/procs"
+	"github.com/spa-skyson/pi-rate/internal/procs"
 )
 
 const (

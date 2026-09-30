@@ -3,7 +3,7 @@
 # local data.
 #
 # rsync stages the remote sessions tree into a temp dir, then session-merge
-# folds it into ~/.pi-go/sessions. The merge never deletes local-only sessions
+# folds it into ~/.pirate/sessions. The merge never deletes local-only sessions
 # and never truncates a local events file: for a session present on both sides
 # it unions events by ID (the longer file wins when one side is a strict
 # continuation), keeps the newer meta.json, and writes everything atomically.
@@ -13,15 +13,15 @@
 #
 # Examples:
 #   scripts/sync-sessions.sh archm2pro
-#   scripts/sync-sessions.sh archm2pro .pi-go/sessions --dry-run
+#   scripts/sync-sessions.sh archm2pro .pirate/sessions --dry-run
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REMOTE="${1:?usage: sync-sessions.sh [user@]host [remote-sessions-dir] [--dry-run]}"
-REMOTE_DIR="${2:-.pi-go/sessions}"
+REMOTE_DIR="${2:-.pirate/sessions}"
 DRY_RUN="${3:-}"
 
-LOCAL_DIR="${HOME}/.pi-go/sessions"
+LOCAL_DIR="${HOME}/.pirate/sessions"
 STAGE="$(mktemp -d "${TMPDIR:-/tmp}/pi-sessions-sync.XXXXXX")"
 trap 'rm -rf "$STAGE"' EXIT
 

@@ -8,9 +8,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	adkmodel "google.golang.org/adk/v2/model"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 // popupTestModel builds a model for the /model and /agent picker popup tests:

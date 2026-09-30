@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/acp/server/adapter"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/acp/server/adapter"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 )
 
 func TestLoadSessionConfig(t *testing.T) {

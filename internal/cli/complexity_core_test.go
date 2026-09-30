@@ -17,14 +17,14 @@ import (
 	adktool "google.golang.org/adk/v2/tool"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/lsp"
-	"github.com/dimetron/pi-go/internal/memory"
-	"github.com/dimetron/pi-go/internal/provider"
-	pisession "github.com/dimetron/pi-go/internal/session"
-	"github.com/dimetron/pi-go/internal/testenv"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/lsp"
+	"github.com/spa-skyson/pi-rate/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/provider"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 )
 
 // clearBaseURLEnv unsets every base-URL variable config.BaseURLs consults, so a
@@ -349,7 +349,7 @@ func TestBuildNonInteractiveInstruction(t *testing.T) {
 		if got == "" {
 			t.Fatal("instruction is empty, want the built-in one")
 		}
-		if !strings.Contains(got, "You are pi-go") {
+		if !strings.Contains(got, "You are Pi-rate") {
 			t.Errorf("instruction does not look like the built-in one:\n%q", got[:min(200, len(got))])
 		}
 		if strings.Contains(got, "## Palace Memory Context") {
@@ -399,7 +399,7 @@ func TestOpenSessionService(t *testing.T) {
 	if svc == nil {
 		t.Fatal("session service is nil")
 	}
-	want := filepath.Join(home, ".pi-go", "sessions")
+	want := filepath.Join(home, ".pirate", "sessions")
 	if path != want {
 		t.Errorf("sessions path = %q, want %q", path, want)
 	}
@@ -584,7 +584,7 @@ func TestLastLoggedError(t *testing.T) {
 	})
 
 	t.Run("newest date directory wins", func(t *testing.T) {
-		logRoot := filepath.Join(home, ".pi-go", "log")
+		logRoot := filepath.Join(home, ".pirate", "log")
 		for _, d := range []struct{ dir, msg string }{
 			{"2026-08-20", "older"},
 			{"2026-08-21", "newer"},

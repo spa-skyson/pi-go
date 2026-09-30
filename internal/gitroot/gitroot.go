@@ -3,7 +3,7 @@
 // The distinction this package exists for: `git rev-parse --show-toplevel`
 // run from inside a *linked worktree* returns the worktree directory, not the
 // main checkout. pi-go spawns subagents whose working directory is a linked
-// worktree (`.pi-go/tasks/<id>`, `.worktrees/<branch>`), and each spawned pi
+// worktree (`.pirate/tasks/<id>`, `.worktrees/<branch>`), and each spawned pi
 // process derives its own PI_SANDBOX_ROOT. Using the toplevel there roots the
 // sandbox at the worktree, so every read or edit of a path elsewhere in the
 // repo is rejected as escaping the sandbox — which is what made /run workers

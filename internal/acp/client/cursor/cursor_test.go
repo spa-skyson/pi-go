@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	shared "github.com/dimetron/pi-go/internal/acp"
-	"github.com/dimetron/pi-go/internal/testenv"
+	shared "github.com/spa-skyson/pi-rate/internal/acp"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 func TestRunnerStartRejectsEmptyPrompt(t *testing.T) {

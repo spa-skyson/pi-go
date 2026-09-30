@@ -4,6 +4,7 @@ package guardrail
 import (
 	"encoding/json"
 	"fmt"
+	config "github.com/spa-skyson/pi-rate/internal/config"
 	"os"
 	"path/filepath"
 	"sync"
@@ -73,15 +74,14 @@ type Tracker struct {
 }
 
 // New creates a tracker with the given daily token limit.
-// It loads any existing usage for today from ~/.pi-go/usage.json.
+// It loads any existing usage for today from ~/.pirate/usage.json.
 func New(maxDailyTokens int64) *Tracker {
 	t := &Tracker{
 		limit: maxDailyTokens,
 	}
 
-	home, err := os.UserHomeDir()
-	if err == nil {
-		t.filePath = filepath.Join(home, ".pi-go", "usage.json")
+	if _, err := os.UserHomeDir(); err == nil {
+		t.filePath = filepath.Join(config.PirateHome(), "usage.json")
 	}
 
 	t.load()

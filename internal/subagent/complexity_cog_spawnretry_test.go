@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	sharedacp "github.com/dimetron/pi-go/internal/acp"
+	sharedacp "github.com/spa-skyson/pi-rate/internal/acp"
 )
 
 // These tests pin the retry behavior of (*Orchestrator).SpawnWithRetry before

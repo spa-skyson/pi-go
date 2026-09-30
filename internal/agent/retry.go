@@ -8,7 +8,7 @@ import (
 
 	"google.golang.org/adk/v2/session"
 
-	"github.com/dimetron/pi-go/internal/retry"
+	"github.com/spa-skyson/pi-rate/internal/retry"
 )
 
 // RetryConfig controls retry behavior for transient LLM errors.

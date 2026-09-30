@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dimetron/pi-go/internal/sop/specdoc"
+	"github.com/spa-skyson/pi-rate/internal/sop/specdoc"
 )
 
 // ArtifactContract binds an artifact to the rules it must satisfy.

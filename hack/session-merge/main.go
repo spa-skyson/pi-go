@@ -1,7 +1,7 @@
 // Command session-merge folds a staged remote pi-go sessions tree into the
 // local one without losing local data. It is the merge half of
 // scripts/sync-sessions.sh: rsync stages the remote tree, this command merges
-// it into ~/.pi-go/sessions.
+// it into ~/.pirate/sessions.
 //
 // Usage:
 //
@@ -13,11 +13,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dimetron/pi-go/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/session"
 )
 
 func main() {
-	local := flag.String("local", "", "local sessions dir (e.g. ~/.pi-go/sessions)")
+	local := flag.String("local", "", "local sessions dir (e.g. ~/.pirate/sessions)")
 	remote := flag.String("remote", "", "staged remote sessions dir")
 	dryRun := flag.Bool("dry-run", false, "report what would change without writing")
 	flag.Parse()

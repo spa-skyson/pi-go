@@ -10,7 +10,7 @@ import (
 // package.
 //
 // Code under test resolves paths through os.UserHomeDir and writes there —
-// ~/.pi-go/config.json, session history, logs. Tests that exercise those paths
+// ~/.pirate/config.json, session history, logs. Tests that exercise those paths
 // without isolating HOME first will overwrite the developer's real
 // configuration: running "go test ./..." was enough to rewrite the default
 // model role and theme of the machine running it. Isolating at package scope

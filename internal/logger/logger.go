@@ -1,10 +1,11 @@
 // Package logger provides session logging for pi-go.
-// Logs are written to ~/.pi-go/log/yyyy-mm-dd/session-HH-MM-SS.log
+// Logs are written to ~/.pirate/log/yyyy-mm-dd/session-HH-MM-SS.log
 package logger
 
 import (
 	"encoding/json"
 	"fmt"
+	config "github.com/spa-skyson/pi-rate/internal/config"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -53,17 +54,16 @@ type Entry struct {
 }
 
 // New creates a new session logger.
-// Log file is created at ~/.pi-go/log/yyyy-mm-dd/session-HH-MM-SS.log
+// Log file is created at ~/.pirate/log/yyyy-mm-dd/session-HH-MM-SS.log
 func New() (*Logger, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
+	if _, err := os.UserHomeDir(); err != nil {
 		return nil, fmt.Errorf("getting home dir: %w", err)
 	}
 
 	now := time.Now()
 	dateDir := now.Format("2006-01-02")
 	fileName := fmt.Sprintf("session-%s.log", now.Format("15-04-05"))
-	logDir := filepath.Join(home, ".pi-go", "log", dateDir)
+	logDir := filepath.Join(config.PirateHome(), "log", dateDir)
 
 	if err := os.MkdirAll(logDir, 0o700); err != nil {
 		return nil, fmt.Errorf("creating log dir: %w", err)

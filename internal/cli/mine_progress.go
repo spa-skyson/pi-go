@@ -40,7 +40,7 @@ const (
 // spinnerFrames is the braille spinner shared by every progress line.
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
-// mineProgress owns the single live terminal line that `pi memory mine` redraws
+// mineProgress owns the single live terminal line that `pirate memory mine` redraws
 // with \r, and is the only thing allowed to write to it.
 //
 // It exists because two independent writers were fighting over that line. The
@@ -140,7 +140,7 @@ func (p *mineProgress) do(fn func() string) {
 }
 
 // show renders one progress update: a bar, the item being worked on, and an
-// estimated time to finish. It is the only line format `pi memory mine` draws.
+// estimated time to finish. It is the only line format `pirate memory mine` draws.
 //
 //	⠹ embed  [██████████░░░░░░░░░░]  52%  3.2k/6.3k chunks  internal/cli/cli.go  ~1m20s left
 //
@@ -159,7 +159,7 @@ func (p *mineProgress) show(stage, item string, done, total int, unit string) {
 // walking the tree, loading content hashes, or committing the insert
 // transaction.
 //
-// These steps are why `pi memory mine` looked hung. They sit between the phases
+// These steps are why `pirate memory mine` looked hung. They sit between the phases
 // that do report, they can run for minutes on a large palace, and they emitted
 // nothing at all: the last thing on screen was whatever the previous phase left
 // there, with no way to tell slow from stuck. Naming the step is half the fix;

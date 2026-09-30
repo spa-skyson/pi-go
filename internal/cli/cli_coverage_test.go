@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/logger"
-	"github.com/dimetron/pi-go/internal/lsp"
-	"github.com/dimetron/pi-go/internal/memory"
-	"github.com/dimetron/pi-go/internal/subagent"
-	"github.com/dimetron/pi-go/internal/testenv"
-	"github.com/dimetron/pi-go/internal/tools"
-	"github.com/dimetron/pi-go/internal/webserver"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/logger"
+	"github.com/spa-skyson/pi-rate/internal/lsp"
+	"github.com/spa-skyson/pi-rate/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/webserver"
 )
 
 // -----------------------------------------------------------------------
@@ -617,7 +617,7 @@ func TestPrintRecentJSON_WithData(t *testing.T) {
 
 func TestFindMemoryDB_ProjectSpecific(t *testing.T) {
 	dir := t.TempDir()
-	memDir := filepath.Join(dir, ".pi-go", "memory")
+	memDir := filepath.Join(dir, ".pirate", "memory")
 	os.MkdirAll(memDir, 0o755)
 	dbPath := filepath.Join(memDir, "claude-mem.db")
 	os.WriteFile(dbPath, []byte("test"), 0o644)
@@ -633,7 +633,7 @@ func TestFindMemoryDB_ProjectSpecific(t *testing.T) {
 
 func TestFindMemoryDB_PalaceLegacy(t *testing.T) {
 	dir := t.TempDir()
-	piDir := filepath.Join(dir, ".pi-go")
+	piDir := filepath.Join(dir, ".pirate")
 	os.MkdirAll(piDir, 0o755)
 	dbPath := filepath.Join(piDir, "palace.db")
 	os.WriteFile(dbPath, []byte("test"), 0o644)
@@ -700,7 +700,7 @@ func TestRunMemoryModelStatus_WithModel(t *testing.T) {
 }
 
 func TestRunMemoryModelStatus_DefaultPath(t *testing.T) {
-	// With empty path, uses ~/.pi-go/models/
+	// With empty path, uses ~/.pirate/models/
 	output := captureStdout(t, func() {
 		_ = runMemoryModelStatus("")
 	})
@@ -731,7 +731,7 @@ func TestRunMemoryStatus_NoDB(t *testing.T) {
 
 func TestRunMemoryRecent_JSON(t *testing.T) {
 	dir := t.TempDir()
-	memDir := filepath.Join(dir, ".pi-go", "memory")
+	memDir := filepath.Join(dir, ".pirate", "memory")
 	os.MkdirAll(memDir, 0o755)
 	dbPath := filepath.Join(memDir, "claude-mem.db")
 
@@ -758,7 +758,7 @@ func TestRunMemoryRecent_JSON(t *testing.T) {
 
 func TestRunMemoryRecent_WithSummaries(t *testing.T) {
 	dir := t.TempDir()
-	memDir := filepath.Join(dir, ".pi-go", "memory")
+	memDir := filepath.Join(dir, ".pirate", "memory")
 	os.MkdirAll(memDir, 0o755)
 	dbPath := filepath.Join(memDir, "claude-mem.db")
 
@@ -809,7 +809,7 @@ func TestRunMemoryRecent_WithSummaries(t *testing.T) {
 
 func TestRunMemoryRecent_TypeFilterWithLimit(t *testing.T) {
 	dir := t.TempDir()
-	memDir := filepath.Join(dir, ".pi-go", "memory")
+	memDir := filepath.Join(dir, ".pirate", "memory")
 	os.MkdirAll(memDir, 0o755)
 	dbPath := filepath.Join(memDir, "claude-mem.db")
 

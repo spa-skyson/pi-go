@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/voicegemini"
+	"github.com/spa-skyson/pi-rate/internal/voicegemini"
 )
 
 // Voice sessions are created over REST and then consumed by exactly one
@@ -168,7 +168,7 @@ func (s *ServerV2) handleVoiceConfig(w http.ResponseWriter, r *http.Request) {
 	if !s.voiceEnabled() {
 		writeJSON(w, map[string]any{
 			"enabled": false,
-			"reason":  "voice is not configured — set GEMINI_API_KEY and run `pi serve --voice`",
+			"reason":  "voice is not configured — set GEMINI_API_KEY and run `pirate serve --voice`",
 		})
 		return
 	}
@@ -188,7 +188,7 @@ func (s *ServerV2) handleCreateVoiceSession(w http.ResponseWriter, r *http.Reque
 	}
 	if !s.voiceEnabled() {
 		voiceHTTPError(w, http.StatusServiceUnavailable,
-			fmt.Errorf("voice is not configured — set GEMINI_API_KEY and run `pi serve --voice`"))
+			fmt.Errorf("voice is not configured — set GEMINI_API_KEY and run `pirate serve --voice`"))
 		return
 	}
 

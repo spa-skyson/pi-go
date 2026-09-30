@@ -6,7 +6,7 @@
 # whatever that tag points at today, which is exactly what pinning prevents.
 #
 # Usage:
-#   ./render-manifests.sh --image ghcr.io/dimetron/pi-go-kagent@sha256:<digest>
+#   ./render-manifests.sh --image ghcr.io/spa-skyson/pi-go-kagent@sha256:<digest>
 #   ./render-manifests.sh --image ... --no-env > manifests.yaml
 #   ./render-manifests.sh --image ... | kubectl apply -f -
 #

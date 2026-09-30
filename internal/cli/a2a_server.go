@@ -10,17 +10,18 @@ import (
 
 	"github.com/spf13/cobra"
 
-	a2aserver "github.com/dimetron/pi-go/internal/a2a/server"
-	acpserver "github.com/dimetron/pi-go/internal/acp/server"
+	a2aserver "github.com/spa-skyson/pi-rate/internal/a2a/server"
+	acpserver "github.com/spa-skyson/pi-rate/internal/acp/server"
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 func newA2AServerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "a2a",
-		Short: "Run pi as an A2A agent over HTTP",
-		Long: `Run pi as an A2A (Agent-to-Agent) agent that communicates with an
+		Short: "Run pirate as an A2A agent over HTTP",
+		Long: `Run pirate as an A2A (Agent-to-Agent) agent that communicates with an
 external A2A client over HTTP JSON-RPC. Use this when another agent or a kagent
-harness drives pi through the A2A protocol. The server serves an agent card at
+harness drives pirate through the A2A protocol. The server serves an agent card at
 /.well-known/agent-card.json and accepts A2A message requests on the root path.
 The server returns when the process receives SIGINT.`,
 		Args: cobra.NoArgs,
@@ -42,15 +43,10 @@ func runA2AServer(cmd *cobra.Command, _ []string) error {
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
 	defer stop()
 
-	// Create error log file for a2a-server failures in $HOME/.pi-go/sessions/.
-	logDir, err := os.UserHomeDir()
-	if err == nil {
-		logDir = filepath.Join(logDir, ".pi-go", "sessions")
-	}
+	// Create error log file for server failures in the Pi-rate home sessions dir.
+	logDir := filepath.Join(config.PirateHome(), "sessions")
 	errFile := filepath.Join(logDir, "a2a-server.err.log")
-	if err == nil {
-		_ = os.MkdirAll(logDir, 0o755)
-	}
+	_ = os.MkdirAll(logDir, 0o755)
 	f, err := os.OpenFile(errFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err == nil {
 		defer f.Close()
@@ -79,7 +75,7 @@ func runA2AServer(cmd *cobra.Command, _ []string) error {
 		system = os.Getenv("PI_SYSTEM")
 	}
 
-	// The A2A context id is the pi session id, and the transcript behind it
+	// The A2A context id is the pirate session id, and the transcript behind it
 	// is persisted, so a conversation survives Substrate replacing the actor:
 	// the next message on the same context resumes it from the durable dir.
 	rt := acpserver.RuntimeConfig{

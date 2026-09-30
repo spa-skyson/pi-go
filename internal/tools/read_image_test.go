@@ -232,7 +232,7 @@ func TestReadImageHandler_HTTPS(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits++
 		// Sanity-check the UA so we know our request builder is wired up.
-		if ua := r.Header.Get("User-Agent"); !strings.HasPrefix(ua, "pi-go/") {
+		if ua := r.Header.Get("User-Agent"); !strings.HasPrefix(ua, "pirate/") {
 			t.Errorf("unexpected User-Agent: %q", ua)
 		}
 		w.Header().Set("Content-Type", "image/png")

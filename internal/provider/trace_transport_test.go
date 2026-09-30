@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/httplog"
+	"github.com/spa-skyson/pi-rate/internal/httplog"
 )
 
 // stubTripper returns a canned response, recording the request body it actually

@@ -1,5 +1,5 @@
 // Package otel provides lightweight OpenTelemetry setup for pi-go,
-// driven entirely by environment variables sourced from ~/.pi-go/.env
+// driven entirely by environment variables sourced from ~/.pirate/.env
 // so secrets never appear in the process environment.
 //
 // The following env vars are consumed:
@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	config "github.com/spa-skyson/pi-rate/internal/config"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	otlptrace "go.opentelemetry.io/otel/exporters/otlp/otlptrace"
@@ -75,7 +76,7 @@ func ExportErrors() (count int64, last string) {
 
 // ResetForTest resets the lazy-initialized tracer provider. It is intended
 // for tests that need to re-read the OTEL configuration from the current
-// ~/.pi-go/.env or process environment, e.g. when the test process has
+// ~/.pirate/.env or process environment, e.g. when the test process has
 // already triggered init once with a different configuration. Production
 // code should never call this.
 func ResetForTest() {
@@ -93,7 +94,7 @@ func Tracer(name string) trace.Tracer {
 	return otel.Tracer(name)
 }
 
-// initProvider reads OTEL_* vars from ~/.pi-go/.env and builds a
+// initProvider reads OTEL_* vars from ~/.pirate/.env and builds a
 // TracerProvider. It is safe to call multiple times; the provider is set
 // exactly once.
 func initProvider() {
@@ -237,7 +238,7 @@ func Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// envOr reads key from ~/.pi-go/.env, falling back to process env.
+// envOr reads key from ~/.pirate/.env, falling back to process env.
 func envOr(dotEnvPath, key, fallback string) string {
 	v := loadEnvFromDotEnv(dotEnvPath, key)
 	if v != "" {
@@ -295,20 +296,19 @@ func normalizeEndpointURL(endpoint, protocol string) string {
 
 // loadEnvFromDotEnv reads a single key from dotEnvPath. If dotEnvPath is
 // absolute it is used as-is; otherwise it is resolved as a filename within
-// ~/.pi-go/ (e.g. ".env" → ~/.pi-go/.env).
+// ~/.pirate/ (e.g. ".env" → ~/.pirate/.env).
 func loadEnvFromDotEnv(dotEnvPath, key string) string {
 	// filepath.IsAbs, not a leading-slash check: a Windows absolute path starts
 	// with a drive letter, and treating it as relative resolved it under
-	// ~/.pi-go/ and silently read nothing.
+	// ~/.pirate/ and silently read nothing.
 	var path string
 	if filepath.IsAbs(dotEnvPath) {
 		path = dotEnvPath
 	} else {
-		home, err := os.UserHomeDir()
-		if err != nil {
+		if _, err := os.UserHomeDir(); err != nil {
 			return ""
 		}
-		path = filepath.Join(home, ".pi-go", dotEnvPath)
+		path = filepath.Join(config.PirateHome(), dotEnvPath)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {

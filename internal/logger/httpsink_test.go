@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/httplog"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/httplog"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 func TestHTTPSinkNilLogger(t *testing.T) {

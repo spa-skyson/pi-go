@@ -6,11 +6,11 @@ import (
 
 	adksession "google.golang.org/adk/v2/session"
 
-	piagent "github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/autocompact"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/guardrail"
-	pisession "github.com/dimetron/pi-go/internal/session"
+	piagent "github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/autocompact"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/guardrail"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
 )
 
 // newTestAgent builds the smallest agent installAutoCompact can be handed. It

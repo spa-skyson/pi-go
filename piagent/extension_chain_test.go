@@ -7,7 +7,7 @@ import (
 
 	adkmodel "google.golang.org/adk/v2/model"
 
-	"github.com/dimetron/pi-go/internal/autocompact"
+	"github.com/spa-skyson/pi-rate/internal/autocompact"
 )
 
 // The two tests below close the gap between "the option stored a value" and

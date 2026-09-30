@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/dimetron/pi-go/internal/mermaid/renderer"
-	"github.com/dimetron/pi-go/internal/mermaid/textwidth"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/renderer"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/textwidth"
 )
 
 // ── layout constants ────────────────────────────────────────────────

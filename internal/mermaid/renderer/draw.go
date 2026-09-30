@@ -3,9 +3,9 @@ package renderer
 import (
 	"strings"
 
-	"github.com/dimetron/pi-go/internal/mermaid/graph"
-	"github.com/dimetron/pi-go/internal/mermaid/layout"
-	"github.com/dimetron/pi-go/internal/mermaid/routing"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/graph"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/layout"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/routing"
 )
 
 // graphFillPercent is the fraction of terminal width used for graph layouts.

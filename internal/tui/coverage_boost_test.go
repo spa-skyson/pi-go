@@ -12,9 +12,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/dimetron/pi-go/internal/auth"
-	"github.com/dimetron/pi-go/internal/extension"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/auth"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // -----------------------------------------------------------------------------
@@ -589,8 +589,8 @@ func TestHistoryPathJSON_WithHome(t *testing.T) {
 	if p == "" {
 		t.Error("expected non-empty path")
 	}
-	if !strings.Contains(p, ".pi-go") {
-		t.Errorf("expected .pi-go path, got %q", p)
+	if !strings.Contains(p, ".pirate") {
+		t.Errorf("expected .pirate path, got %q", p)
 	}
 }
 
@@ -608,7 +608,7 @@ func TestAppendHistory_WritesFile(t *testing.T) {
 	testenv.SetHome(t, tmp)
 	appendHistory(HistoryEntry{Text: "hello"})
 	// File should exist.
-	p := filepath.Join(tmp, ".pi-go", "history.jsonl")
+	p := filepath.Join(tmp, ".pirate", "history.jsonl")
 	data, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatalf("expected history file to exist: %v", err)
@@ -621,7 +621,7 @@ func TestAppendHistory_WritesFile(t *testing.T) {
 func TestLoadHistory_MigratePlainToJSON(t *testing.T) {
 	tmp := t.TempDir()
 	testenv.SetHome(t, tmp)
-	piDir := filepath.Join(tmp, ".pi-go")
+	piDir := filepath.Join(tmp, ".pirate")
 	_ = os.MkdirAll(piDir, 0o700)
 	// Write legacy plain history.
 	_ = os.WriteFile(filepath.Join(piDir, "history"), []byte("one\ntwo\n"), 0o600)
@@ -671,7 +671,7 @@ func TestSaveThemeToConfig_WritesConfig(t *testing.T) {
 	tmp := t.TempDir()
 	testenv.SetHome(t, tmp)
 	saveThemeToConfig("tokyo-night")
-	data, err := os.ReadFile(filepath.Join(tmp, ".pi-go", "config.json"))
+	data, err := os.ReadFile(filepath.Join(tmp, ".pirate", "config.json"))
 	if err != nil {
 		t.Fatalf("expected config.json to be created: %v", err)
 	}
@@ -683,7 +683,7 @@ func TestSaveThemeToConfig_WritesConfig(t *testing.T) {
 func TestSaveThemeToConfig_UpdatesExisting(t *testing.T) {
 	tmp := t.TempDir()
 	testenv.SetHome(t, tmp)
-	configDir := filepath.Join(tmp, ".pi-go")
+	configDir := filepath.Join(tmp, ".pirate")
 	_ = os.MkdirAll(configDir, 0o755)
 	// Pre-write config.
 	_ = os.WriteFile(filepath.Join(configDir, "config.json"),

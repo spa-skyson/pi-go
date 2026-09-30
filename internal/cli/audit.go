@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/audit"
-	"github.com/dimetron/pi-go/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/audit"
+	"github.com/spa-skyson/pi-rate/internal/extension"
 )
 
 func newAuditCmd() *cobra.Command {

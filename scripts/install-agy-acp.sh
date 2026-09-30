@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Install the Google Antigravity ACP server used by pi-go's "agy" subagent.
+# Install the Google Antigravity ACP server used by pi-rate's "agy" subagent.
 #
 # The agy CLI has no ACP mode: Antigravity ships a standalone ACP server binary
 # distributed as a platform archive by the Agent Client Protocol registry. This
 # script resolves the entry for the current platform, downloads the archive and
-# extracts it into ~/.pi-go/acp/agy, which is the first location the adapter
+# extracts it into ~/.pirate/acp/agy, which is the first location the adapter
 # (internal/acp/client/agy) searches.
 #
 # The download is large (~300 MB compressed, ~900 MB extracted).
@@ -14,7 +14,7 @@
 set -euo pipefail
 
 AGENT_JSON_URL="${AGY_ACP_AGENT_JSON:-https://raw.githubusercontent.com/agentclientprotocol/registry/main/antigravity-acp/agent.json}"
-INSTALL_DIR="${1:-$HOME/.pi-go/acp/agy}"
+INSTALL_DIR="${1:-$HOME/.pirate/acp/agy}"
 
 for cmd in curl python3 unzip; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "error: $cmd is required" >&2; exit 1; }
@@ -90,7 +90,7 @@ if [ ! -f "$server" ]; then
 fi
 
 echo "==> installed $server"
-echo "    pi-go finds it automatically; override with PI_ACP_AGY_CMD if you move it."
+echo "    pirate finds it automatically; override with PI_ACP_AGY_CMD if you move it."
 echo
 echo "Next: the server does not inherit the agy CLI login. Select an auth method in"
 echo "  ~/.gemini/antigravity-acp/settings.json, e.g. {\"auth\": {\"type\": \"oauth-personal\"}},"

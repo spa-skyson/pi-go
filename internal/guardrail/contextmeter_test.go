@@ -3,8 +3,8 @@ package guardrail_test
 import (
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/autocompact"
-	"github.com/dimetron/pi-go/internal/guardrail"
+	"github.com/spa-skyson/pi-rate/internal/autocompact"
+	"github.com/spa-skyson/pi-rate/internal/guardrail"
 )
 
 // Auto-compaction reads the live context size through autocompact.ContextMeter

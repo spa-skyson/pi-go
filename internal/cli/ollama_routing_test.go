@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // The bug this pins: OLLAMA_API_KEY exported for a :cloud model used to be read

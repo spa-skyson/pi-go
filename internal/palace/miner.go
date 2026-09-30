@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/spa-skyson/pi-rate/internal/config"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -132,21 +134,21 @@ var supportedExtensions = map[string]bool{
 
 // skipDirNames are directory names always skipped during mining.
 var skipDirNames = map[string]bool{
-	"node_modules": true,
-	"vendor":       true,
-	".git":         true,
-	".pi-go":       true,
-	"__pycache__":  true,
-	"dist":         true,
-	"build":        true,
-	".idea":        true,
-	".vscode":      true,
-	".next":        true,
-	".cache":       true,
-	"target":       true,
-	"bin":          true,
-	".ralph":       true,
-	".agents":      true,
+	"node_modules":        true,
+	"vendor":              true,
+	".git":                true,
+	config.ProjectDirName: true,
+	"__pycache__":         true,
+	"dist":                true,
+	"build":               true,
+	".idea":               true,
+	".vscode":             true,
+	".next":               true,
+	".cache":              true,
+	"target":              true,
+	"bin":                 true,
+	".ralph":              true,
+	".agents":             true,
 }
 
 // chunkText splits text into overlapping chunks, splitting on paragraph or

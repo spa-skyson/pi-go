@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/piagent"
-	"github.com/dimetron/pi-go/pimodels"
+	"github.com/spa-skyson/pi-rate/piagent"
+	"github.com/spa-skyson/pi-rate/pimodels"
 )
 
 // This file is the one place the two public packages meet. It lives in the

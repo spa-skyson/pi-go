@@ -21,7 +21,7 @@ func writeEnv(t *testing.T, dir, rel, body string) string {
 
 func TestLookupEnvPrefersProcessEnvironment(t *testing.T) {
 	dir := t.TempDir()
-	writeEnv(t, dir, ".pi-go/.env", "PI_TEST_KEY=from-file\n")
+	writeEnv(t, dir, ".pirate/.env", "PI_TEST_KEY=from-file\n")
 	t.Setenv("PI_TEST_KEY", "from-environment")
 
 	// An explicit export for one run must beat a file.
@@ -38,7 +38,7 @@ func TestLookupEnvPrefersProcessEnvironment(t *testing.T) {
 // the user also exporting it.
 func TestLookupEnvReadsProjectFile(t *testing.T) {
 	dir := t.TempDir()
-	path := writeEnv(t, dir, ".pi-go/.env", "# a comment\nGEMINI_API_KEY=AIzaSyFromFile\n")
+	path := writeEnv(t, dir, ".pirate/.env", "# a comment\nGEMINI_API_KEY=AIzaSyFromFile\n")
 	t.Setenv("GEMINI_API_KEY", "")
 
 	got, source := LookupEnvFrom(dir, "GEMINI_API_KEY")
@@ -51,7 +51,7 @@ func TestLookupEnvReadsProjectFile(t *testing.T) {
 }
 
 // A project that keeps a plain .env should not have to duplicate it under
-// .pi-go/ just for voice.
+// .pirate/ just for voice.
 func TestLookupEnvReadsPlainDotEnv(t *testing.T) {
 	dir := t.TempDir()
 	writeEnv(t, dir, ".env", "GEMINI_API_KEY=AIzaSyPlain\n")
@@ -64,7 +64,7 @@ func TestLookupEnvReadsPlainDotEnv(t *testing.T) {
 
 func TestLookupEnvProjectFileBeatsPlainDotEnv(t *testing.T) {
 	dir := t.TempDir()
-	writeEnv(t, dir, ".pi-go/.env", "GEMINI_API_KEY=AIzaSyPiGo\n")
+	writeEnv(t, dir, ".pirate/.env", "GEMINI_API_KEY=AIzaSyPiGo\n")
 	writeEnv(t, dir, ".env", "GEMINI_API_KEY=AIzaSyPlain\n")
 	t.Setenv("GEMINI_API_KEY", "")
 
@@ -77,7 +77,7 @@ func TestLookupEnvProjectFileBeatsPlainDotEnv(t *testing.T) {
 // other project file.
 func TestLookupEnvWalksUp(t *testing.T) {
 	dir := t.TempDir()
-	writeEnv(t, dir, ".pi-go/.env", "GEMINI_API_KEY=AIzaSyParent\n")
+	writeEnv(t, dir, ".pirate/.env", "GEMINI_API_KEY=AIzaSyParent\n")
 	deep := filepath.Join(dir, "a", "b", "c")
 	if err := os.MkdirAll(deep, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -107,7 +107,7 @@ func TestLookupEnvUnwrapsWrittenForms(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
-			writeEnv(t, dir, ".pi-go/.env", tt.line+"\n")
+			writeEnv(t, dir, ".pirate/.env", tt.line+"\n")
 			t.Setenv("K", "")
 			if got, _ := LookupEnvFrom(dir, "K"); got != tt.want {
 				t.Errorf("value = %q, want %q", got, tt.want)
@@ -119,7 +119,7 @@ func TestLookupEnvUnwrapsWrittenForms(t *testing.T) {
 // One call accepts a key's aliases, in order.
 func TestLookupEnvTriesAliasesInOrder(t *testing.T) {
 	dir := t.TempDir()
-	writeEnv(t, dir, ".pi-go/.env", "GOOGLE_API_KEY=AIzaSyFallback\n")
+	writeEnv(t, dir, ".pirate/.env", "GOOGLE_API_KEY=AIzaSyFallback\n")
 	t.Setenv("GEMINI_API_KEY", "")
 	t.Setenv("GOOGLE_API_KEY", "")
 

@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	pisession "github.com/dimetron/pi-go/internal/session"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 
 	llmmodel "google.golang.org/adk/v2/model"
 	adksession "google.golang.org/adk/v2/session"

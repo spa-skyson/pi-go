@@ -7,7 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/palace"
 )
 
 func newMemorySearchCmd() *cobra.Command {
@@ -30,7 +31,7 @@ a content preview.`,
 		},
 	}
 
-	cmd.Flags().StringVar(&flagDB, "db", "", "Palace database path (default: .pi-go/palace.db)")
+	cmd.Flags().StringVar(&flagDB, "db", "", "Palace database path (default: .pirate/palace.db)")
 	cmd.Flags().StringVar(&flagWing, "wing", "", "Filter by wing")
 	cmd.Flags().StringVar(&flagRoom, "room", "", "Filter by room")
 	cmd.Flags().IntVar(&flagLimit, "limit", 5, "Maximum results")
@@ -40,7 +41,7 @@ a content preview.`,
 
 func runMemorySearch(query, dbPath, wing, room string, limit int) error {
 	if dbPath == "" {
-		dbPath = filepath.Join(".pi-go", "palace.db")
+		dbPath = filepath.Join(config.ProjectDirName, "palace.db")
 	}
 
 	p, err := palace.New(

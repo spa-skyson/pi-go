@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"strings"
 
-	sharedacp "github.com/dimetron/pi-go/internal/acp"
-	"github.com/dimetron/pi-go/internal/acp/client/agy"
-	"github.com/dimetron/pi-go/internal/acp/client/claudecode"
-	"github.com/dimetron/pi-go/internal/acp/client/copilot"
-	"github.com/dimetron/pi-go/internal/acp/client/cursor"
-	"github.com/dimetron/pi-go/internal/acp/client/gemini"
-	"github.com/dimetron/pi-go/internal/notice"
+	sharedacp "github.com/spa-skyson/pi-rate/internal/acp"
+	"github.com/spa-skyson/pi-rate/internal/acp/client/agy"
+	"github.com/spa-skyson/pi-rate/internal/acp/client/claudecode"
+	"github.com/spa-skyson/pi-rate/internal/acp/client/copilot"
+	"github.com/spa-skyson/pi-rate/internal/acp/client/cursor"
+	"github.com/spa-skyson/pi-rate/internal/acp/client/gemini"
+	"github.com/spa-skyson/pi-rate/internal/notice"
 )
 
 // acpSession is the shared interface implemented by every per-runner

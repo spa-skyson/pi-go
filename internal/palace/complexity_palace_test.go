@@ -773,7 +773,7 @@ func TestExtractPathTriples(t *testing.T) {
 // one chunk, which is what extractTriples did inline before the split.
 func TestExtractTriples_EndToEnd(t *testing.T) {
 	text := "package handler\n\n" +
-		"import (\n\t\"fmt\"\n\t\"github.com/dimetron/pi-go/internal/palace\"\n)\n\n" +
+		"import (\n\t\"fmt\"\n\t\"github.com/spa-skyson/pi-rate/internal/palace\"\n)\n\n" +
 		"type Handler struct {\n}\n\n" +
 		"func Serve() {}\n\n" +
 		"// see internal/api/routes.go for the table\n"
@@ -781,7 +781,7 @@ func TestExtractTriples_EndToEnd(t *testing.T) {
 	t.Run("with a source file", func(t *testing.T) {
 		got := extractTriples(text, "internal/api/handler.go")
 		want := map[string]string{
-			"github.com/dimetron/pi-go/internal/palace": "imports",
+			"github.com/spa-skyson/pi-rate/internal/palace": "imports",
 			"Handler":                "defined_in",
 			"Serve":                  "defined_in",
 			"internal/api/routes.go": "part_of",

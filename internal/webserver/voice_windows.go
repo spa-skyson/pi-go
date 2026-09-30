@@ -18,7 +18,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/dimetron/pi-go/internal/voicegemini"
+	"github.com/spa-skyson/pi-rate/internal/voicegemini"
 )
 
 // errVoiceUnsupported is the one reason every voice surface reports on

@@ -12,7 +12,7 @@
 //
 // Unlike claude/gemini/cursor/copilot, the binary is not the vendor's
 // interactive CLI: the `agy` CLI has no ACP mode. Install the ACP server with
-// scripts/install-agy-acp.sh, which extracts it to ~/.pi-go/acp/agy.
+// scripts/install-agy-acp.sh, which extracts it to ~/.pirate/acp/agy.
 package agy
 
 import (
@@ -28,8 +28,8 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 
-	shared "github.com/dimetron/pi-go/internal/acp"
-	client "github.com/dimetron/pi-go/internal/acp/client"
+	shared "github.com/spa-skyson/pi-rate/internal/acp"
+	client "github.com/spa-skyson/pi-rate/internal/acp/client"
 )
 
 // BinaryName is the name of the Antigravity ACP server executable for the
@@ -185,20 +185,20 @@ func defaultBinaryPaths() []string {
 }
 
 // defaultBinaryPathsFor returns the search order for the ACP server binary:
-// the pi-go install directory first, then Antigravity's own directory, then
+// the Pi-rate install directory first, then Antigravity's own directory, then
 // the usual bin directories, and a bare-name PATH lookup only as a last
 // resort. An empty home drops the entries derived from it.
 //
 // The order matters. A bare name resolves through exec.LookPath, so putting it
 // first would let any agy_acp_server earlier on PATH win over the copy the
-// installer placed in ~/.pi-go/acp/agy — the resolved binary would depend on
+// installer placed in ~/.pirate/acp/agy — the resolved binary would depend on
 // the caller's PATH rather than on what was installed.
 func defaultBinaryPathsFor(goos, home string) []string {
 	name := binaryNameFor(goos)
 	var paths []string
 	if home != "" {
 		paths = append(paths,
-			filepath.Join(home, ".pi-go", "acp", "agy", name),
+			filepath.Join(home, ".pirate", "acp", "agy", name),
 			filepath.Join(home, ".antigravity", "acp", name),
 			filepath.Join(home, ".local", "bin", name),
 		)

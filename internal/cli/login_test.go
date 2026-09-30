@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/auth"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/auth"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // -----------------------------------------------------------------------
@@ -239,8 +239,8 @@ func TestSaveResult_Success(t *testing.T) {
 	if !strings.Contains(stdout, "Successfully logged in") {
 		t.Errorf("expected success message in stdout, got %q", stdout)
 	}
-	// Verify the key was written to ~/.pi-go/.env.
-	envPath := filepath.Join(tmpDir, ".pi-go", ".env")
+	// Verify the key was written to ~/.pirate/.env.
+	envPath := filepath.Join(tmpDir, ".pirate", ".env")
 	data, err := os.ReadFile(envPath)
 	if err != nil {
 		t.Fatalf("reading .env: %v", err)

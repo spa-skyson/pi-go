@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/dimetron/pi-go/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/provider"
 )
 
 // modelPriceRefreshDoneMsg carries the result of an async /model-price-refresh.

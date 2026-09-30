@@ -105,7 +105,7 @@ func TestRunA2AServerWritesErrorLog(t *testing.T) {
 		t.Fatal("want an error from the canceled context")
 	}
 
-	logPath := filepath.Join(home, ".pi-go", "sessions", "a2a-server.err.log")
+	logPath := filepath.Join(home, ".pirate", "sessions", "a2a-server.err.log")
 	body, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatalf("error log was not created at %s: %v", logPath, err)

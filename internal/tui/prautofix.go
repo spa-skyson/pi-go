@@ -16,9 +16,9 @@ import (
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/sop"
-	sopexec "github.com/dimetron/pi-go/internal/sop/exec"
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/sop"
+	sopexec "github.com/spa-skyson/pi-rate/internal/sop/exec"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 // prAutofixState tracks one /pr-autofix run.
@@ -353,7 +353,7 @@ func (m *model) showPRAutofixUsage() {
 		"Commits are signed, so each cycle waits on the signing prompt.",
 		"",
 		"  /pr-autofix 253",
-		"  /pr-autofix https://github.com/dimetron/pi-go/pull/253",
+		"  /pr-autofix https://github.com/spa-skyson/pi-rate/pull/253",
 	}, "\n"))
 }
 

@@ -25,14 +25,14 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/voicegemini"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/voicegemini"
 )
 
 func liveKey(t *testing.T) string {
 	t.Helper()
 	// Resolved the way `pi serve --voice` resolves it, so a key living in
-	// ~/.pi-go/.env runs these tests instead of skipping them.
+	// ~/.pirate/.env runs these tests instead of skipping them.
 	key, _ := config.LookupEnv("GEMINI_API_KEY", "GOOGLE_API_KEY")
 	if key == "" {
 		t.Skip("no GEMINI_API_KEY in the environment or .env; skipping the live Gemini voice check")

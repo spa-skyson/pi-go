@@ -35,7 +35,7 @@ type ProviderConfig struct {
 	// Required. ${VAR} is expanded at load, like MCP server URLs.
 	BaseURL string `json:"baseURL"`
 	// APIKey is the credential sent with requests. ${VAR} is expanded at
-	// load, so the secret can live in ~/.pi-go/.env instead of config.json.
+	// load, so the secret can live in ~/.pirate/.env instead of config.json.
 	APIKey string `json:"apiKey,omitempty"`
 	// APIKeyEnv names an environment variable to read the key from when
 	// APIKey is empty. A literal APIKey wins over it.
@@ -46,7 +46,7 @@ type ProviderConfig struct {
 	// Headers are static HTTP headers sent with every request to this
 	// provider. Two substitution mechanisms apply:
 	//
-	//   - ${VAR} names an environment variable (or a ~/.pi-go/.env entry) and
+	//   - ${VAR} names an environment variable (or a ~/.pirate/.env entry) and
 	//     is expanded at load, like apiKey — secrets stay out of config.json.
 	//   - ${SESSION_ID} is NOT env: it survives load verbatim and is replaced
 	//     with the current session's ID when the LLM client is built, so a
@@ -155,7 +155,7 @@ const sessionIDSentinel = "\x00PI_SESSION_ID\x00"
 
 // substituteProviderEnv expands ${VAR} in each declared provider's baseURL,
 // apiKey and headers, from the same sources the MCP-URL substitution reads
-// (~/.pi-go/.env, project .pi-go/.env, then the process environment). Secrets
+// (~/.pirate/.env, project .pirate/.env, then the process environment). Secrets
 // stay out of config.json; the expanded values live in memory only.
 // ${SESSION_ID} is shielded — it is not env and is substituted later.
 func substituteProviderEnv(cfg *Config, cwd string) {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 // maxPromptOutput is the maximum size of tool output included in the compression prompt.

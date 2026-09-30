@@ -5,7 +5,7 @@ package subagent
 import (
 	"os/exec"
 
-	"github.com/dimetron/pi-go/internal/procs"
+	"github.com/spa-skyson/pi-rate/internal/procs"
 )
 
 // setPlatformAttrs configures Unix process group management so the

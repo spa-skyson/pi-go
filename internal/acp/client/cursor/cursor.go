@@ -17,8 +17,8 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 
-	shared "github.com/dimetron/pi-go/internal/acp"
-	client "github.com/dimetron/pi-go/internal/acp/client"
+	shared "github.com/spa-skyson/pi-rate/internal/acp"
+	client "github.com/spa-skyson/pi-rate/internal/acp/client"
 )
 
 // rpcTimeout caps Initialize and NewSession against a hung subprocess. See

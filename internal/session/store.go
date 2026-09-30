@@ -22,7 +22,7 @@ import (
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/atif"
+	"github.com/spa-skyson/pi-rate/internal/atif"
 )
 
 // PlanContext holds the /plan session context for resume.
@@ -88,7 +88,7 @@ type Meta struct {
 //
 // Reconstructing a run previously meant grouping sessions by workDir and
 // inferring roles from title prefixes; sessions in numerically-named worktrees
-// (.pi-go/tasks/763098722000) could not be attributed to a spec by any recorded
+// (.pirate/tasks/763098722000) could not be attributed to a spec by any recorded
 // field at all, and three such worktrees are still on disk with nothing to say
 // what they were for. Every question that investigation had to answer by
 // inference is a field here.
@@ -120,7 +120,7 @@ type FileService struct {
 }
 
 // NewFileService creates a new file-based session service.
-// baseDir is the directory where sessions are stored (e.g., ~/.pi-go/sessions).
+// baseDir is the directory where sessions are stored (e.g., ~/.pirate/sessions).
 func NewFileService(baseDir string) (*FileService, error) {
 	if err := os.MkdirAll(baseDir, 0o755); err != nil {
 		return nil, fmt.Errorf("creating sessions dir: %w", err)

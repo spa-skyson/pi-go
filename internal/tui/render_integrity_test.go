@@ -26,7 +26,7 @@ func realisticChat() []message {
 		"interactive terminal UI, LSP integration, and a subagent orchestration system.\n\n" +
 		"```go\nfunc main() { fmt.Println(\"a line of code that certainly exceeds the chat width by a wide margin\") }\n```\n\n" +
 		"| Column | Description |\n|---|---|\n| a | a description long enough to need wrapping |\n\n" +
-		"See [![codecov](https://codecov.io/gh/dimetron/pi-go/graph/badge.svg)](https://codecov.io/gh/dimetron/pi-go)\n"
+		"See [![codecov](https://codecov.io/gh/spa-skyson/pi-rate/graph/badge.svg)](https://codecov.io/gh/spa-skyson/pi-rate)\n"
 
 	var goSrc strings.Builder
 	for i := range 40 {
@@ -39,7 +39,7 @@ func realisticChat() []message {
 		{role: "assistant", content: md},
 		{role: "tool", tool: "read", toolIn: `{"file_path":"server.go"}`, content: goSrc.String()},
 		{role: "tool", tool: "bash", toolIn: `{"command":"go test ./... -run TestVeryLongTestNameThatKeepsGoing"}`,
-			content: "ok  \tgithub.com/dimetron/pi-go/internal/tui\t7.4s\n" + strings.Repeat("noisy output line\n", 30)},
+			content: "ok  \tgithub.com/spa-skyson/pi-rate/internal/tui\t7.4s\n" + strings.Repeat("noisy output line\n", 30)},
 		{role: "tool", tool: "grep", toolIn: `{"pattern":"func "}`, content: "server.go:12: func main()"},
 		{role: "tool", tool: "subagent", agentType: "pi", agentTitle: "Analyze internal/subagent",
 			agentEvents: []agentEv{
@@ -159,8 +159,8 @@ func TestChatOutputCannotTakeTheSidebarsColumns(t *testing.T) {
 	hostile := []message{
 		{role: "tool", tool: "bash", toolIn: `{"command":"go test ./..."}`,
 			content: "--- FAIL: TestRenderSidebar_OTELAboveModel (0.00s)\n" +
-				"FAIL\tgithub.com/dimetron/pi-go/internal/tui\t0.653s\n" +
-				"ok  \tgithub.com/dimetron/pi-go/internal/agent\t1.2s\n"},
+				"FAIL\tgithub.com/spa-skyson/pi-rate/internal/tui\t0.653s\n" +
+				"ok  \tgithub.com/spa-skyson/pi-rate/internal/agent\t1.2s\n"},
 		{role: "tool", tool: "bash", toolIn: `{"command":"docker pull alpine"}`,
 			content: "Pulling\r  50%\rPulling  100%\ndone\x08\x08\n"},
 		{role: "assistant", content: "A tabbed table:\n\ncol\tvalue\tnotes\na\tb\tc\n"},

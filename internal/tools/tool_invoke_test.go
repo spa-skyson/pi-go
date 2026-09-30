@@ -13,7 +13,7 @@ import (
 	"google.golang.org/adk/v2/tool/toolconfirmation"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/lsp"
+	"github.com/spa-skyson/pi-rate/internal/lsp"
 )
 
 // mockToolCtx is a minimal agent.Context backed by a real context.Context.

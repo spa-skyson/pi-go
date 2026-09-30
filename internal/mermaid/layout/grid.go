@@ -19,8 +19,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dimetron/pi-go/internal/mermaid/graph"
-	"github.com/dimetron/pi-go/internal/mermaid/textwidth"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/graph"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/textwidth"
 )
 
 const (

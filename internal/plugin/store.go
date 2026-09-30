@@ -3,6 +3,7 @@ package plugin
 import (
 	"encoding/json"
 	"fmt"
+	config "github.com/spa-skyson/pi-rate/internal/config"
 	"os"
 	"path/filepath"
 	"sort"
@@ -12,7 +13,7 @@ import (
 // RegistryVersion is the on-disk schema version of installed.json.
 const RegistryVersion = 1
 
-// Layout under the pi-go home (~/.pi-go):
+// Layout under the pi-go home (~/.pirate):
 //
 //	plugins/installed.json              this registry
 //	plugins/marketplaces/<name>/        cloned marketplace repositories
@@ -193,7 +194,7 @@ func (r *Registry) SkillDirs(piHome string) []string {
 }
 
 // ResolveSkillsDir returns the directory holding a plugin's skills. An explicit
-// SkillsDir on the record wins; otherwise the pi-go convention (.pi-go/skills)
+// SkillsDir on the record wins; otherwise the pi-go convention (.pirate/skills)
 // is preferred and the Claude Code convention (skills/) is the fallback. The
 // plugin root is returned when neither exists, which is the convention for a
 // plugin whose skills sit at the top level.
@@ -202,7 +203,7 @@ func ResolveSkillsDir(pluginDir string, inst Installed) string {
 		return filepath.Join(pluginDir, inst.SkillsDir)
 	}
 	for _, rel := range []string{
-		filepath.Join(".pi-go", "skills"),
+		filepath.Join(config.ProjectDirName, "skills"),
 		"skills",
 	} {
 		dir := filepath.Join(pluginDir, rel)

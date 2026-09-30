@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 // fakeRunner is a scriptable compressorRunner for adapter tests.

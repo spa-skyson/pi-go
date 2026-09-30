@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/auth"
-	"github.com/dimetron/pi-go/internal/httplog"
-	"github.com/dimetron/pi-go/internal/ratelimit"
+	"github.com/spa-skyson/pi-rate/internal/auth"
+	"github.com/spa-skyson/pi-rate/internal/httplog"
+	"github.com/spa-skyson/pi-rate/internal/ratelimit"
 
 	"google.golang.org/adk/v2/model"
 )

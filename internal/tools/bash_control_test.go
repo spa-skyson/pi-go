@@ -10,7 +10,7 @@ import (
 
 	"google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/procs"
+	"github.com/spa-skyson/pi-rate/internal/procs"
 )
 
 // TestBashControlTools_Registered checks the two control tools exist under the

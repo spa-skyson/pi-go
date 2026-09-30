@@ -13,7 +13,7 @@
 # (default build is pure Go; ORT acceleration is opt-in and not needed for the
 # harness).
 #
-#   docker build -f specs/kagent/Dockerfile -t localhost:5001/dimetron/pi-go-kagent:dev .
+#   docker build -f specs/kagent/Dockerfile -t localhost:5001/spa-skyson/pi-go-kagent:dev .
 #   docker tag ... and push by digest.
 #
 # With buildx, pass --platform linux/amd64,linux/arm64; TARGETARCH selects the

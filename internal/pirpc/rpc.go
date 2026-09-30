@@ -52,9 +52,10 @@ import (
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/logger"
-	"github.com/dimetron/pi-go/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/logger"
+	"github.com/spa-skyson/pi-rate/internal/provider"
 )
 
 // Config holds the stdio RPC server configuration.
@@ -464,8 +465,8 @@ func (s *Server) state() map[string]any {
 	}
 	// Only advertise a session file that exists — pi-acp persists it into its
 	// session map, and a bogus path would make session/load unresolvable.
-	if home, err := os.UserHomeDir(); err == nil {
-		p := filepath.Join(home, ".pi-go", "sessions", s.sessionID+".jsonl")
+	if _, err := os.UserHomeDir(); err == nil {
+		p := filepath.Join(config.PirateHome(), "sessions", s.sessionID+".jsonl")
 		if _, statErr := os.Stat(p); statErr == nil {
 			st["sessionFile"] = p
 		}

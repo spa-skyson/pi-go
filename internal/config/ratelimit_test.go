@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/ratelimit"
+	"github.com/spa-skyson/pi-rate/internal/ratelimit"
 )
 
 func intPtr(n int) *int { return &n }

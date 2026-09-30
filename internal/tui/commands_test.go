@@ -10,9 +10,9 @@ import (
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/extension"
-	pisession "github.com/dimetron/pi-go/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
 )
 
 // --- handleCompactCommand tests ---
