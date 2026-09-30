@@ -10,26 +10,24 @@ import (
 )
 
 // The sea scene replaces the old matrix rain: while a turn runs, the top bar
-// draws a small sea — two animated wave rows, a ship that sails from the left
-// edge toward the island at the right edge, and (on wide zones) a palm island
+// draws a small sea — layered animated waves, a pirate ship that sails from the
+// left edge toward the island at the right edge, and (on wide zones) a palm island
 // marking the treasure. It reuses the matrix's exact mechanics: feed while the
-// agent produces output, tick on the 150ms timer, clear when the turn ends.
+// agent produces output, tick on the 120ms timer, clear when the turn ends.
 
 // Scene geometry. The scene is seaLines rows tall and exactly as wide as the
 // zone feed/tick were given (the main panel's inner width) — no shrink, no
 // centering pad, unlike the matrix tape it replaced.
 const (
-	// seaLines is the height of the scene: sky (ship sail, palm crown, gull),
-	// waterline (ship hull, palm trunk, beach), surface, swell.
-	seaLines = 4
-	// seaShipW is the ship's hull width; the sail row lives inside the same
-	// five columns.
-	seaShipW = 5
+	// seaLines is the height of the scene: sky, three silhouette rows, surface,
+	// and a deep parallax swell.
+	seaLines = 6
+	seaShipW = 12
 	// seaIslandW is the island's reserved width at the right edge.
-	seaIslandW = 5
+	seaIslandW = 11
 	// seaIslandMin is the narrow-zone cutoff: below this the island does not
 	// render (sea and ship only), so a cramped zone never clips the palm.
-	seaIslandMin = 24
+	seaIslandMin = 32
 )
 
 // The sprites. Every rune is ASCII except π — East Asian Ambiguous, declared
@@ -39,14 +37,16 @@ const (
 // welcome-header decision in chat.go). TestSeaState_GlyphsAreWidthSafe pins
 // this.
 const (
-	seaHull       = `\_|_/` // hull; the mast is the '|' at index 2
-	seaSailCrest  = ` π| `  // sail π to port of the mast — ship on a crest
-	seaSailTrough = ` |π `  // sail swung to starboard — ship in a trough
-	seaCrown      = `/|\`   // palm crown
-	seaGull       = `~v~`   // one sky detail, static
-	seaCurl       = `(~)`   // surface tile: foam curls
-	seaSwell      = `~--`   // deeper tile: softer rhythm, parallax offset
-	seaTreasure   = 'X'     // the mark on the island's beach
+	seaHull       = `\_________/` // broad pirate hull
+	seaSailCrest  = `/|\  /|\`    // main and jib, leaning into the wind
+	seaSailTrough = `/| \ /| \`   // sails opened on the trough
+	seaCrown      = `\_\|/_/`     // wind-bent palm crown
+	seaGull       = `\v/`
+	seaSparkle    = `  .   '  .. `
+	seaCurl       = `~\/~~/\~=`
+	seaSwell      = `__~---~~__--`
+	seaDeep       = `-~___~~---__`
+	seaTreasure   = 'X'
 )
 
 // seaState holds the scene: pure layout state, no cell buffers. Waves, island
@@ -57,7 +57,7 @@ type seaState struct {
 	active  bool // a turn is running and the bar should draw
 	phase   int  // wave phase; advances with output (feed) and time (tick)
 	shipX   int  // left column of the ship; advances one cell per tick
-	bob     bool // false = crest (sail to port), true = trough (sail to starboard)
+	bob     int  // four-step heave cycle; also selects the ship's pitch
 	seed    int64
 	palette Palette
 }
@@ -116,8 +116,8 @@ func (s *seaState) tick(width int) {
 		return
 	}
 	s.ensureWidth(width)
-	s.phase++
-	s.bob = !s.bob
+	s.phase += 2
+	s.bob = (s.bob + 1) % 4
 	if next := s.shipX + 1; next > s.shipMaxX() {
 		s.shipX = 0
 	} else {
@@ -140,7 +140,7 @@ func (s *seaState) clear() {
 	s.width = 0
 	s.phase = 0
 	s.shipX = 0
-	s.bob = false
+	s.bob = 0
 }
 
 // seaCell is one drawn cell: a rune and the role color it wears. A space (or
@@ -150,11 +150,9 @@ type seaCell struct {
 	c color.Color
 }
 
-// render composes the four scene rows. Rows 0–1 are sky and waterline: the
-// gull, the palm, and the ship's sail and hull. Rows 2–3 are the sea, tiled
-// from repeating wave patterns whose offset is the phase, so the water drifts
-// one cell leftward every step. The island is painted first, the gull and
-// ship last — a moving sprite overwrites whatever it passes.
+// render composes the six scene rows. Three water rhythms move at different
+// rates; sky details twinkle and drift more slowly. Land is painted before the
+// moving ship, so arrival reads as a silhouette crossing the beach.
 func (s *seaState) render() string {
 	if !s.visible() {
 		return ""
@@ -164,10 +162,10 @@ func (s *seaState) render() string {
 	// Role colors from the active theme; ANSI fallbacks when no palette has
 	// been resolved yet, so the scene never renders invisible.
 	p := s.palette
-	seaC, hullC, sailC, isleC, birdC := p.Primary, p.Text, p.Subtext, p.Warning, p.Dim
+	seaC, deepC, hullC, sailC, isleC, skyC := p.Primary, p.Blue, p.Text, p.Subtext, p.Warning, p.Dim
 	if !p.Valid {
-		seaC, hullC, sailC, isleC, birdC =
-			lipgloss.Color("4"), lipgloss.Color("7"), lipgloss.Color("8"), lipgloss.Color("3"), lipgloss.Color("8")
+		seaC, deepC, hullC, sailC, isleC, skyC =
+			lipgloss.Color("4"), lipgloss.Color("6"), lipgloss.Color("7"), lipgloss.Color("8"), lipgloss.Color("3"), lipgloss.Color("8")
 	}
 
 	rows := make([][]seaCell, seaLines)
@@ -178,12 +176,18 @@ func (s *seaState) render() string {
 		}
 	}
 
-	// The sea: two rows, two rhythms, phase-offset so they do not move in
-	// lockstep.
-	curl, swell := []rune(seaCurl), []rune(seaSwell)
+	// The sea: glitter, crests, and two deeper rhythms. The surface runs twice
+	// as fast as the ship while the bottom layer lags behind.
+	sparkle, curl, swell, deep := []rune(seaSparkle), []rune(seaCurl), []rune(seaSwell), []rune(seaDeep)
 	for j := 0; j < w; j++ {
-		rows[2][j] = seaCell{curl[(j+s.phase)%len(curl)], seaC}
-		rows[3][j] = seaCell{swell[(j+s.phase+1)%len(swell)], seaC}
+		if r := sparkle[(j+s.phase/2)%len(sparkle)]; r != ' ' {
+			rows[3][j] = seaCell{r, skyC}
+		}
+		rows[4][j] = seaCell{curl[(j+s.phase)%len(curl)], seaC}
+		rows[5][j] = seaCell{swell[(j+s.phase/2)%len(swell)], deepC}
+		if (j+s.phase)%7 == 0 {
+			rows[5][j] = seaCell{deep[(j+s.phase/2)%len(deep)], deepC}
+		}
 	}
 
 	// The island at the right edge: palm crown, trunk, beach with the
@@ -193,38 +197,71 @@ func (s *seaState) render() string {
 	if island {
 		base = w - seaIslandW
 		for k, r := range []rune(seaCrown) {
-			rows[0][base+1+k] = seaCell{r, isleC}
+			rows[1][base+2+k] = seaCell{r, isleC}
 		}
-		rows[1][base+2] = seaCell{'|', isleC}
-		rows[2][base] = seaCell{seaTreasure, isleC}
+		rows[2][base+5] = seaCell{'/', isleC}
+		rows[3][base+4] = seaCell{'/', isleC}
+		rows[3][base+7] = seaCell{'[', isleC}
+		rows[3][base+8] = seaCell{'X', isleC}
+		rows[3][base+9] = seaCell{']', isleC}
+		rows[4][base] = seaCell{seaTreasure, isleC}
 		for j := base + 1; j < w; j++ {
-			rows[2][j] = seaCell{'_', isleC}
+			rows[4][j] = seaCell{'_', isleC}
 		}
 	}
 
-	// One sky detail, kept clear of the island's columns.
-	if g := w / 4; w >= 12 && (!island || g+2 < base) {
+	// Stars blink, the moon holds the horizon, and the gull crosses at a
+	// fraction of the ship's speed.
+	for j := 2 + s.phase%5; j < base; j += 11 {
+		r := '.'
+		if (j+s.phase/2)%3 == 0 {
+			r = '*'
+		}
+		rows[0][j] = seaCell{r, skyC}
+	}
+	if w >= 18 {
+		moon := min(w-4, max(1, base-5))
+		for k, r := range []rune("(o)") {
+			rows[0][moon+k] = seaCell{r, skyC}
+		}
+	}
+	if g := (s.phase / 6) % max(1, base-3); w >= 12 && g+2 < base {
 		for k, r := range []rune(seaGull) {
-			rows[0][g+k] = seaCell{r, birdC}
+			rows[0][g+k] = seaCell{r, skyC}
 		}
 	}
 
-	// The ship: sail row rides the sky, hull row the waterline. The bob
-	// alternates which side of the mast the sail hangs on — the visible
-	// rock. The bounds check keeps a sprite wider than a tiny zone from
-	// overrunning the row.
+	// The ship heaves through a 0,1,2,1 cycle. Alternating sail and hull shapes
+	// make the bow visibly pitch instead of merely translating vertically.
 	sail := seaSailCrest
-	if s.bob {
+	if s.bob == 1 || s.bob == 2 {
 		sail = seaSailTrough
 	}
-	for k, r := range []rune(sail) {
-		if r != ' ' && s.shipX+k < w {
-			rows[0][s.shipX+k] = seaCell{r, sailC}
+	y := []int{0, 1, 0, 1}[s.bob]
+	ship := []string{"      |P>", "   |  |", "  " + sail, "_/_|π|_\\_", seaHull}
+	if s.bob >= 2 {
+		ship[4] = ` \________/`
+	}
+	for row, line := range ship {
+		if y+row >= seaLines {
+			break
+		}
+		for k, r := range []rune(line) {
+			if r != ' ' && s.shipX+k < w {
+				c := sailC
+				if row >= 3 {
+					c = hullC
+				}
+				rows[y+row][s.shipX+k] = seaCell{r, c}
+			}
 		}
 	}
-	for k, r := range []rune(seaHull) {
-		if r != ' ' && s.shipX+k < w {
-			rows[1][s.shipX+k] = seaCell{r, hullC}
+	// Stern wake responds to output-driven phase changes as well as ticks.
+	wake := []string{"..~", "~.."}[s.phase%2]
+	for k, r := range []rune(wake) {
+		x := s.shipX - 3 + k
+		if x >= 0 && x < w {
+			rows[min(seaLines-1, y+4)][x] = seaCell{r, sailC}
 		}
 	}
 
@@ -247,7 +284,7 @@ func (s *seaState) render() string {
 
 // seaTickInterval is how often the scene animates while a turn runs — the
 // matrix's cadence, kept.
-const seaTickInterval = 150 * time.Millisecond
+const seaTickInterval = 120 * time.Millisecond
 
 // seaTickMsg is sent periodically to animate the sea scene.
 type seaTickMsg struct{}
