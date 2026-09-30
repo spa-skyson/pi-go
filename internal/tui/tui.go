@@ -1118,6 +1118,12 @@ func (m *model) updateTerminal(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 
 	case seaTickMsg:
 		return m.handleSeaTick()
+
+	case cardTickMsg:
+		// Repaint, then re-arm while a live card remains. The repaint is
+		// implicit — Update is always followed by View — so the handler only
+		// decides whether the clock keeps ticking.
+		return m, m.armCardTick(), true
 	}
 	return nil, nil, false
 }
@@ -1797,6 +1803,12 @@ func (m *model) handleToggleKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 // scrolls the chat before any history exists, so the keyboard can scroll on a
 // fresh session.
 //
+// Down keeps scrolling the chat, with one exception: on an empty prompt, with
+// the view already at the bottom — where a scroll-down is a no-op — and
+// subagents running, ↓ opens the subagent monitor. That is the one state where
+// the key it replaces is dead, so nothing is taken away: scrolled-up reading
+// still walks back down first, and a second ↓ then opens the monitor.
+//
 // A prompt starting with "/" is excluded: those arrows drive the slash-command
 // popup instead. An open search popup never gets here either: its stack entry
 // owns Up/Down for list navigation and wins the key before the globals run.
@@ -1813,6 +1825,10 @@ func (m *model) handleHistoryKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 		m.newSearchPopup(searchModeHistory)
 		return m, nil, true
 	case tea.KeyDown:
+		if m.inputModel.Text == "" && m.chatModel.Scroll == 0 && m.runningSubagentCount() > 0 {
+			m.newSearchPopup(searchModeSubagents)
+			return m, nil, true
+		}
 		m.chatModel.ScrollDown(3)
 		return m, nil, true
 	}
@@ -2779,22 +2795,23 @@ func (m *model) statusRenderInput() StatusRenderInput {
 	}
 	hostName := cachedHostname()
 	return StatusRenderInput{
-		ProviderName: m.providerDisplayName(),
-		ModelName:    m.cfg.ModelName,
-		Running:      m.running,
-		Pending:      len(m.pendingPrompts),
-		Mode:         mode,
-		Eyes:         m.eyes(),
-		Messages:     m.chatModel.Messages,
-		TokenTracker: m.cfg.TokenTracker,
-		DiffAdded:    m.diffAdded,
-		DiffRemoved:  m.diffRemoved,
-		RunCycle:     rc,
-		FolderName:   sidebarFolderName(m.cwd()),
-		HostName:     hostName,
-		LoadingItems: m.loadingItems,
-		Flash:        m.flash,
-		Palette:      m.palette,
+		ProviderName:  m.providerDisplayName(),
+		ModelName:     m.cfg.ModelName,
+		Running:       m.running,
+		Pending:       len(m.pendingPrompts),
+		Mode:          mode,
+		Eyes:          m.eyes(),
+		Messages:      m.chatModel.Messages,
+		TokenTracker:  m.cfg.TokenTracker,
+		DiffAdded:     m.diffAdded,
+		DiffRemoved:   m.diffRemoved,
+		RunCycle:      rc,
+		FolderName:    sidebarFolderName(m.cwd()),
+		HostName:      hostName,
+		LoadingItems:  m.loadingItems,
+		Flash:         m.flash,
+		Palette:       m.palette,
+		RunningAgents: m.runningSubagentCount(),
 	}
 }
 

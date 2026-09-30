@@ -3,6 +3,8 @@ package tui
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // agentCardLines returns the gutter lines of a rendered subagent card — the
@@ -20,17 +22,20 @@ func agentCardLines(t *testing.T, msg message, width int) []string {
 	return out
 }
 
-// The subagent output window is 3 lines.
-func TestAgentOutputWindowIsThreeLines(t *testing.T) {
-	if maxAgentOutputLines != 3 {
-		t.Fatalf("maxAgentOutputLines = %d, want 3", maxAgentOutputLines)
+// The subagent output window is 8 lines: the pinned thought plus the newest
+// tool rows.
+func TestAgentOutputWindowIsEightLines(t *testing.T) {
+	if maxAgentOutputLines != 8 {
+		t.Fatalf("maxAgentOutputLines = %d, want 8", maxAgentOutputLines)
 	}
 }
 
 // The bug from the screenshot: a subagent's final analysis arrives as ONE "text"
 // event carrying thousands of characters. Capping the number of events caps
-// nothing — that single event soft-wraps into a screenful (74 lines, measured)
-// and buries the chat.
+// nothing — that single event soft-wrapped into a screenful (74 lines,
+// measured) and buried the chat. The collapsed card pins the latest thought to
+// a single row, clipped with an ellipsis; the full text lives in the monitor's
+// viewer and in the result summary.
 func TestAgentOutputWindowCapsAHugeSingleEvent(t *testing.T) {
 	flood := strings.Repeat(
 		"Here is the analysis: the provider package resolves models by prefix. ", 80)
@@ -42,18 +47,14 @@ func TestAgentOutputWindowCapsAHugeSingleEvent(t *testing.T) {
 
 	lines := agentCardLines(t, msg, 100)
 
-	// 3 output lines, plus the note saying output was withheld.
-	if len(lines) > 4 {
-		t.Fatalf("one huge event rendered %d gutter lines, want 3 plus a note", len(lines))
-	}
-	if len(lines) == 0 {
-		t.Fatal("the window swallowed the output entirely")
+	// One thought row, however long the analysis was.
+	if len(lines) != 1 {
+		t.Fatalf("one huge event rendered %d gutter lines, want exactly 1", len(lines))
 	}
 
-	// Clipping 67 of 74 lines with no mark would read as if that were all the
-	// agent said.
-	if !strings.Contains(strings.Join(lines, "\n"), "earlier output") {
-		t.Error("output was clipped with no note that anything was withheld")
+	// Clipping without a mark would read as if that were all the agent said.
+	if !strings.Contains(ansi.Strip(lines[0]), "...") {
+		t.Error("the clipped thought carries no ellipsis marking the cut")
 	}
 }
 

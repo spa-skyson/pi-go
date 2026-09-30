@@ -1131,26 +1131,33 @@ func TestAgentWindowLinesRender(t *testing.T) {
 	})
 
 	t.Run("under budget shows everything with no note", func(t *testing.T) {
-		evs := []agentEv{{kind: "text", content: "a"}, {kind: "text", content: "b"}}
+		evs := []agentEv{
+			{kind: "text", content: "b"},
+			{kind: "tool_call", content: "read"},
+			{kind: "tool_result", content: "ok"},
+		}
 		lines, note := agentWindowLines(evs, st, 60)
 		if len(lines) != 2 || note != "" {
 			t.Errorf("got %d lines %v, note %q", len(lines), lines, note)
 		}
-		if !strings.HasSuffix(ansi.Strip(lines[1]), "b") {
-			t.Errorf("newest event must be last, got %q", lines[1])
+		if !strings.HasSuffix(ansi.Strip(lines[0]), "» b") {
+			t.Errorf("the pinned thought must be first, got %q", lines[0])
+		}
+		if !strings.Contains(ansi.Strip(lines[1]), "⚙ read ✓ ok") {
+			t.Errorf("the tool row must carry call and result, got %q", lines[1])
 		}
 	})
 
 	t.Run("dropped events report a count", func(t *testing.T) {
 		evs := make([]agentEv, 10)
 		for i := range evs {
-			evs[i] = agentEv{kind: "text", content: fmt.Sprintf("e%d", i)}
+			evs[i] = agentEv{kind: "tool_call", content: fmt.Sprintf("e%d", i)}
 		}
 		lines, note := agentWindowLines(evs, st, 60)
 		if len(lines) != maxAgentOutputLines {
 			t.Errorf("got %d lines, want %d", len(lines), maxAgentOutputLines)
 		}
-		if note != "... 7 earlier events" {
+		if note != "... 2 earlier events" {
 			t.Errorf("note = %q", note)
 		}
 		if got := ansi.Strip(lines[len(lines)-1]); !strings.HasSuffix(got, "e9") {
@@ -1158,14 +1165,29 @@ func TestAgentWindowLinesRender(t *testing.T) {
 		}
 	})
 
-	t.Run("one over-long event reports a clip", func(t *testing.T) {
+	t.Run("older texts are superseded by the pinned thought", func(t *testing.T) {
+		evs := []agentEv{{kind: "text", content: "a"}, {kind: "text", content: "b"}}
+		lines, note := agentWindowLines(evs, st, 60)
+		if len(lines) != 1 || note != "... 1 earlier events" {
+			t.Errorf("got %d lines %v, note %q; want the latest thought alone plus a count",
+				len(lines), lines, note)
+		}
+		if !strings.HasSuffix(ansi.Strip(lines[0]), "» b") {
+			t.Errorf("the latest thought must win, got %q", lines[0])
+		}
+	})
+
+	t.Run("one over-long thought clips to one marked row", func(t *testing.T) {
 		evs := []agentEv{{kind: "text", content: strings.Repeat("word ", 200)}}
 		lines, note := agentWindowLines(evs, st, 40)
-		if len(lines) != maxAgentOutputLines {
-			t.Errorf("got %d lines, want %d", len(lines), maxAgentOutputLines)
+		if len(lines) != 1 {
+			t.Errorf("got %d lines, want 1", len(lines))
 		}
-		if note != "... earlier output" {
-			t.Errorf("note = %q", note)
+		if note != "" {
+			t.Errorf("note = %q, want none: a clipped thought is marked by its ellipsis, not a note", note)
+		}
+		if !strings.HasSuffix(ansi.Strip(lines[0]), "...") {
+			t.Errorf("clipped thought = %q, want an ellipsis suffix", ansi.Strip(lines[0]))
 		}
 	})
 }

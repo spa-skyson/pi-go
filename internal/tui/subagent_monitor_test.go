@@ -406,3 +406,68 @@ func TestSubagentsMonitorFilterSearch(t *testing.T) {
 		t.Fatalf("filtered rows = %+v, want only the explore agent", m.searchPopup.filtered)
 	}
 }
+
+// ↓ on an empty prompt, at the bottom of the chat, with a subagent running
+// opens the monitor — the one state where the scroll-down it replaces is a
+// no-op anyway.
+func TestDownArrowOpensSubagentsMonitor(t *testing.T) {
+	m := monitorTestModel(t)
+
+	m = pressKey(t, m, tea.Key{Code: tea.KeyDown})
+
+	if m.searchPopup == nil || m.searchPopup.mode != searchModeSubagents {
+		t.Fatalf("↓ did not open the subagent monitor (popup = %+v)", m.searchPopup)
+	}
+	if got := len(m.searchPopup.filtered); got != 3 {
+		t.Errorf("monitor shows %d rows, want the same 3 the /subagents command shows", got)
+	}
+}
+
+// With text in the prompt ↓ stays a scroll: the monitor must not steal an
+// editing key.
+func TestDownArrowWithPromptTextStillScrolls(t *testing.T) {
+	m := monitorTestModel(t)
+	m.inputModel.Text = "draft in progress"
+	m.chatModel.Scroll = 5
+
+	m = pressKey(t, m, tea.Key{Code: tea.KeyDown})
+
+	if m.searchPopup != nil {
+		t.Fatalf("↓ opened the monitor over a non-empty prompt")
+	}
+	if m.chatModel.Scroll != 2 {
+		t.Errorf("Scroll = %d, want 5-3: the key must scroll", m.chatModel.Scroll)
+	}
+}
+
+// Scrolled-up reading walks back down first; the monitor opens only from the
+// bottom, where ↓ has nothing to scroll to.
+func TestDownArrowScrolledUpStillScrolls(t *testing.T) {
+	m := monitorTestModel(t)
+	m.chatModel.Scroll = 5
+
+	m = pressKey(t, m, tea.Key{Code: tea.KeyDown})
+
+	if m.searchPopup != nil {
+		t.Fatalf("↓ opened the monitor while the view was scrolled up")
+	}
+	if m.chatModel.Scroll != 2 {
+		t.Errorf("Scroll = %d, want 5-3", m.chatModel.Scroll)
+	}
+}
+
+// No running subagent, no monitor: ↓ keeps scrolling the chat even on an
+// empty prompt at the bottom.
+func TestDownArrowWithoutRunningSubagentsScrolls(t *testing.T) {
+	m := monitorTestModel(t)
+	m.cfg.SubagentStatuses = func() []subagent.AgentStatus { return nil }
+	// The explore card would still infer "running" from its empty result;
+	// finish it so nothing is live.
+	m.chatModel.Messages[0].content = `{"result":"done"}`
+
+	m = pressKey(t, m, tea.Key{Code: tea.KeyDown})
+
+	if m.searchPopup != nil {
+		t.Fatalf("↓ opened the monitor with nothing running")
+	}
+}

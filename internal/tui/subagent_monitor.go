@@ -131,6 +131,50 @@ func pipelineLabel(msg *message) string {
 	return fmt.Sprintf("%s %d/%d", msg.pipelineMode, msg.pipelineStep, msg.pipelineTotal)
 }
 
+// runningSubagentCount counts the subagents the orchestrator currently reports
+// running — the same merged view the monitor shows, so the status bar's ⚓
+// counter cannot disagree with it. Computed per frame from List() rather than
+// cached on spawn/done events: timeouts and kills flip a status without a TUI
+// event ever carrying one, and a cached count would drift exactly then. The
+// source is a mutex-guarded map copy, cheap enough at frame rate.
+func (m *model) runningSubagentCount() int {
+	n := 0
+	for _, r := range m.subagentRows() {
+		if r.status == "running" {
+			n++
+		}
+	}
+	return n
+}
+
+// cardTickMsg repaints the frame while a subagent card is running outside a
+// running turn — a background agent outliving its parent turn. While the turn
+// runs the sea tick repaints every 120ms and this tick is never armed; once it
+// ends, this is the only thing keeping a live card's timer moving. It stops
+// the moment no running card is left, so it never ticks forever.
+type cardTickMsg struct{}
+
+// armCardTick returns the once-a-second card tick when it is needed: some
+// agent card is still running while the turn (and with it the sea tick) is
+// over. Nil otherwise — no tick while the turn runs, none when nothing runs.
+func (m *model) armCardTick() tea.Cmd {
+	if m.running || !m.hasRunningAgentCard() {
+		return nil
+	}
+	return tea.Tick(time.Second, func(time.Time) tea.Msg { return cardTickMsg{} })
+}
+
+// hasRunningAgentCard reports whether any transcript card's subagent is live.
+func (m *model) hasRunningAgentCard() bool {
+	for i := range m.chatModel.Messages {
+		msg := &m.chatModel.Messages[i]
+		if (msg.tool == "agent" || msg.tool == "subagent") && msg.agentRunning() {
+			return true
+		}
+	}
+	return false
+}
+
 // rowDuration is the elapsed time to show: the orchestrator's own duration
 // for finished runs, otherwise live time-since-start (recomputed per render,
 // so a monitor left open keeps counting).
