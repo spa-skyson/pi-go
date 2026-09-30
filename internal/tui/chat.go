@@ -85,8 +85,10 @@ func (c *ChatModel) renderWelcome(p Palette) string {
 			cmd.Render("/run") + dim.Render(" ") +
 			cmd.Render("/subagents") + dim.Render(" ") +
 			cmd.Render("/ping"),
-		dim.Render("  Press ") + cmd.Render("Tab") + dim.Render(" to cycle commands, ") +
-			cmd.Render("@") + dim.Render(" to mention files"),
+		// No "Tab to cycle commands" hint: Tab only navigates inside an
+		// already-open popup — advertising a cycle from the prompt was the
+		// promise bug #8 is about.
+		dim.Render("  Press ") + cmd.Render("@") + dim.Render(" to mention files"),
 	}
 	return strings.Join(lines, "\n")
 }

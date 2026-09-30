@@ -2142,7 +2142,7 @@ func TestRenderWelcome(t *testing.T) {
 		"help",
 		"commit",
 		"plan",
-		"Tab",
+		"@", // mention files hint; the Tab-cycle promise is gone (bug #8)
 	}
 	for _, want := range checks {
 		if !strings.Contains(got, want) {

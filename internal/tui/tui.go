@@ -200,6 +200,13 @@ type model struct {
 	// Unified search popup for slash commands and history.
 	searchPopup *searchPopupState
 
+	// Recent slash commands for the popup's Suggested section: a
+	// most-recent-first list capped at suggestedCommandsMax plus a usage
+	// count. In-memory by design — the popup reflects this session's own
+	// usage; persisting it across restarts is a future need, not this one.
+	cmdRecent []string
+	cmdCounts map[string]int
+
 	// subagentViewer is the fullscreen stream viewer opened from the
 	// subagent monitor (Enter on an agent). It renders the selected card's
 	// full agentEvents; nil when closed. See subagent_monitor.go.
@@ -334,13 +341,15 @@ func listGitBranches(workDir string) []string {
 // searchPopupState is a unified search window for slash commands and history.
 // The mode determines what items are shown and how they are selected.
 type searchPopupState struct {
-	mode      searchMode   // "commands" or "history"
-	entries   []SearchItem // all items (commands or history entries)
-	filtered  []SearchItem // filtered by search query
-	selected  int          // currently selected index in filtered list
-	search    string       // current search query
-	height    int          // popup height (number of visible items)
-	scrollOff int          // scroll offset when more entries than height
+	mode       searchMode   // "commands" or "history"
+	entries    []SearchItem // all items (commands or history entries)
+	filtered   []SearchItem // filtered by search query
+	suggested  []SearchItem // Suggested candidates (recent commands, the active model/agent/…); matched against entries while the filter is empty
+	suggestedN int          // how many of the leading filtered rows are the pinned Suggested section (0 when the filter is non-empty)
+	selected   int          // currently selected index in filtered list
+	search     string       // current search query
+	height     int          // popup height (number of visible items)
+	scrollOff  int          // scroll offset when more entries than height
 }
 
 // searchMode determines what the popup displays.
@@ -372,13 +381,14 @@ type SearchItem struct {
 }
 
 // searchPopupChrome is the number of rows the search popup reserves for chrome
-// — two border rows (top, bottom), a header row, and a search-prompt row.
-// height = items.  The item list fills the remaining space, so the popup's
-// total height is item count + searchPopupChrome.  The render loop and the
-// Up/Down scroll math both treat height as the visible item count, so it has
-// to reflect what actually fits, not the total number of items — otherwise
-// scrolling never fires and the selected row renders off-screen.
-const searchPopupChrome = 4
+// — two border rows (top, bottom), a header row, a search-prompt row, and a
+// footer key-hint row.  height = items.  The item list fills the remaining
+// space, so the popup's total height is item count + searchPopupChrome.  The
+// render loop and the Up/Down scroll math both treat height as the visible
+// item count, so it has to reflect what actually fits, not the total number
+// of items — otherwise scrolling never fires and the selected row renders
+// off-screen.
+const searchPopupChrome = 5
 
 // searchPopupMaxItems caps the popup so a huge command list does not eat the
 // whole message area.  25 mirrors the previous cap and is enough to scan at a
@@ -471,14 +481,7 @@ func (m *model) newSearchPopup(mode searchMode) {
 		} else {
 			items = make([]SearchItem, len(m.todoState.Items))
 			for i, it := range m.todoState.Items {
-				prefix := "[ ]"
-				switch it.Status {
-				case "in_progress":
-					prefix = "[~]"
-				case "completed":
-					prefix = "[x]"
-				}
-				items[i] = SearchItem{Text: prefix + " " + it.Content}
+				items[i] = SearchItem{Text: todoPrefix(it.Status) + " " + it.Content}
 			}
 		}
 
@@ -500,11 +503,105 @@ func (m *model) newSearchPopup(mode searchMode) {
 	m.searchPopup = &searchPopupState{
 		mode:      mode,
 		entries:   items,
+		suggested: m.suggestedItems(mode),
 		filtered:  items,
 		selected:  0,
 		search:    "",
 		height:    popupHeight,
 		scrollOff: 0,
+	}
+	// Pin the Suggested rows for the empty query the popup opens with.
+	m.searchPopup.filterSearch()
+}
+
+// suggestedCommandsMax caps the Suggested section of the commands popup.
+const suggestedCommandsMax = 5
+
+// recordCommandUse notes a picked command for the popup's Suggested section:
+// a most-recent-first list capped at suggestedCommandsMax plus a usage
+// count. In-memory only — see the cmdRecent field comment.
+func (m *model) recordCommandUse(cmd string) {
+	if cmd == "" {
+		return
+	}
+	if m.cmdCounts == nil {
+		m.cmdCounts = make(map[string]int)
+	}
+	m.cmdCounts[cmd]++
+	for i, c := range m.cmdRecent {
+		if c == cmd {
+			m.cmdRecent = append(m.cmdRecent[:i], m.cmdRecent[i+1:]...)
+			break
+		}
+	}
+	m.cmdRecent = append([]string{cmd}, m.cmdRecent...)
+	if len(m.cmdRecent) > suggestedCommandsMax {
+		m.cmdRecent = m.cmdRecent[:suggestedCommandsMax]
+	}
+}
+
+// suggestedItems returns the rows a popup pins above the list while the
+// filter is empty: recent commands, or the active model/agent/subagent/todo.
+// Rows are matched against the popup's entries at filter time, so stale
+// suggestions drop out silently (see pinnedSuggested).
+func (m *model) suggestedItems(mode searchMode) []SearchItem {
+	switch mode {
+	case searchModeCommands:
+		items := make([]SearchItem, 0, len(m.cmdRecent))
+		for _, cmd := range m.cmdRecent {
+			items = append(items, SearchItem{Text: cmd})
+		}
+		return items
+	case searchModeModels:
+		role := m.cfg.ActiveRole
+		if role == "" {
+			role = "default"
+		}
+		return []SearchItem{{Text: role}}
+	case searchModeAgents:
+		role := m.activeAgent
+		if role == "" {
+			role = "default"
+		}
+		return []SearchItem{{Text: role}}
+	case searchModeSubagents:
+		// The running subagent is the "current" one; a monitor with nothing
+		// running gets no Suggested row at all.
+		for _, r := range m.subagentRows() {
+			if r.status != "running" {
+				continue
+			}
+			title := r.title
+			if title == "" {
+				title = r.typ
+			}
+			return []SearchItem{{ID: r.agentID, Text: title}}
+		}
+		return nil
+	case searchModeTodos:
+		// The in-progress todo is the current one.
+		if m.todoState == nil {
+			return nil
+		}
+		for _, it := range m.todoState.Items {
+			if it.Status == "in_progress" {
+				return []SearchItem{{Text: todoPrefix(it.Status) + " " + it.Content}}
+			}
+		}
+		return nil
+	}
+	return nil
+}
+
+// todoPrefix is the checkbox glyph a todo status renders as in the popup.
+func todoPrefix(status string) string {
+	switch status {
+	case "in_progress":
+		return "[~]"
+	case "completed":
+		return "[x]"
+	default:
+		return "[ ]"
 	}
 }
 
@@ -578,27 +675,141 @@ func markActiveRole(items []SearchItem, activeRole string) {
 	}
 }
 
-// filterSearch filters items by search query (case-insensitive substring on Text).
+// filterSearch rebuilds filtered from entries. An empty query pins the
+// Suggested rows (recent commands, the active model/agent/subagent/todo)
+// above the rest in entry order; a non-empty one fuzzy-scores every row —
+// text counts double, description adds — and sorts by score, keeping entry
+// order for ties. A query nothing matches falls back to the full list, as
+// before.
 func (sp *searchPopupState) filterSearch() {
+	sp.selected, sp.scrollOff = 0, 0
+	sp.suggestedN = 0
 	if sp.search == "" {
 		sp.filtered = sp.entries
-		sp.selected = 0
-		sp.scrollOff = 0
+		head, used := sp.pinnedSuggested()
+		if len(head) > 0 {
+			sp.suggestedN = len(head)
+			filtered := make([]SearchItem, 0, len(sp.entries))
+			filtered = append(filtered, head...)
+			for i, e := range sp.entries {
+				if !used[i] {
+					filtered = append(filtered, e)
+				}
+			}
+			sp.filtered = filtered
+		}
 		return
 	}
-	q := strings.ToLower(sp.search)
-	var filtered []SearchItem
+	type scored struct {
+		item  SearchItem
+		score int
+	}
+	var matches []scored
 	for _, e := range sp.entries {
-		if strings.Contains(strings.ToLower(e.Text), q) || strings.Contains(strings.ToLower(e.Description), q) {
-			filtered = append(filtered, e)
+		if s := fuzzyScore(sp.search, e.Text, e.Description); s >= 0 {
+			matches = append(matches, scored{item: e, score: s})
 		}
 	}
-	if filtered == nil {
-		filtered = sp.entries // show all if no matches
+	if len(matches) == 0 {
+		sp.filtered = sp.entries // nothing matched: show everything, as before
+		return
 	}
-	sp.filtered = filtered
-	sp.selected = 0
-	sp.scrollOff = 0
+	sort.SliceStable(matches, func(i, j int) bool { return matches[i].score > matches[j].score })
+	sp.filtered = make([]SearchItem, len(matches))
+	for i, m := range matches {
+		sp.filtered[i] = m.item
+	}
+}
+
+// pinnedSuggested returns the suggested rows that still exist in entries —
+// in suggested order, with each row taken from entries so descriptions and
+// IDs travel with it — plus which entry indexes were consumed. Stale
+// suggestions (an unloaded skill, a finished subagent) drop out silently.
+func (sp *searchPopupState) pinnedSuggested() (head []SearchItem, used []bool) {
+	if len(sp.suggested) == 0 {
+		return nil, nil
+	}
+	used = make([]bool, len(sp.entries))
+	for _, s := range sp.suggested {
+		for i, e := range sp.entries {
+			if !used[i] && e.Text == s.Text && e.ID == s.ID {
+				head = append(head, e)
+				used[i] = true
+				break
+			}
+		}
+	}
+	return head, used
+}
+
+// fuzzyScore scores query against an item's text and description as a
+// case-insensitive subsequence match. Text hits count double, description
+// hits add on top; -1 means neither matched. The score orders the popup
+// list: prefix matches outrank word-start matches, which outrank plain
+// subsequence hits ("/he" → /help before /theme).
+func fuzzyScore(query, text, desc string) int {
+	score := -1
+	if s := fuzzyMatchScore(query, text); s > 0 {
+		score = 2 * s
+	}
+	if s := fuzzyMatchScore(query, desc); s > 0 {
+		if score < 0 {
+			score = s
+		} else {
+			score += s
+		}
+	}
+	return score
+}
+
+// fuzzyMatchScore scores query against s as a case-insensitive subsequence
+// match: ≥1 on a hit, -1 on a miss. A full prefix match outranks a match at
+// a word boundary, which outranks a plain hit.
+func fuzzyMatchScore(query, s string) int {
+	if query == "" {
+		return 0
+	}
+	lq, ls := strings.ToLower(query), strings.ToLower(s)
+	t := []rune(ls)
+	first, idx := -1, 0
+	for _, r := range lq {
+		found := -1
+		for k := idx; k < len(t); k++ {
+			if t[k] == r {
+				found = k
+				break
+			}
+		}
+		if found < 0 {
+			return -1
+		}
+		if first < 0 {
+			first = found
+		}
+		idx = found + 1
+	}
+	switch {
+	case strings.HasPrefix(ls, lq):
+		return 7
+	case wordStartAt(t, first):
+		return 4
+	default:
+		return 1
+	}
+}
+
+// wordStartAt reports whether rune i in t sits right after a separator or at
+// the string start, so a match there begins a word ("claude" inside
+// "anthropic/claude-opus").
+func wordStartAt(t []rune, i int) bool {
+	if i <= 0 {
+		return true
+	}
+	switch t[i-1] {
+	case ' ', '-', '_', '.', '/', ':', '(', '[':
+		return true
+	}
+	return false
 }
 
 // syncPalette resolves the active theme's palette and fans it out to every
@@ -636,6 +847,9 @@ func newModel(ctx context.Context, cancel context.CancelFunc, cfg Config) model 
 	// stylesheet is chosen from the palette, so the renderer cannot be built
 	// until the theme is known.
 	tm := NewThemeManager()
+	// Custom themes load before the configured name is applied, so the config
+	// can name a theme that only exists in ~/.pirate/themes or a project.
+	tm.LoadCustomThemes(cfg.WorkDir)
 	if cfg.ThemeName != "" && cfg.ThemeName != "default" {
 		_ = tm.SetTheme(cfg.ThemeName) // ignore error, falls back to tokyo-night
 	}
@@ -1734,6 +1948,7 @@ func (m *model) acceptSearchPopupSelection() tea.Cmd {
 	item := sp.filtered[sp.selected]
 	switch sp.mode {
 	case searchModeCommands:
+		m.recordCommandUse(item.Text)
 		m.inputModel.SetText(item.Text + " ")
 		m.searchPopup = nil
 	case searchModeHistory:
@@ -2834,6 +3049,8 @@ func (m *model) renderSearchPopup(width int) string {
 		b.WriteString("\n")
 		msg := "  No matching " + string(sp.mode) // "commands", "history", "models", "agents"
 		b.WriteString(st.searchStyle.Width(width).Render(msg))
+		b.WriteString("\n")
+		b.WriteString(st.searchStyle.Width(width).Render(clipRunes(searchPopupFooter(sp.mode), width)))
 		return st.popupStyle.Render(b.String())
 	}
 
@@ -2848,7 +3065,33 @@ func (m *model) renderSearchPopup(width int) string {
 		b.WriteString(st.searchStyle.Width(width).Render(clipRunes(line, width)))
 	}
 
+	// Footer: only the keys this mode actually answers. PageUp/PageDown and
+	// Home/End are not bound in the popup, so they are not advertised;
+	// Backspace is obvious.
+	b.WriteString("\n")
+	b.WriteString(st.searchStyle.Width(width).Render(clipRunes(searchPopupFooter(sp.mode), width)))
+
 	return st.popupStyle.Render(b.String())
+}
+
+// searchPopupFooter is the popup's key-hint line for a mode: only keys that
+// actually work there. Todos is view-only, so it promises no Enter; the
+// subagent monitor adds its `s` steer key.
+func searchPopupFooter(mode searchMode) string {
+	switch mode {
+	case searchModeTodos:
+		return "  ↑/↓ move · Esc close"
+	case searchModeSubagents:
+		return "  ↑/↓ move · Enter view · s steer · Esc close"
+	case searchModeCommands:
+		return "  ↑/↓ move · Enter run · Esc close"
+	case searchModeHistory:
+		return "  ↑/↓ move · Enter insert · Esc close"
+	case searchModeModels, searchModeAgents:
+		return "  ↑/↓ move · Enter switch · Esc close"
+	default:
+		return "  ↑/↓ move · Enter select · Esc close"
+	}
 }
 
 // searchPopupStyleSet is the per-mode palette of the search popup: the same
@@ -2922,19 +3165,31 @@ func (m *model) searchPopupStyles(mode searchMode, width int) searchPopupStyleSe
 // Both i and scrollOff+i are bounded by len(filtered) so a stale scrollOff from
 // before a resize cannot index past the end and panic —
 // refreshSearchPopupHeight is the primary guard, this is the belt to its braces.
+//
+// While the filter is empty, the first suggestedN rows are the Suggested
+// section: a header line sits above its first row (and scrolls away with it),
+// and each suggested row carries the ● current marker instead of the plain
+// indent.
 func writeSearchPopupItems(b *strings.Builder, sp *searchPopupState, st searchPopupStyleSet, width int) {
 	for i := 0; i < sp.height; i++ {
 		idx := sp.scrollOff + i
 		if idx < 0 || idx >= len(sp.filtered) {
 			break
 		}
+		if idx == 0 && sp.suggestedN > 0 {
+			b.WriteString("\n")
+			b.WriteString(st.searchStyle.Width(width).Render(clipRunes("  Suggested", width)))
+		}
 		item := sp.filtered[idx]
 		prefix := "  "
 		currentItemStyle := st.itemStyle
-		if idx == sp.selected {
+		switch {
+		case idx == sp.selected:
 			// Always highlight the selected item.
 			prefix = "> "
 			currentItemStyle = st.selectedItemStyle
+		case idx < sp.suggestedN:
+			prefix = "● "
 		}
 
 		line := prefix + item.Text

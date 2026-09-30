@@ -195,8 +195,10 @@ type testError struct{ msg string }
 func (e *testError) Error() string { return e.msg }
 
 // TestHandleAgentCommandList checks the no-arg path: it opens the agent
-// picker popup — default plus every primary agent, the active one marked in
-// its description — instead of printing a listing into the chat.
+// picker popup — the active agent pinned first by the Suggested section,
+// then the built-in default and every primary agent — with the active one
+// still marked in its description, instead of printing a listing into the
+// chat.
 func TestHandleAgentCommandList(t *testing.T) {
 	var asked []string
 	m := newSwitchTestModel(t, &asked)
@@ -217,8 +219,8 @@ func TestHandleAgentCommandList(t *testing.T) {
 		texts = append(texts, it.Text)
 		descs[it.Text] = it.Description
 	}
-	if len(texts) != 3 || texts[0] != "default" || texts[1] != "build" || texts[2] != "pm" {
-		t.Fatalf("popup entries = %v, want [default build pm]", texts)
+	if len(texts) != 3 || texts[0] != "pm" || texts[1] != "default" || texts[2] != "build" {
+		t.Fatalf("popup entries = %v, want [pm default build] (active agent pinned first)", texts)
 	}
 	if !strings.Contains(descs["default"], "built-in pi-go agent") {
 		t.Errorf("default description = %q", descs["default"])

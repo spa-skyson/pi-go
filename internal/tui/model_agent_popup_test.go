@@ -105,7 +105,8 @@ func TestModelCommandNoArgsOpensModelsPopup(t *testing.T) {
 func TestModelsPopupEnterSwitchesModel(t *testing.T) {
 	m, switched := popupTestModel(t)
 	m = submit(t, m, "/model")
-	m.searchPopup.selected = 1 // the role candidate
+	// The default role is the active candidate — Suggested pins it first.
+	m.searchPopup.selected = 0
 
 	m = press(t, m, tea.KeyEnter)
 
@@ -128,6 +129,7 @@ func TestModelsPopupEnterWithActiveAgentOverrides(t *testing.T) {
 	m, switched := popupTestModel(t)
 	m.activeAgent = "pm"
 	m = submit(t, m, "/model")
+	m.searchPopup.selected = 1 // the plain model candidate; index 0 is the pinned default role
 
 	m = press(t, m, tea.KeyEnter)
 

@@ -192,6 +192,9 @@ func (m *model) refreshSubagentsPopup() {
 		selected = sp.filtered[sp.selected].ID
 	}
 	sp.entries = m.subagentSearchItems()
+	// Recompute the "current" row too: the pinned running subagent may have
+	// finished since the popup opened.
+	sp.suggested = m.suggestedItems(sp.mode)
 	sp.filterSearch()
 	if selected != "" {
 		for i, it := range sp.filtered {

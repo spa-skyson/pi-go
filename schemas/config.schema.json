@@ -251,6 +251,15 @@
         "excluded_projects": { "type": "array", "items": { "type": "string" } }
       }
     },
+    "attention": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Terminal attention signals: bell and desktop notification when an approval dialog opens or a long turn completes.",
+      "properties": {
+        "bell": { "type": "boolean", "description": "Ring the terminal bell (ASCII BEL). Default true." },
+        "notify": { "type": "boolean", "description": "Send an OSC 777 desktop notification. Default true." }
+      }
+    },
     "palace": {
       "type": "object",
       "additionalProperties": false,
