@@ -8,6 +8,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/spa-skyson/pi-rate/internal/extension"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 // CompletionType identifies what kind of completion to perform.
@@ -272,7 +274,7 @@ func listSpecs(workDir string) ([]string, error) {
 
 // CompleteMention returns file completion candidates for the given prefix.
 func CompleteMention(prefix string, workDir string) *CompleteResult {
-	candidates := matchingFiles(prefix, workDir)
+	candidates := matchingFiles(prefix, workDir, 20)
 	return &CompleteResult{
 		Candidates: candidates,
 		Selected:   0,
@@ -282,8 +284,8 @@ func CompleteMention(prefix string, workDir string) *CompleteResult {
 
 // matchingFiles returns files in workDir whose relative path starts with the prefix.
 // Skips hidden directories, node_modules, vendor, and binary artifacts.
-// Returns at most 20 candidates.
-func matchingFiles(prefix string, workDir string) []CompletionCandidate {
+// Returns at most limit candidates.
+func matchingFiles(prefix string, workDir string, limit int) []CompletionCandidate {
 	if workDir == "" {
 		return nil
 	}
@@ -326,7 +328,7 @@ func matchingFiles(prefix string, workDir string) []CompletionCandidate {
 			})
 		}
 
-		if len(candidates) >= 20 {
+		if len(candidates) >= limit {
 			return filepath.SkipAll
 		}
 		return nil
@@ -388,6 +390,91 @@ func extractMentions(text string) []string {
 		i = j - 1
 	}
 	return mentions
+}
+
+// mentionPopupFileLimit caps the file-mention popup's candidate walk. The
+// popup's fuzzy filter narrows the list as the prefix grows, so a wider net
+// than CompleteMention's 20 is safe and finds deeper matches for a bare "@".
+const mentionPopupFileLimit = 50
+
+// mentionAtCursor reports the @mention the input cursor sits in: the char
+// position of '@' and the prefix typed after it. A mention starts the line or
+// follows whitespace — the @ in an email-like "a@b" is not a trigger.
+func (m *model) mentionAtCursor() (int, string) {
+	start, prefix := findMentionAtCursor(m.inputModel.Text, m.inputModel.CursorPos)
+	if start < 0 {
+		return -1, ""
+	}
+	if start > 0 {
+		before := charOffsetToByteOffset(m.inputModel.Text, start-1)
+		r, _ := utf8.DecodeRuneInString(m.inputModel.Text[before:])
+		if r != ' ' && r != '\t' && r != '\n' {
+			return -1, ""
+		}
+	}
+	return start, prefix
+}
+
+// syncFilesPopup mirrors the file-mention popup to the @mention at the input
+// cursor: opens it where an @ can start a mention, re-filters while the
+// prefix grows, and closes it when the @ or the cursor moves away. Runs on
+// every prompt key, so the popup can never outlive its trigger.
+func (m *model) syncFilesPopup() {
+	start, prefix := m.mentionAtCursor()
+	if start < 0 {
+		if m.searchPopup != nil && m.searchPopup.mode == searchModeFiles {
+			m.popOverlay(overlaySearchPopup)
+		}
+		return
+	}
+	if m.searchPopup != nil && m.searchPopup.mode == searchModeFiles {
+		if m.searchPopup.search != prefix {
+			m.searchPopup.search = prefix
+			m.searchPopup.filterSearch()
+		}
+		return
+	}
+	m.newSearchPopup(searchModeFiles)
+}
+
+// handleFilesPopupKey answers the keys the file popup owns. Everything else —
+// letters, backspace, cursor moves — declines, so it falls through to the
+// prompt input: the text after @ is the filter, and syncFilesPopup re-filters
+// on every edit (and closes the popup once the @ is gone).
+func (m *model) handleFilesPopupKey(key tea.Key) (tea.Cmd, bool) {
+	sp := m.searchPopup
+	switch key.Code {
+	case tea.KeyUp:
+		sp.selectPrev()
+		return nil, true
+	case tea.KeyDown:
+		sp.selectNext()
+		return nil, true
+	case tea.KeyTab:
+		sp.selectByTab(key.Mod == tea.ModShift)
+		return nil, true
+	case tea.KeyEnter:
+		return m.acceptSearchPopupSelection(), true
+	case tea.KeyEsc:
+		m.popOverlay(overlaySearchPopup)
+		return nil, true
+	}
+	return nil, false
+}
+
+// insertFilesPopupSelection replaces the "@prefix" at the cursor with the
+// chosen path plus a trailing space and parks the cursor at the end. Sending
+// already extracts mentions (extractMentions), so the file rides along with
+// no extra wiring.
+func (m *model) insertFilesPopupSelection(path string) {
+	start, _ := m.mentionAtCursor()
+	if start < 0 {
+		return
+	}
+	text := m.inputModel.Text
+	startByte := charOffsetToByteOffset(text, start)
+	endByte := charOffsetToByteOffset(text, m.inputModel.CursorPos)
+	m.inputModel.SetText(text[:startByte] + "@" + path + " " + text[endByte:])
 }
 
 // CycleSelection moves the selection index in the given direction.

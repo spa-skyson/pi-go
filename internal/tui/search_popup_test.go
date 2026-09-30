@@ -262,6 +262,7 @@ func TestSearchPopupFooters(t *testing.T) {
 		{searchModeAgents, true},
 		{searchModeSubagents, true},
 		{searchModeTodos, false}, // view-only: Enter does nothing here
+		{searchModeFiles, true},
 	}
 	for _, tc := range cases {
 		t.Run(string(tc.mode), func(t *testing.T) {
@@ -305,6 +306,7 @@ func TestSearchPopupRenderWidthAllModes(t *testing.T) {
 	for _, mode := range []searchMode{
 		searchModeCommands, searchModeHistory, searchModeModels,
 		searchModeAgents, searchModeSubagents, searchModeTodos,
+		searchModeFiles,
 	} {
 		t.Run(string(mode), func(t *testing.T) {
 			items := []SearchItem{
