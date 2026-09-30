@@ -2567,11 +2567,11 @@ func (m *model) messageViewportHeight() int {
 	// frame and tore the panel away from the sidebar.
 	availableHeight := m.height - statusLines - inputLines - 3 - 2
 	if m.sea.visible() {
-		// The sea scene adds six rows above the messages (rule, 4 scene rows,
-		// rule). visible() answers the same question as render() != "" without
+		// The sea scene adds its rows plus two framing rules above the messages.
+		// visible() answers the same question as render() != "" without
 		// building the scene: render() assembled the whole animation purely
 		// for this check, and View renders it again a few lines later.
-		availableHeight -= 6
+		availableHeight -= seaLines + 2
 	}
 	if m.branchPopup != nil {
 		availableHeight -= m.branchPopup.height + 6

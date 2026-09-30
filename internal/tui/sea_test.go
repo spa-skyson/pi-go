@@ -24,7 +24,7 @@ func seaScene(t *testing.T, width int) (*seaState, []string) {
 // The scene is seaLines rows tall and every row measures exactly the zone
 // width — the frame between the rules must not push the panel wider.
 func TestSeaState_RowGeometry(t *testing.T) {
-	for _, width := range []int{10, 26, 40, 48, 100} {
+	for width := 10; width <= 100; width++ {
 		_, rows := seaScene(t, width)
 		if len(rows) != seaLines {
 			t.Errorf("width %d: scene has %d rows, want %d", width, len(rows), seaLines)
@@ -88,19 +88,19 @@ func runeIndex(s, sub string) int {
 func TestSeaState_ShipVisibleAtPosition(t *testing.T) {
 	const width = 40
 	s, _ := seaScene(t, width)
-	s.bob = false
+	s.bob = 0
 	s.tick(width) // advance to a known position and settle the bob
 
 	rows := strings.Split(ansi.Strip(s.render()), "\n")
-	hullAt := runeIndex(rows[1], seaHull)
+	hullAt := runeIndex(rows[5], seaHull)
 	if hullAt < 0 {
 		t.Fatalf("hull missing from the waterline row:\n%s", rows[1])
 	}
 	if hullAt != s.shipX {
 		t.Errorf("hull at column %d, want %d", hullAt, s.shipX)
 	}
-	if !strings.Contains(rows[0], "π") {
-		t.Errorf("sail missing from the sky row:\n%s", rows[0])
+	if !strings.Contains(strings.Join(rows, "\n"), "π") {
+		t.Errorf("sail missing from the scene:\n%s", strings.Join(rows, "\n"))
 	}
 }
 
@@ -111,20 +111,20 @@ func TestSeaState_BobAlternates(t *testing.T) {
 
 	b0 := s.bob
 	s.tick(width)
-	if s.bob == b0 {
-		t.Error("bob should flip on a tick")
+	if s.bob != (b0+1)%4 {
+		t.Error("bob should advance on a tick")
 	}
 	s.tick(width)
-	if s.bob != b0 {
-		t.Error("bob should flip back on the second tick")
+	if s.bob != (b0+2)%4 {
+		t.Error("bob should advance through its four-step cycle")
 	}
 
-	s.bob = false
+	s.bob = 0
 	s.tick(width)
-	crest := strings.Split(ansi.Strip(s.render()), "\n")[0]
-	s.bob = false
+	crest := ansi.Strip(s.render())
+	s.bob = 1
 	s.tick(width)
-	trough := strings.Split(ansi.Strip(s.render()), "\n")[0]
+	trough := ansi.Strip(s.render())
 	if crest == trough {
 		t.Errorf("sail must alternate between the two sprites:\n%s", crest)
 	}
@@ -134,14 +134,14 @@ func TestSeaState_BobAlternates(t *testing.T) {
 func TestSeaState_IslandOnWideOnly(t *testing.T) {
 	const width = 40
 	_, rows := seaScene(t, width)
-	crown := runeIndex(rows[0], seaCrown)
+	crown := runeIndex(rows[1], seaCrown)
 	if crown < 0 {
-		t.Fatalf("island crown missing on a wide zone:\n%s", rows[0])
+		t.Fatalf("island crown missing on a wide zone:\n%s", rows[1])
 	}
-	if crown != width-seaIslandW+1 {
-		t.Errorf("crown at column %d, want %d", crown, width-seaIslandW+1)
+	if crown != width-seaIslandW+2 {
+		t.Errorf("crown at column %d, want %d", crown, width-seaIslandW+2)
 	}
-	x := strings.Index(rows[2], "X")
+	x := strings.Index(rows[4], "X")
 	if x < 0 || x < width-seaIslandW {
 		t.Errorf("treasure mark at %d, want inside the island zone [%d,%d)", x, width-seaIslandW, width)
 	}
@@ -149,7 +149,7 @@ func TestSeaState_IslandOnWideOnly(t *testing.T) {
 	// Narrow zone: sea and ship only.
 	_, rows = seaScene(t, 20)
 	for i, row := range rows {
-		if strings.Contains(row, `/|\`) || strings.Contains(row, "X") {
+		if strings.Contains(row, seaCrown) || strings.Contains(row, "X") {
 			t.Errorf("narrow zone row %d draws island parts:\n%s", i, row)
 		}
 	}
@@ -176,7 +176,7 @@ func TestSeaState_PaletteApplied(t *testing.T) {
 // The pirate flag was rejected at the welcome banner for exactly this reason —
 // keep it out of here too.
 func TestSeaState_GlyphsAreWidthSafe(t *testing.T) {
-	sprites := seaHull + seaSailCrest + seaSailTrough + seaCrown + seaGull + seaCurl + seaSwell + string(seaTreasure)
+	sprites := seaHull + seaSailCrest + seaSailTrough + seaCrown + seaGull + seaSparkle + seaCurl + seaSwell + seaDeep + string(seaTreasure)
 	for _, r := range sprites {
 		if r == ' ' || widthSafe(r) {
 			continue
