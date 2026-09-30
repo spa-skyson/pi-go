@@ -9,8 +9,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/extension"
 )
 
 // handleSkillCommand activates a dynamic skill by injecting its body into the
@@ -101,7 +102,7 @@ func (m *model) handleSkillCreateCommand(args []string) (tea.Model, tea.Cmd) {
 	if len(args) == 0 {
 		m.chatModel.Messages = append(m.chatModel.Messages, message{
 			role:    "assistant",
-			content: "Usage: `/skill-create <name> [description]`\nCreates `.pi-go/skills/<name>/SKILL.md`",
+			content: "Usage: `/skill-create <name> [description]`\nCreates `.pirate/skills/<name>/SKILL.md`",
 		})
 		return m, nil
 	}
@@ -124,7 +125,7 @@ func (m *model) handleSkillCreateCommand(args []string) (tea.Model, tea.Cmd) {
 		desc = strings.Join(args[1:], " ")
 	}
 
-	skillDir := filepath.Join(".pi-go", "skills", skillName)
+	skillDir := filepath.Join(config.ProjectDirName, "skills", skillName)
 	skillPath := filepath.Join(skillDir, "SKILL.md")
 
 	// Check if already exists — ask to overwrite
@@ -210,7 +211,7 @@ Configure skill /%s in two phases:
 
 **Phase 1 — Research:** Do quick research first:
 - Search the codebase for related patterns, commands, or workflows
-- Check existing skills in .pi-go/skills/ for reference
+- Check existing skills in .pirate/skills/ for reference
 - Identify what tools and steps are typically needed for this kind of task
 
 **Phase 2 — Interview:** Based on your research, ask the user 1-3 focused questions:
@@ -246,7 +247,7 @@ func (m *model) handleSkillListCommand() (tea.Model, tea.Cmd) {
 	if len(m.cfg.Skills) == 0 {
 		m.chatModel.Messages = append(m.chatModel.Messages, message{
 			role:    "assistant",
-			content: "No skills loaded. Place `*.SKILL.md` files in `~/.pi-go/skills/` or `.pi-go/skills/`.",
+			content: "No skills loaded. Place `*.SKILL.md` files in `~/.pirate/skills/` or `.pirate/skills/`.",
 		})
 		return m, nil
 	}
@@ -283,7 +284,7 @@ func (m *model) handleSkillLoadCommand() (tea.Model, tea.Cmd) {
 	if len(m.cfg.Skills) == 0 {
 		m.chatModel.Messages = append(m.chatModel.Messages, message{
 			role:    "assistant",
-			content: "Reloaded: no skills found. Place `*.SKILL.md` files in `~/.pi-go/skills/` or `.pi-go/skills/`.",
+			content: "Reloaded: no skills found. Place `*.SKILL.md` files in `~/.pirate/skills/` or `.pirate/skills/`.",
 		})
 		return m, nil
 	}

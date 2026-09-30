@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/permission"
+	"github.com/spa-skyson/pi-rate/internal/permission"
 )
 
 // The config.json spelling a user writes — tool rules flat, bash as a

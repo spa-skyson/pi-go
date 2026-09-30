@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/ratelimit"
+	"github.com/spa-skyson/pi-rate/internal/ratelimit"
 )
 
 // BuildTransport returns nil when nothing needs customizing, which tells the

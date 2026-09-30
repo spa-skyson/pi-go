@@ -138,7 +138,7 @@ func TestDefaultBinaryPathsForPlatforms(t *testing.T) {
 			paths := defaultBinaryPathsFor(goos, home)
 			name := binaryNameFor(goos)
 
-			if want := filepath.Join(home, ".pi-go", "acp", "agy", name); paths[0] != want {
+			if want := filepath.Join(home, ".pirate", "acp", "agy", name); paths[0] != want {
 				t.Errorf("first entry = %q, want the install dir %q", paths[0], want)
 			}
 			if last := paths[len(paths)-1]; last != name {
@@ -298,19 +298,19 @@ func TestBinaryPaths(t *testing.T) {
 	}
 	var found bool
 	for _, path := range DefaultBinaryPaths {
-		if strings.Contains(path, filepath.Join(".pi-go", "acp", "agy")) {
+		if strings.Contains(path, filepath.Join(".pirate", "acp", "agy")) {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("DefaultBinaryPaths %v should include ~/.pi-go/acp/agy", DefaultBinaryPaths)
+		t.Errorf("DefaultBinaryPaths %v should include ~/.pirate/acp/agy", DefaultBinaryPaths)
 	}
 }
 
 // TestBinaryPathsPreferInstallDirOverPATH pins the search order: the bare name
 // resolves through exec.LookPath, so it must come last. If it came first, a
 // binary earlier on the caller's PATH would shadow the one the installer put
-// in ~/.pi-go/acp/agy, making the resolved server depend on the environment
+// in ~/.pirate/acp/agy, making the resolved server depend on the environment
 // rather than on what was installed.
 func TestBinaryPathsPreferInstallDirOverPATH(t *testing.T) {
 	if got := DefaultBinaryPaths[len(DefaultBinaryPaths)-1]; got != BinaryName {
@@ -325,7 +325,7 @@ func TestBinaryPathsPreferInstallDirOverPATH(t *testing.T) {
 			t.Errorf("entry %d = %q; every entry before the bare name must name a directory", i, path)
 		}
 	}
-	if strings.Contains(DefaultBinaryPaths[0], filepath.Join(".pi-go", "acp", "agy")) {
+	if strings.Contains(DefaultBinaryPaths[0], filepath.Join(".pirate", "acp", "agy")) {
 		return
 	}
 	// Only a home directory that cannot be resolved should drop the install

@@ -135,7 +135,7 @@ jobs:
       # Attest the archives *and* the raw binaries inside them. install.sh
       # extracts the binary and drops it on the user's PATH, so the archive
       # digest is not the digest anyone ends up running — without the
-      # `dist/*/pi*` entries, `pi verify` could never verify itself.
+      # `dist/*/pirate*` entries, `pirate verify` could never verify itself.
       #
       # The binaries are attested but not published: an extra ~100 MB asset
       # per platform is not worth it when the digest is what verification
@@ -148,8 +148,8 @@ jobs:
           subject-path: |
             dist/*.tar.gz
             dist/*.zip
-            dist/*/pi
-            dist/*/pi.exe
+            dist/*/pirate
+            dist/*/pirate.exe
 
       # One SBOM covers every subject: a Go binary's dependency set is its
       # module graph, which is identical across the goos/goarch matrix. The
@@ -162,8 +162,8 @@ jobs:
           subject-path: |
             dist/*.tar.gz
             dist/*.zip
-            dist/*/pi
-            dist/*/pi.exe
+            dist/*/pirate
+            dist/*/pirate.exe
           sbom-path: sbom.spdx.json
 
   # The deployable kagent manifest for this release.

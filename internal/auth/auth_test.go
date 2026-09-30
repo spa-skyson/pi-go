@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 func TestGeneratePKCE(t *testing.T) {
@@ -514,7 +514,7 @@ func TestSaveKey(t *testing.T) {
 		t.Fatalf("SaveKey error: %v", err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(tmpDir, ".pi-go", ".env"))
+	data, err := os.ReadFile(filepath.Join(tmpDir, ".pirate", ".env"))
 	if err != nil {
 		t.Fatalf("error reading .env: %v", err)
 	}
@@ -971,7 +971,7 @@ func TestSaveKey_ExistingFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	testenv.SetHome(t, tmpDir)
 
-	piDir := filepath.Join(tmpDir, ".pi-go")
+	piDir := filepath.Join(tmpDir, ".pirate")
 	_ = os.MkdirAll(piDir, 0700)
 	// Write existing content.
 	_ = os.WriteFile(filepath.Join(piDir, ".env"), []byte("EXISTING=value\n"), 0600)
@@ -1166,8 +1166,8 @@ func TestSaveKey_WriteFileError(t *testing.T) {
 	tmpDir := t.TempDir()
 	testenv.SetHome(t, tmpDir)
 
-	// Create .pi-go/.env as a directory to make WriteFile fail.
-	envDir := filepath.Join(tmpDir, ".pi-go", ".env")
+	// Create .pirate/.env as a directory to make WriteFile fail.
+	envDir := filepath.Join(tmpDir, ".pirate", ".env")
 	_ = os.MkdirAll(envDir, 0700)
 
 	err := SaveKey("TEST_KEY", "test")

@@ -10,8 +10,8 @@ import (
 	adksession "google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
 
-	piacp "github.com/dimetron/pi-go/internal/acp"
-	"github.com/dimetron/pi-go/internal/acp/server/adapter"
+	piacp "github.com/spa-skyson/pi-rate/internal/acp"
+	"github.com/spa-skyson/pi-rate/internal/acp/server/adapter"
 )
 
 // replayEvents re-emits a persisted transcript as the session updates

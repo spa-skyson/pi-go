@@ -1,9 +1,9 @@
-# Installer for the Google Antigravity ACP server used by pi-go's "agy" subagent.
+# Installer for the Google Antigravity ACP server used by pi-rate's "agy" subagent.
 #
 # The agy CLI has no ACP mode: Antigravity ships a standalone ACP server binary
 # distributed as a platform archive by the Agent Client Protocol registry. This
 # script resolves the entry for the current platform, downloads the archive and
-# extracts it into %USERPROFILE%\.pi-go\acp\agy, which is the first location the
+# extracts it into %USERPROFILE%\.pirate\acp\agy, which is the first location the
 # adapter (internal/acp/client/agy) searches.
 #
 # The download is large (~300 MB compressed, ~900 MB extracted).
@@ -14,7 +14,7 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File install-agy-acp.ps1 [-InstallDir <path>]
 
 param(
-    [string]$InstallDir = (Join-Path $env:USERPROFILE ".pi-go\acp\agy"),
+    [string]$InstallDir = (Join-Path $env:USERPROFILE ".pirate\acp\agy"),
     [string]$AgentJsonUrl = $env:AGY_ACP_AGENT_JSON
 )
 
@@ -92,7 +92,7 @@ if (-not (Test-Path $server)) {
 }
 
 Write-Host "Installed $server"
-Write-Host "pi-go finds it automatically; override with PI_ACP_AGY_CMD if you move it."
+Write-Host "pirate finds it automatically; override with PI_ACP_AGY_CMD if you move it."
 Write-Host ""
 Write-Host "Next: the server does not inherit the agy CLI login. Select an auth method in"
 Write-Host "  %USERPROFILE%\.gemini\antigravity-acp\settings.json, e.g. {""auth"": {""type"": ""oauth-personal""}},"

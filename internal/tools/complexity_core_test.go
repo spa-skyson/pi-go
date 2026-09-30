@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/jsonschema-go/jsonschema"
 
-	"github.com/dimetron/pi-go/internal/lsp"
+	"github.com/spa-skyson/pi-rate/internal/lsp"
 )
 
 // This file pins the behavior of the helpers extracted while reducing
@@ -766,8 +766,8 @@ func TestResolveSessionStatsOptions(t *testing.T) {
 		if err != nil {
 			t.Skipf("no home directory available: %v", err)
 		}
-		if !strings.HasSuffix(opts.sessionDir, filepath.Join(".pi-go", "sessions")) {
-			t.Errorf("sessionDir = %q, want it under ~/.pi-go/sessions", opts.sessionDir)
+		if !strings.HasSuffix(opts.sessionDir, filepath.Join(".pirate", "sessions")) {
+			t.Errorf("sessionDir = %q, want it under ~/.pirate/sessions", opts.sessionDir)
 		}
 	})
 }

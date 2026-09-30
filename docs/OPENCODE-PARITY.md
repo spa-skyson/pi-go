@@ -1,5 +1,7 @@
 # План: паритет с opencode (вариант А)
 
+Проект: **Pi-rate** (форк pi-go).
+
 Ветка: `feature/opencode-parity`. Worktree: `.worktrees/opencode-parity`.
 
 Цель: пользовательский сетап opencode (`~/.config/opencode/opencode.json` +

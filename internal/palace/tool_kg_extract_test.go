@@ -27,7 +27,7 @@ func TestToolKGExtract_ImportsWithSourceFile(t *testing.T) {
 	text := `package auth
 
 import (
-	"github.com/dimetron/pi-go/internal/users"
+	"github.com/spa-skyson/pi-rate/internal/users"
 	"github.com/labstack/echo/v4"
 )
 `
@@ -44,8 +44,8 @@ import (
 	// segment, relative paths) are filtered out. The extractor preserves
 	// case in subjects and objects, so map keys are compared verbatim.
 	want := map[string]bool{
-		"handler.go imports github.com/dimetron/pi-go/internal/users": false,
-		"handler.go imports github.com/labstack/echo/v4":              false,
+		"handler.go imports github.com/spa-skyson/pi-rate/internal/users": false,
+		"handler.go imports github.com/labstack/echo/v4":                  false,
 	}
 	for _, t0 := range out.Triples {
 		key := t0.Subject + " " + t0.Predicate + " " + t0.Object

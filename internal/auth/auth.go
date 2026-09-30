@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	config "github.com/spa-skyson/pi-rate/internal/config"
 	"io"
 	"net"
 	"net/http"
@@ -880,14 +881,9 @@ func IsCodexOAuthToken(key string) bool {
 	return IdentifyKey(key) == KeyKindCodexOAuth
 }
 
-// SaveKey saves an API key to ~/.pi-go/.env.
+// SaveKey saves an API key to ~/.pirate/.env.
 func SaveKey(envVar, apiKey string) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("cannot determine home directory: %w", err)
-	}
-
-	envPath := filepath.Join(home, ".pi-go", ".env")
+	envPath := filepath.Join(config.PirateHome(), ".env")
 
 	existing := ""
 	if data, err := os.ReadFile(envPath); err == nil {

@@ -1,5 +1,6 @@
 # Binaries
 /pi
+/pirate
 /pi-*
 
 # Go build
@@ -51,6 +52,7 @@ Thumbs.db
 sandbox-trace.log
 sandbox.log
 /pi-sandbox
+/pirate-sandbox
 
 # Local secrets — never commit real API keys. hack/agentgateway/.env holds
 # live keys (Anthropic, OpenAI, Gemini, ...) and the repo is public.
@@ -78,3 +80,4 @@ sandbox.log
 /internal/cli/sentence-transformers_all-MiniLM-L6-v2/tokenizer.json
 /internal/cli/sentence-transformers_all-MiniLM-L6-v2/tokenizer_config.json
 /internal/cli/sentence-transformers_all-MiniLM-L6-v2/vocab.txt
+.pirate/

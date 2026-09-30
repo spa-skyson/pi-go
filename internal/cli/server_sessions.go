@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	acpserver "github.com/dimetron/pi-go/internal/acp/server"
-	pisession "github.com/dimetron/pi-go/internal/session"
+	acpserver "github.com/spa-skyson/pi-rate/internal/acp/server"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
 )
 
 // openServerSessionStore opens the on-disk session store the ACP and A2A

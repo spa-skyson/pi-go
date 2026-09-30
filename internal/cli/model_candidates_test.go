@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/provider"
-	"github.com/dimetron/pi-go/internal/tui"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/tui"
 )
 
 // testModelConfig builds a config with two named providers (one declaring

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 // --- E2E: /plan creates spec skeleton ---

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/sop"
+	"github.com/spa-skyson/pi-rate/internal/sop"
 )
 
 // verdictModel builds a model whose run is at the verification step with the

@@ -26,43 +26,60 @@ var moodEyes = map[AgentMood]string{
 	MoodSad:        "◡ ◡",
 }
 
-// mascotEars is the mascot's top row. ASCII slashes rather than ╱ ╲ (U+2571,
-// U+2572): the box-drawing diagonals are East Asian Ambiguous, so a terminal
-// resolving ambiguous width as wide draws this row two cells over budget and
-// shoves the whole sidebar — and with it every row of the top section — out of
-// alignment. In a monospace grid the ASCII pair is indistinguishable.
-const mascotEars = ` /\___/\` + "\n"
-
-// moodMascot maps each mood to a full mascot face (multi-line).
+// moodMascot maps each mood to the full pirate (5 rows, 8 cells wide).
 //
-// Every glyph here is East Asian Neutral or Narrow, so the face measures the
-// same in every terminal regardless of mood. The mascot sits in the sidebar's
-// first rows, which is why a mood-dependent width shows up as "the top of the
-// frame shifts sometimes": ★ (U+2605) and ◑ (U+25D1) are ambiguous, so the happy
-// and processing faces were a cell wider than the rest. See
-// TestMascotGlyphsAreWidthSafe.
+// The art is a fixed monospace grid: hat, face rows and shoulders with the
+// hook hand. The mood is a detail on the two face rows — a squint, a ship's
+// wheel, an open mouth, a tear — while the frame never moves, so the sidebar
+// slot does not jump when the mood changes.
+//
+// Every glyph here is East Asian Neutral or Narrow, or declared in
+// ambiguousChrome (π, █), so the art measures the same in every terminal
+// regardless of mood, and every mood occupies the same 8×5 box. See
+// TestMascotGlyphsAreWidthSafe and TestMascot_PirateArtGrid.
 var moodMascot = map[AgentMood]string{
-	MoodIdle: mascotEars +
-		"   ( ◕ ◕ )\n" +
-		`    / π \`,
-	MoodThinking: mascotEars +
-		"   ( ◔ ◕ )\n" +
-		`    / ~ \`,
-	MoodProcessing: mascotEars +
-		"   ( ◔ ◔ )\n" +
-		`    / ⚙ \`,
-	MoodToolCall: mascotEars +
-		"   ( ▸ ◂ )\n" +
-		`    / ⇢ \`,
-	MoodSpeaking: mascotEars +
-		"   ( ◕ ◡ )\n" +
-		`    / ~ \`,
-	MoodHappy: mascotEars +
-		"   ( ✧ ✧ )\n" +
-		`    / ⋆ \`,
-	MoodSad: mascotEars +
-		"   ( ◡ ◡ )\n" +
-		`    / ∙ \`,
+	// Neutral: patch, eye, beard, hook at rest.
+	MoodIdle: ` _.--._ 
+/__π___\
+(  █ ◕ )
+  \____/
+(_|  |J)`,
+	// Spyglass (or palm) out at the eye, scanning the horizon.
+	MoodThinking: ` _.--._ 
+/__π___\
+( █ ◔ )>
+  \____/
+(_|  |J)`,
+	// At the ship's wheel: hands on )o(.
+	MoodProcessing: ` _.--._ 
+/__π___\
+(  █ ◔ )
+ \|)o(|/
+(_|  |J)`,
+	// Eyes narrowed onto the tool about to be called.
+	MoodToolCall: ` _.--._ 
+/__π___\
+( █ ▸◂ )
+  \____/
+(_|  |J)`,
+	// Talking: open mouth in the beard.
+	MoodSpeaking: ` _.--._ 
+/__π___\
+(  █ ◡ )
+  \_o__/
+(_|  |J)`,
+	// Grin: π-shaped teeth under the hat insignia.
+	MoodHappy: ` _.--._ 
+/__π___\
+(  █ ✧ )
+  \_ππ_/
+(_|  |J)`,
+	// Tear rolling down from under the patch, eye downcast.
+	MoodSad: ` _.--._ 
+/__π___\
+(  █ ◡ )
+ ∙\____/
+(_|  |J)`,
 }
 
 // String returns a human-readable name for the mood.
@@ -95,7 +112,7 @@ func (m AgentMood) Eyes() string {
 	return moodEyes[MoodIdle]
 }
 
-// Mascot returns the full mascot face for this mood.
+// Mascot returns the full pirate art for this mood.
 func (m AgentMood) Mascot() string {
 	if f, ok := moodMascot[m]; ok {
 		return f
@@ -135,7 +152,7 @@ func (f *FaceRenderer) Eyes() string {
 	return f.mood.Eyes()
 }
 
-// Mascot returns the full mascot face for the current mood.
+// Mascot returns the full pirate art for the current mood.
 func (f *FaceRenderer) Mascot() string {
 	f.mu.RLock()
 	defer f.mu.RUnlock()

@@ -8,8 +8,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/dimetron/pi-go/internal/extension"
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 // These tests pin the behavior the cyclomatic-complexity refactor moved out of

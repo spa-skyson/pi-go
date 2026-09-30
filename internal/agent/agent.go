@@ -24,9 +24,10 @@ import (
 	"google.golang.org/adk/v2/util/instructionutil"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/extension"
-	"github.com/dimetron/pi-go/internal/logger"
-	pisession "github.com/dimetron/pi-go/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/logger"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
 )
 
 // re-export callback types for use by CLI without importing llmagent directly.
@@ -46,7 +47,7 @@ const (
 )
 
 // SystemInstruction is the default system prompt for the coding agent.
-const SystemInstruction = `You are pi-go, a coding agent that helps users with software engineering tasks.
+const SystemInstruction = `You are Pi-rate, a terminal coding agent that helps users with software engineering tasks.
 
 You have access to tools for reading, writing, and editing files, running shell commands,
 and searching codebases. Use these tools to assist the user effectively.
@@ -77,9 +78,9 @@ Prefer modern, fast package managers:
 # Coding tasks
 
 Before starting a task, first check for repository-specific instructions and reusable skills:
-- find AGENTS.md if it exists in current folder .pi-go .cursor .claude
+- find AGENTS.md if it exists in current folder .pirate .cursor .claude
 - Read AGENTS.md if it exists and follow it as project-specific rules.
-- find SKILL.md files .pi-go .cursor .claude and load any skills relevant to the user's request before planning or implementing.
+- find SKILL.md files .pirate .cursor .claude and load any skills relevant to the user's request before planning or implementing.
 
 Follow this workflow for every coding task — move fast, verify, deliver:
 
@@ -436,7 +437,7 @@ var placeholderRegex = regexp.MustCompile(`\{+[^{}]*\}+`)
 // substring is left in place rather than aborting the whole turn.
 //
 // Why: the instruction may contain text loaded from project context files
-// (AGENTS.md / CLAUDE.md / AGENT.md / .pi-go/AGENTS.md) and skill
+// (AGENTS.md / CLAUDE.md / AGENT.md / .pirate/AGENTS.md) and skill
 // descriptions. Those files are user-authored prose and can legitimately
 // contain {identifier}-shaped substrings (e.g. documentation about
 // `{AGT_X}` placeholder tokens in a keymap system) that are NOT session
@@ -871,14 +872,14 @@ var contextFileNames = []string{
 	"AGENT.md",
 	"AGENTS.md",
 	"CLAUDE.md",
-	filepath.Join(".pi-go", "AGENTS.md"),
+	filepath.Join(config.ProjectDirName, "AGENTS.md"),
 }
 
 // LoadInstruction appends discovered project context files and a summary of
 // discovered skills to the base instruction. Context files (AGENT.md,
-// AGENTS.md, CLAUDE.md, or .pi-go/AGENTS.md; first match per directory) are
+// AGENTS.md, CLAUDE.md, or .pirate/AGENTS.md; first match per directory) are
 // discovered by walking from the working directory up to the filesystem
-// root; a global ~/.pi-go/AGENTS.md is included first when present.
+// root; a global ~/.pirate/AGENTS.md is included first when present.
 func LoadInstruction(baseInstruction string) string {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -1090,7 +1091,7 @@ type contextFile struct {
 }
 
 // discoverContextFiles returns context-file contents ordered from most
-// general to most specific: the global ~/.pi-go/AGENTS.md first, then one
+// general to most specific: the global ~/.pirate/AGENTS.md first, then one
 // file per directory from the filesystem root down to cwd.
 func discoverContextFiles(cwd, home string) []string {
 	// Walk from cwd up to the filesystem root, nearest directory first.
@@ -1110,7 +1111,7 @@ func discoverContextFiles(cwd, home string) []string {
 
 	// Global file comes first, unless the walk already picked it up.
 	if home != "" {
-		globalPath := filepath.Join(home, ".pi-go", "AGENTS.md")
+		globalPath := filepath.Join(home, ".pirate", "AGENTS.md")
 		alreadyFound := slices.ContainsFunc(found, func(f contextFile) bool {
 			return f.path == globalPath
 		})

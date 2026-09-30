@@ -13,7 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/attest"
+	"github.com/spa-skyson/pi-rate/internal/attest"
 )
 
 // verifyTimeout bounds the whole command: a TUF refresh plus one API call per
@@ -21,7 +21,7 @@ import (
 // trust root.
 const verifyTimeout = 60 * time.Second
 
-// newVerifyCmd wires up `pi verify`, which checks the running binary — or any
+// newVerifyCmd wires up `pirate verify`, which checks the running binary — or any
 // file named on the command line — against the attestations the release
 // workflow published for it.
 //
@@ -38,7 +38,7 @@ func newVerifyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "verify [file...]",
 		Short: "Verify this binary's build provenance and SBOM attestations",
-		Long: `Verify that a pi binary was built by pi-go's release workflow.
+		Long: `Verify that a pirate binary was built by the Pi-rate release workflow.
 
 With no arguments, verifies the running executable. Otherwise verifies each
 file named on the command line — a downloaded archive, for instance, before
@@ -57,11 +57,11 @@ must name this repository's release workflow running on a tag.
 
 Requires network access. A binary you built yourself has no attestation and
 will report as unverified — that is the expected result, not a failure.`,
-		Example: `  pi verify                                  # the running binary
-  pi verify ./pi                             # a specific file
-  pi verify pi-go_0.0.74_linux_amd64.tar.gz  # a downloaded archive
-  pi verify --json                           # machine-readable
-  pi verify --sbom > sbom.spdx.json          # print the attested SBOM`,
+		Example: `  pirate verify                                  # the running binary
+  pirate verify ./pirate                        # a specific file
+  pirate verify pi-rate_0.0.74_linux_amd64.tar.gz  # a downloaded archive
+  pirate verify --json                           # machine-readable
+  pirate verify --sbom > sbom.spdx.json          # print the attested SBOM`,
 		// A failed verification is a result, not a misuse of the command:
 		// printing the flag list underneath it buries the finding, and
 		// main already prints the error itself.
@@ -132,7 +132,7 @@ func runVerify(ctx context.Context, out io.Writer, opts verifyOptions) error {
 	}
 	fetcher := &attest.Fetcher{
 		Token:     githubTokenFromEnv(),
-		UserAgent: "pi-go/" + versionString(),
+		UserAgent: "pirate/" + versionString(),
 	}
 
 	reports := make([]verifyReport, 0, len(targets))

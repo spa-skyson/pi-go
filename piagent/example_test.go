@@ -10,7 +10,7 @@ import (
 	"google.golang.org/adk/v2/model"
 	adktool "google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/piagent"
+	"github.com/spa-skyson/pi-rate/piagent"
 )
 
 // newModel stands in for pimodels.FromConfig. piagent takes any ADK model.LLM
@@ -63,7 +63,7 @@ func ExampleNew_options() {
 		piagent.WithWorkingDir("/srv/checkout"),
 		piagent.WithExtraInstruction("Answer as a release engineer. Never modify files under /srv/checkout/vendor."),
 		piagent.WithLSP(piagent.LSPOff),
-		piagent.WithMemory(true), // opt in to the shared ~/.pi-go stores
+		piagent.WithMemory(true), // opt in to the shared ~/.pirate stores
 	)
 	if err != nil {
 		log.Fatal(err)

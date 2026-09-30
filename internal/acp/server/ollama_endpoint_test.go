@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 // buildSessionLLM used to read OLLAMA_API_KEY as a destination: a key exported

@@ -1,6 +1,6 @@
-# Contributing to pi-go
+# Contributing to Pi-rate
 
-First off, thank you for considering contributing to pi-go! It's a complex project involving LLMs, TUIs, and system-level sandboxing, so we appreciate your help in making it better.
+First off, thank you for considering contributing to Pi-rate! It's a complex project involving LLMs, TUIs, and system-level sandboxing, so we appreciate your help in making it better.
 
 ## Getting Started
 
@@ -12,8 +12,8 @@ First off, thank you for considering contributing to pi-go! It's a complex proje
 ### Setup
 1. Clone the repository:
    ```bash
-   git clone https://github.com/spa-skyson/pi-go.git
-   cd pi-go
+   git clone https://github.com/spa-skyson/pi-rate.git
+   cd pi-rate
    ```
 2. Build the binary:
    ```bash
@@ -70,7 +70,7 @@ make lint   # Run go vet and linters
 
 ## Profiling
 
-pi-go includes built-in pprof profiling support via the `--pprof` flag.
+Pi-rate includes built-in pprof profiling support via the `--pprof` flag.
 
 ### Quick Start
 
@@ -137,9 +137,9 @@ go tool trace http://localhost:6060/debug/pprof/trace
 
 - **Bugs**: Use the GitHub Issue tracker. Include a minimal reproduction case and the LLM provider you were using.
 - **Feature Requests**: Open an issue describing the desired behavior and the problem it solves.
-- **Session Logs**: If you encounter a bug in the agent's behavior, providing a session log from `~/.pi-go/log/` is extremely helpful.
+- **Session Logs**: If you encounter a bug in the agent's behavior, providing a session log from `~/.pirate/log/` is extremely helpful.
 
 ## License
 
-By contributing to pi-go, you agree that your contributions will be licensed under the project's [LICENSE](LICENSE).
+By contributing to Pi-rate, you agree that your contributions will be licensed under the project's [LICENSE](LICENSE).
 

@@ -1,17 +1,21 @@
-# pi-go
+# Pi-rate
 
-> **Fork notice.** This is a fork of [dimetron/pi-go](https://github.com/dimetron/pi-go),
-> developed independently; upstream commits are cherry-picked as needed. It extends the
-> upstream with declared providers in `config.json`, per-agent model/tools/sampling
-> frontmatter, the permission subsystem, and primary-agent switching — see
+> Yo-ho-ho — a terminal coding agent. A pirate fork: Pi + rate = Pi-rate — forked from pi-go, inspired by opencode.
+
+> **Inspired by & built upon.** Pi-rate is a fork of [dimetron/pi-go](https://github.com/dimetron/pi-go),
+> inspired by [Pi (badlogic)](https://github.com/badlogic/pi-mono) and [opencode](https://opencode.ai);
+> the name is a piracy pun on Pi. Upstream commits are cherry-picked as needed. On top of
+> upstream it adds declared providers in `config.json`, per-agent model/tools/sampling
+> frontmatter, the permission subsystem, primary-agent switching, todo plans, and
+> subagent monitor/steer/background modes — see
 > [docs/OPENCODE-PARITY.md](docs/OPENCODE-PARITY.md) for details.
 
-[![CI](https://github.com/spa-skyson/pi-go/actions/workflows/ci.yml/badge.svg)](https://github.com/spa-skyson/pi-go/actions/workflows/ci.yml)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/spa-skyson/pi-go)](go.mod)
-[![License](https://img.shields.io/github/license/spa-skyson/pi-go)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/spa-skyson/pi-go?logo=github&label=latest)](https://github.com/spa-skyson/pi-go/releases)
-[![GitHub stars](https://img.shields.io/github/stars/spa-skyson/pi-go?style=social)](https://github.com/spa-skyson/pi-go)
-[![GitHub issues](https://img.shields.io/github/issues/spa-skyson/pi-go)](https://github.com/spa-skyson/pi-go/issues)
+[![CI](https://github.com/spa-skyson/pi-rate/actions/workflows/ci.yml/badge.svg)](https://github.com/spa-skyson/pi-rate/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/spa-skyson/pi-rate)](go.mod)
+[![License](https://img.shields.io/github/license/spa-skyson/pi-rate)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/spa-skyson/pi-rate?logo=github&label=latest)](https://github.com/spa-skyson/pi-rate/releases)
+[![GitHub stars](https://img.shields.io/github/stars/spa-skyson/pi-rate?style=social)](https://github.com/spa-skyson/pi-rate)
+[![GitHub issues](https://img.shields.io/github/issues/spa-skyson/pi-rate)](https://github.com/spa-skyson/pi-rate/issues)
 
 A terminal-based coding agent built on [Google ADK Go](https://adk.dev/). It connects to multiple LLM providers, runs
 sandboxed tools, integrates LSP, and ships with a process-based subagent system.
@@ -37,7 +41,7 @@ sandboxed tools, integrates LSP, and ships with a process-based subagent system.
 ## Architecture
 
 ```
-cmd/pi/             Entry point — CLI parsing, output mode selection
+cmd/pirate/          Entry point — CLI parsing, output mode selection
 internal/
 ├── agent/          ADK agent setup, retry logic, runner
 ├── cli/            Cobra CLI flags, output modes (interactive, print, json, rpc)
@@ -74,7 +78,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation.
 **macOS / Linux**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/spa-skyson/pi-go/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/spa-skyson/pi-rate/main/scripts/install.sh | bash
 ```
 
 This script detects your OS/arch, downloads the latest release binary, and installs it to `/usr/local/bin` (or `~/.local/bin` if needed).
@@ -84,7 +88,7 @@ This script detects your OS/arch, downloads the latest release binary, and insta
 **Windows**
 
 ```powershell
-powershell -NoProfile -Command "iwr https://raw.githubusercontent.com/spa-skyson/pi-go/main/scripts/install.ps1 -UseBasicParsing | iex"
+powershell -NoProfile -Command "iwr https://raw.githubusercontent.com/spa-skyson/pi-rate/main/scripts/install.ps1 -UseBasicParsing | iex"
 ```
 
 Or, from a checkout:
@@ -93,7 +97,7 @@ Or, from a checkout:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install.ps1
 ```
 
-Installs `pi.exe` to `%LOCALAPPDATA%\Programs` and adds that directory to your
+Installs `pirate.exe` to `%LOCALAPPDATA%\Programs` and adds that directory to your
 user `PATH`. Restart the terminal afterwards so the new `PATH` is picked up.
 Runs on Windows PowerShell 5.1 (built into Windows 10/11) and PowerShell 7+;
 `windows/amd64` only. Set `GITHUB_TOKEN` if you hit the GitHub API rate limit
@@ -102,7 +106,7 @@ while it resolves the latest release.
 The installer checks the download against the release's `checksums.txt` and
 refuses to install on a mismatch. That catches a corrupted or swapped archive,
 but not a substituted release — `checksums.txt` travels the same path as the
-archive. Run `pi verify` afterwards for the provenance check that does answer
+archive. Run `pirate verify` afterwards for the provenance check that does answer
 that question — see [Verifying a release](#verifying-a-release).
 
 Windows machines without `bash.exe` on `PATH` — a stock Windows install has
@@ -113,14 +117,14 @@ restores the bash behaviour.
 
 ### NixOS / Nix
 
-The repository includes a flake that builds `pi-go` reproducibly and exposes a
+The repository includes a flake that builds Pi-rate reproducibly and exposes a
 NixOS module. To install it in a NixOS configuration, add the repository as an
 input:
 
 ```nix
 # flake.nix
 {
-  inputs.pi-go.url = "github:spa-skyson/pi-go";
+  inputs.pi-go.url = "github:spa-skyson/pi-rate";
 
   outputs = { self, nixpkgs, pi-go, ... }: {
     nixosConfigurations.my-host = nixpkgs.lib.nixosSystem {
@@ -141,68 +145,76 @@ Enable it in `configuration.nix`:
 ```
 
 Then rebuild with `sudo nixos-rebuild switch --flake .`. For a one-off use,
-run `nix run github:spa-skyson/pi-go` or install it into a profile with
-`nix profile install github:spa-skyson/pi-go`.
+run `nix run github:spa-skyson/pi-rate` or install it into a profile with
+`nix profile install github:spa-skyson/pi-rate`.
 
 ### go install
 
-The module path stays `github.com/dimetron/pi-go`, so `go install` from this fork is not available yet. Use one of these instead:
+The module now lives at `github.com/spa-skyson/pi-rate`, so from the first
+`pi-rate` release on:
 
 ```bash
-# 1) Shell installer (falls back to a source build while the fork has no releases)
-curl -fsSL https://raw.githubusercontent.com/spa-skyson/pi-go/main/scripts/install.sh | bash
+go install github.com/spa-skyson/pi-rate/cmd/pirate@latest
+```
+
+Until that first release is cut, `@latest` resolves to nothing — use one of
+these instead:
+
+```bash
+# 1) Shell installer (falls back to a source build while there are no releases)
+curl -fsSL https://raw.githubusercontent.com/spa-skyson/pi-rate/main/scripts/install.sh | bash
 
 # 2) Build from source
-git clone https://github.com/spa-skyson/pi-go.git
-cd pi-go
+git clone https://github.com/spa-skyson/pi-rate.git
+cd pi-rate
 make build
 make install
 ```
 
-Make sure your `GOPATH/bin` is in your `PATH`. The binary will be installed as `pi`.
+Make sure your `GOPATH/bin` is in your `PATH`. The binary is installed as `pirate`.
 
 ### Build from source
 
 ```bash
-git clone https://github.com/spa-skyson/pi-go.git
-cd pi-go
-go install ./cmd/pi
+git clone https://github.com/spa-skyson/pi-rate.git
+cd pi-rate
+go install ./cmd/pirate
 ```
 
 ### Pre-built binaries
 
-Download the latest release for your platform from the [Releases page](https://github.com/spa-skyson/pi-go/releases).
+Download the latest release for your platform from the [Releases page](https://github.com/spa-skyson/pi-rate/releases).
 
 ### Verifying a release
 
-`pi verify` checks the running binary against the attestations published for
+`pirate verify` checks the running binary against the attestations published for
 it, with no other tooling required:
 
 ```bash
-pi verify                                     # the running binary
-pi verify ./pi                                # a specific file
-pi verify pi-go_1.2.3_linux_amd64.tar.gz      # a downloaded archive, before extracting
-pi verify --json                              # machine-readable
-pi verify --sbom > sbom.spdx.json             # print the attested SBOM document
+pirate verify                                     # the running binary
+pirate verify ./pirate                        # a specific file
+pirate verify pi-rate_1.2.3_linux_amd64.tar.gz      # a downloaded archive, before extracting
+pirate verify --json                              # machine-readable
+pirate verify --sbom > sbom.spdx.json             # print the attested SBOM document
 ```
 
 ```
-/usr/local/bin/pi
+/usr/local/bin/pirate
   sha256:abd70659b49183320320426af4abf34555b031e432aff27afbdbf1be39e1ecff
 
   ✓ build provenance
-      repository  github.com/spa-skyson/pi-go
+      repository  github.com/spa-skyson/pi-rate
       workflow    .github/workflows/release.yml@refs/tags/v1.2.3
       commit      4086645aa1f2c3d4e5f60718293a4b5c6d7e8f90
-      run         https://github.com/spa-skyson/pi-go/actions/runs/1234/attempts/1
-      signer      https://github.com/spa-skyson/pi-go/.github/workflows/release.yml@refs/tags/v1.2.3
+      run         https://github.com/spa-skyson/pi-rate/actions/runs/1234/attempts/1
+      signer      https://github.com/spa-skyson/pi-rate/.github/workflows/release.yml@refs/tags/v1.2.3
       signed      2026-08-21T12:00:00Z
 
   ✓ SBOM
       format      SPDX 2.3
       packages    192
       ecosystems  golang 180, github 12
-      signer      https://github.com/spa-skyson/pi-go/.github/workflows/release.yml@refs/tags/v1.2.3
+      signer      https://github.com/spa-skyson/pi-rate/.github/workflows/release.yml@refs/tags/v1.2.3
       signed      2026-08-21T12:00:00Z
 ```
 
@@ -220,7 +232,7 @@ A binary you built yourself has no attestation and reports as unverified. That
 is the expected answer, not a failure.
 
 Verification needs network access. The Sigstore trust root is cached in
-`~/.pi-go/sigstore` after the first run.
+`~/.pirate/sigstore` after the first run.
 
 #### Verifying with the GitHub CLI
 
@@ -228,10 +240,10 @@ The same attestations are readable by `gh`, if you would rather not trust the
 binary to vouch for itself:
 
 ```bash
-gh attestation verify ./pi --repo spa-skyson/pi-go
+gh attestation verify ./pirate --repo spa-skyson/pi-rate
 
 # SBOM attestation. The predicate type carries the SPDX version syft emitted.
-gh attestation verify ./pi --repo spa-skyson/pi-go \
+gh attestation verify ./pirate --repo spa-skyson/pi-rate \
   --predicate-type https://spdx.dev/Document/v2.3
 ```
 
@@ -245,9 +257,9 @@ are not published as release assets — the digest is all verification needs.
 
 Each release publishes SBOMs as assets, in SPDX JSON:
 
-- `pi-go_<version>_<os>_<arch>.tar.gz.sbom.json` — cataloged by syft from the
+- `pi-rate_<version>_<os>_<arch>.tar.gz.sbom.json` — cataloged by syft from the
   contents of that specific archive.
-- `pi-go_<version>_sbom.spdx.json` — the aggregate SBOM cataloged from the
+- `pi-rate_<version>_sbom.spdx.json` — the aggregate SBOM cataloged from the
   source tree, and the one the SBOM attestation binds to. It covers the Go
   module graph, which is the same across every platform in the build matrix,
   plus the pinned GitHub Actions the release itself was built with.
@@ -298,10 +310,10 @@ pi setup
 ```
 
 The wizard asks which provider to use, for its API key, and which model should
-be the default. It writes the key to `~/.pi-go/.env` and the provider and model
-to the `default` role in `~/.pi-go/config.json` — the same places a hand-exported
+be the default. It writes the key to `~/.pirate/.env` and the provider and model
+to the `default` role in `~/.pirate/config.json` — the same places a hand-exported
 variable and a hand-edited config land. Providers that need no credential
-(Ollama, agentgateway) skip the key step; providers pi-go has no offline catalog
+(Ollama, agentgateway) skip the key step; providers Pi-rate has no offline catalog
 for (Ollama, agentgateway, Azure, OpenCode) have their model typed in, since only
 you know what your daemon or deployment serves.
 
@@ -315,7 +327,7 @@ explicit `OLLAMA_HOST` overrides both.
 ## Build
 
 ```bash
-make build      # build the pi binary
+make build      # build the pirate binary
 make test       # run unit tests
 make lint       # golangci-lint (vet, staticcheck, errcheck, …)
 make e2e        # run E2E integration tests
@@ -401,7 +413,7 @@ reconstruct the text; that is how every consumer uses it.
 
 ### Plugin marketplaces
 
-Install skill bundles from a **plugin marketplace**. pi-go reads the same
+Install skill bundles from a **plugin marketplace**. Pi-rate reads the same
 `.claude-plugin/marketplace.json` manifest other coding agents use, so existing
 marketplaces work unchanged:
 
@@ -425,9 +437,9 @@ pi plugin list
 | `pi plugin update [plugin]`                      | Update one plugin, or all of them                       |
 | `pi plugin uninstall <plugin>`                   | Remove a plugin and its files                           |
 
-Installed plugins live in `~/.pi-go/plugins/`, and their skills are discovered
+Installed plugins live in `~/.pirate/plugins/`, and their skills are discovered
 automatically. **Plugin skills have lower precedence than your own**: a skill in
-`~/.pi-go/skills` or `.pi-go/skills` with the same name always wins, so
+`~/.pirate/skills` or `.pirate/skills` with the same name always wins, so
 installing a plugin can never silently replace a skill you wrote or customized.
 
 Sources may be a GitHub shorthand (`owner/repo`), a full git URL, or a local
@@ -512,7 +524,11 @@ Skills are automatically scanned on load — skills with critical findings (Unic
 
 ## Configuration
 
-Pi reads configuration from `~/.pi-go/config.json` (global) and `.pi-go/config.json` (project-local):
+Pi-rate reads configuration from `~/.pirate/config.json` (global) and `.pirate/config.json` (project-local).
+An existing `~/.pi-go` directory is migrated to `~/.pirate` automatically on
+first run; the old directory is left untouched.
+
+Configuration covers:
 
 - **Model roles** — Map role names to specific model strings
 - **Hooks** — Shell commands triggered on tool events (e.g., post-write formatting)
@@ -521,7 +537,7 @@ Pi reads configuration from `~/.pi-go/config.json` (global) and `.pi-go/config.j
 - **Base URLs** — Per-provider endpoints via the `baseURLs` field
 
 Config files accept `//` line comments — anything from `//` to the end of a line
-is ignored, except inside string values (so `"https://…"` is safe). Note that pi-go
+is ignored, except inside string values (so `"https://…"` is safe). Note that Pi-rate
 itself rewrites config files as plain JSON when saving, so comments in sections it
 edits (e.g. `roles`, via `/model`) do not survive a save. A commented,
 copy-paste-ready example lives in [`config.example.jsonc`](config.example.jsonc).
@@ -529,7 +545,7 @@ For editor autocompletion and validation, add:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/spa-skyson/pi-go/main/schemas/config.schema.json"
+  "$schema": "https://raw.githubusercontent.com/spa-skyson/pi-rate/main/schemas/config.schema.json"
 }
 ```
 
@@ -623,7 +639,7 @@ With neither available, the tool returns that as an ordinary result naming what
 to set, rather than failing the turn.
 
 The two endpoints are different *paths*, not the same path on two hosts, which is
-why pi-go calls them directly instead of through the Ollama Go SDK: the SDK's
+why Pi-rate calls them directly instead of through the Ollama Go SDK: the SDK's
 `WebSearchExperimental` posts to `/api/experimental/web_search`, which 404s on
 `api.ollama.com`.
 
@@ -680,7 +696,7 @@ When `--url` or `OPENAI_BASE_URL` is set, unknown model names are treated as cus
 ### MCP server integration
 
 Pi supports the [Model Context Protocol](https://modelcontextprotocol.io/). Use it to extend the agent with external tools. Configure servers in
-`~/.pi-go/config.json`:
+`~/.pirate/config.json`:
 
 ```json
 {
@@ -704,7 +720,7 @@ Pi supports the [Model Context Protocol](https://modelcontextprotocol.io/). Use 
 }
 ```
 
-Or in standalone `~/.pi-go/mcp.json` (Claude Desktop compatible format):
+Or in standalone `~/.pirate/mcp.json` (Claude Desktop compatible format):
 
 ```json
 {
@@ -729,7 +745,7 @@ Or in standalone `~/.pi-go/mcp.json` (Claude Desktop compatible format):
 - **HTTP/Streamable** — `url` field for cloud-based MCP servers
 - **Stdio** — `command` + `args` for local subprocess servers
 
-**Environment variable substitution:** Pi automatically expands `${ENV_VAR}` patterns in server URLs using `.pi-go/.env`
+**Environment variable substitution:** Pi automatically expands `${ENV_VAR}` patterns in server URLs using `.pirate/.env`
 
 ## Editor integration
 
@@ -763,7 +779,7 @@ from `~/.jetbrains/acp.json`. Add pi under `agent_servers`:
 ```json
 {
   "agent_servers": {
-    "Pi-Go": {
+    "Pi-rate": {
       "command": "pi",
       "args": ["acp-server", "--model", "agentgateway/ollama/glm-5.3-flash:cloud"]
     }
@@ -771,20 +787,20 @@ from `~/.jetbrains/acp.json`. Add pi under `agent_servers`:
 }
 ```
 
-Restart the IDE so it picks up the file, then open the AI Assistant / agent panel and select "Pi-Go". The agent runs in
+Restart the IDE so it picks up the file, then open the AI Assistant / agent panel and select "Pi-rate". The agent runs in
 the current project directory. `pi acp-server` accepts `--model` plus `--url`, `--header key=value` (repeatable) and
 `--insecure`; with no `--model` it falls back to `glm-5.2:cloud`.
 
 ### VS Code
 
-The `vscode/` directory contains a VS Code extension that drives pi-go over
+The `vscode/` directory contains a VS Code extension that drives Pi-rate over
 ACP, surfacing it as a native agent in VS Code's Chat/Agent Sessions UI. See
 [vscode/README.md](vscode/README.md) for installation and usage.
 
 ### Sessions survive the server
 
 Every ACP session's transcript is written to the same store the terminal uses
-(`~/.pi-go/sessions/<session-id>/`, or `$PI_SESSIONS_DIR`), keyed by the ACP
+(`~/.pirate/sessions/<session-id>/`, or `$PI_SESSIONS_DIR`), keyed by the ACP
 session id. The server implements the protocol's session lifecycle on top of it:
 
 | Method | What pi does |
@@ -798,7 +814,7 @@ left off, and `pi --session <id>` reopens the same conversation from the termina
 
 ## kagent
 
-Run pi-go as a custom agent inside [kagent](https://kagent.dev) on Agent Substrate via the A2A
+Run Pi-rate as a custom agent inside [kagent](https://kagent.dev) on Agent Substrate via the A2A
 adapter image. See [docs/kagent-harness.md](docs/kagent-harness.md) for the deployment guide and
 `specs/kagent/` for the Dockerfile, manifests, and step-by-step deploy notes.
 

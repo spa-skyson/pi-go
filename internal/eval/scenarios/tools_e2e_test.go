@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/eval"
-	"github.com/dimetron/pi-go/internal/lsp"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/eval"
+	"github.com/spa-skyson/pi-rate/internal/lsp"
 )
 
 func TestEvalTools(t *testing.T) {
@@ -202,7 +202,7 @@ func runScenario(t, root *testing.T, bin, model string, s eval.Scenario, caps ma
 	}
 	exitCode, output, runErr := runPi(ctx, bin, workDir, home, s, timeout)
 
-	sessionsDir := filepath.Join(home, ".pi-go", "sessions")
+	sessionsDir := filepath.Join(home, ".pirate", "sessions")
 	loaded, loadErr := eval.LoadTrajectories(sessionsDir)
 	if loadErr != nil {
 		t.Logf("%s: load trajectories: %v", s.Name, loadErr)
@@ -466,7 +466,7 @@ func gopathBin() string {
 }
 
 func writeHomeConfig(home string, cfg *config.Config) error {
-	dir := filepath.Join(home, ".pi-go")
+	dir := filepath.Join(home, ".pirate")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}

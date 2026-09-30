@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 )
 
 func TestCompactorConfigFrom(t *testing.T) {

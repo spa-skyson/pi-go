@@ -17,12 +17,12 @@ import (
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/extension"
-	pisession "github.com/dimetron/pi-go/internal/session"
-	"github.com/dimetron/pi-go/internal/testenv"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 )
 
 // cliMockLLM returns a fixed text response.
@@ -158,7 +158,7 @@ func newTestAgent(t *testing.T, llm model.LLM) (*agent.Agent, string) {
 func TestNewRootCmd(t *testing.T) {
 	cmd := newRootCmd()
 
-	if cmd.Use != "pi [prompt]" {
+	if cmd.Use != "pirate [prompt]" {
 		t.Errorf("unexpected Use: %s", cmd.Use)
 	}
 
@@ -191,12 +191,12 @@ func TestCLI_SmolFlag(t *testing.T) {
 
 	// Write a config with smol role. Run inside the tmpDir so the
 	// loadDotEnv walk-up from cwd doesn't reach this machine's real
-	// ~/.pi-go/.env — on a dev box with a saved codex OAuth token,
+	// ~/.pirate/.env — on a dev box with a saved codex OAuth token,
 	// that walk-up would override OPENAI_API_KEY=test-key with the
 	// JWT and trip "model not supported by the ChatGPT codex
 	// backend" in NewOpenAI for non-codex-listed models.
 	tmpDir := t.TempDir()
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	os.MkdirAll(cfgDir, 0o755)
 	os.WriteFile(filepath.Join(cfgDir, "config.json"), []byte(`{
 		"roles": {
@@ -265,7 +265,7 @@ func TestRootCmdDefaultModelNoPrompt(t *testing.T) {
 func TestRootCmdMissingAPIKey(t *testing.T) {
 	// Isolate HOME so loadDotEnv cannot pull credentials from the real machine.
 	// Also chdir into the same tmpDir so findNearestDotEnv cannot walk up
-	// from cwd and reach the real ~/.pi-go/.env above this repo — without
+	// from cwd and reach the real ~/.pirate/.env above this repo — without
 	// that chdir the walk-up re-introduces the host's saved OPENAI_API_KEY
 	// (or, worse, a codex OAuth token) and the test's "no key set" intent
 	// never reaches buildRootRuntime.
@@ -339,7 +339,7 @@ func TestContinueNoSessionError(t *testing.T) {
 func TestContinueResumesLastSession(t *testing.T) {
 	// Create a session on disk, then verify --continue finds it.
 	tmpDir := t.TempDir()
-	sessionsDir := filepath.Join(tmpDir, ".pi-go", "sessions")
+	sessionsDir := filepath.Join(tmpDir, ".pirate", "sessions")
 	svc, err := pisession.NewFileService(sessionsDir)
 	if err != nil {
 		t.Fatal(err)
@@ -692,9 +692,9 @@ func TestLoadDotEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set up a temp .pi-go dir with .env file
+			// Set up a temp .pirate dir with .env file
 			tmpDir := t.TempDir()
-			piGoDir := filepath.Join(tmpDir, ".pi-go")
+			piGoDir := filepath.Join(tmpDir, ".pirate")
 			if err := os.MkdirAll(piGoDir, 0755); err != nil {
 				t.Fatal(err)
 			}
@@ -1034,7 +1034,7 @@ func TestDetectGitRootSubdirectory(t *testing.T) {
 
 func TestLoadDotEnvQuotedValues(t *testing.T) {
 	tmpDir := t.TempDir()
-	piGoDir := filepath.Join(tmpDir, ".pi-go")
+	piGoDir := filepath.Join(tmpDir, ".pirate")
 	if err := os.MkdirAll(piGoDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -1055,7 +1055,7 @@ func TestLoadDotEnvQuotedValues(t *testing.T) {
 
 func TestLoadDotEnvMultipleKeys(t *testing.T) {
 	tmpDir := t.TempDir()
-	piGoDir := filepath.Join(tmpDir, ".pi-go")
+	piGoDir := filepath.Join(tmpDir, ".pirate")
 	if err := os.MkdirAll(piGoDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -1084,19 +1084,19 @@ func TestLoadDotEnvProjectOverridesGlobal(t *testing.T) {
 	homeDir := filepath.Join(tmpDir, "home")
 	projectDir := filepath.Join(tmpDir, "project")
 	subDir := filepath.Join(projectDir, "sub")
-	if err := os.MkdirAll(filepath.Join(homeDir, ".pi-go"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(homeDir, ".pirate"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(projectDir, ".pi-go"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(projectDir, ".pirate"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(subDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(homeDir, ".pi-go", ".env"), []byte("TEST_PROJECT_ENV=global\nTEST_GLOBAL_ONLY=global-only\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(homeDir, ".pirate", ".env"), []byte("TEST_PROJECT_ENV=global\nTEST_GLOBAL_ONLY=global-only\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(projectDir, ".pi-go", ".env"), []byte("TEST_PROJECT_ENV=project\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectDir, ".pirate", ".env"), []byte("TEST_PROJECT_ENV=project\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1123,12 +1123,12 @@ func TestLoadDotEnvProjectOverridesGlobal(t *testing.T) {
 }
 
 func TestLoadDotEnvFileWinsOverShellEnv(t *testing.T) {
-	// ~/.pi-go/.env is the authoritative source for credentials managed
+	// ~/.pirate/.env is the authoritative source for credentials managed
 	// by /login, so a value there must beat anything the shell exported
 	// earlier. Otherwise `/login codex` is silently ignored when the user
 	// already has a stale OPENAI_API_KEY in their shell.
 	tmpDir := t.TempDir()
-	piGoDir := filepath.Join(tmpDir, ".pi-go")
+	piGoDir := filepath.Join(tmpDir, ".pirate")
 	if err := os.MkdirAll(piGoDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -1150,7 +1150,7 @@ func TestBuildCommitMsgFuncNoDefaultRole(t *testing.T) {
 	// Config with no roles: buildCommitMsgFunc should return nil (no model available).
 	tmpDir := t.TempDir()
 	testenv.SetHome(t, tmpDir)
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	os.MkdirAll(cfgDir, 0o755)
 	os.WriteFile(filepath.Join(cfgDir, "config.json"), []byte(`{"roles":{}}`), 0o644)
 
@@ -1172,7 +1172,7 @@ func TestBuildCommitMsgFuncWithDefaultRole(t *testing.T) {
 	// Config with default role that has no valid API key: should return nil or a func that errors.
 	tmpDir := t.TempDir()
 	testenv.SetHome(t, tmpDir)
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	os.MkdirAll(cfgDir, 0o755)
 	os.WriteFile(filepath.Join(cfgDir, "config.json"), []byte(`{
 		"roles": {
@@ -1199,7 +1199,7 @@ func TestBuildCommitMsgFuncCommitRoleFallback(t *testing.T) {
 	// Config with a "commit" role: buildCommitMsgFunc should use it.
 	tmpDir := t.TempDir()
 	testenv.SetHome(t, tmpDir)
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	os.MkdirAll(cfgDir, 0o755)
 	os.WriteFile(filepath.Join(cfgDir, "config.json"), []byte(`{
 		"roles": {
@@ -1300,7 +1300,7 @@ func TestRunJSONThinkingDelta(t *testing.T) {
 func TestBuildCommitMsgFuncOllama(t *testing.T) {
 	tmpDir := t.TempDir()
 	testenv.SetHome(t, tmpDir)
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	os.MkdirAll(cfgDir, 0o755)
 	// Use an Ollama model (qwen2.5 resolves to ollama provider).
 	os.WriteFile(filepath.Join(cfgDir, "config.json"), []byte(`{
@@ -1327,7 +1327,7 @@ func TestBuildCommitMsgFuncOllama(t *testing.T) {
 func TestBuildCommitMsgFuncOllamaWithBaseURL(t *testing.T) {
 	tmpDir := t.TempDir()
 	testenv.SetHome(t, tmpDir)
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	os.MkdirAll(cfgDir, 0o755)
 	os.WriteFile(filepath.Join(cfgDir, "config.json"), []byte(`{
 		"roles": {

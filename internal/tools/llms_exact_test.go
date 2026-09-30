@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 func mustURL(t *testing.T, raw string) *url.URL {

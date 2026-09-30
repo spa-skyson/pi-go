@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/voicegemini"
+	"github.com/spa-skyson/pi-rate/internal/voicegemini"
 )
 
 // This file pins the branch structure of the voice functions the complexity

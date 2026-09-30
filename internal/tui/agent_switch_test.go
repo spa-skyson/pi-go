@@ -10,9 +10,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	adkmodel "google.golang.org/adk/v2/model"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/subagent"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // switchTestAgents returns two primary agent configs, deliberately listed
@@ -253,7 +253,7 @@ func TestAgentSidebarIndicator(t *testing.T) {
 func TestModelCommandWithActiveAgent(t *testing.T) {
 	home := t.TempDir()
 	testenv.SetHome(t, home)
-	cfgPath := filepath.Join(home, ".pi-go", "config.json")
+	cfgPath := filepath.Join(home, ".pirate", "config.json")
 
 	var asked []string
 	m := newSwitchTestModel(t, &asked)

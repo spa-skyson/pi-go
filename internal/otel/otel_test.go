@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 func TestTracerReturnsTracer(t *testing.T) {
@@ -35,7 +35,7 @@ func TestEnvOrFromDotEnv(t *testing.T) {
 	if err != nil {
 		t.Skip("no home dir")
 	}
-	dotEnvPath := filepath.Join(home, ".pi-go", ".env")
+	dotEnvPath := filepath.Join(home, ".pirate", ".env")
 
 	// When key is absent, fallback is returned.
 	got := envOr(dotEnvPath, "DOES_NOT_EXIST_12345", "fallback-val")
@@ -65,7 +65,7 @@ func TestLoadEnvFromDotEnv(t *testing.T) {
 	if err != nil {
 		t.Skip("no home dir")
 	}
-	path := filepath.Join(home, ".pi-go", ".env")
+	path := filepath.Join(home, ".pirate", ".env")
 
 	val := loadEnvFromDotEnv(path, "OTEL_SERVICE_NAME")
 	if val == "" {
@@ -348,7 +348,7 @@ func TestIsAvailable_ProbesTheConfiguredHost(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// envOr consults ~/.pi-go/.env before the process environment, so an
+	// envOr consults ~/.pirate/.env before the process environment, so an
 	// empty HOME is what makes t.Setenv authoritative here.
 	testenv.SetHome(t, t.TempDir())
 	t.Setenv("OTEL_TRACES_EXPORTER", "otlp")

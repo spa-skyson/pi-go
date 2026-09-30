@@ -80,7 +80,7 @@ type Connection struct {
 	// logger is atomic because SetLogger may be called after NewConnection has
 	// already spawned the receive/processNotifications goroutines that read it
 	// via loggerOrDefault. Upstream still uses a bare *slog.Logger, which races;
-	// patched locally pending an upstream fix (see dimetron/pi-go go.mod replace).
+	// patched locally pending an upstream fix (see spa-skyson/pi-rate go.mod replace).
 	logger atomic.Pointer[slog.Logger]
 
 	notifyMu sync.Mutex

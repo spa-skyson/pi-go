@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 func providerHeadersConfig() config.Config {

@@ -12,7 +12,7 @@
 // fulcio.sigstore.dev and logged in Rekor. Attestations GitHub generates on
 // its own for release assets are signed by a different, GitHub-operated
 // authority and are deliberately out of scope here — this package answers
-// "did dimetron/pi-go's release workflow build these bytes", not "is this
+// "did spa-skyson/pi-rate's release workflow build these bytes", not "is this
 // file attached to some GitHub release".
 package attest
 
@@ -36,12 +36,13 @@ import (
 	"github.com/sigstore/sigstore-go/pkg/root"
 	"github.com/sigstore/sigstore-go/pkg/tuf"
 	"github.com/sigstore/sigstore-go/pkg/verify"
+	config "github.com/spa-skyson/pi-rate/internal/config"
 )
 
 const (
 	// DefaultRepo is the repository whose release workflow signs official
-	// pi-go builds.
-	DefaultRepo = "dimetron/pi-go"
+	// Pi-rate builds.
+	DefaultRepo = "spa-skyson/pi-rate"
 
 	// WorkflowPath is the only workflow permitted to sign a release. Pinning
 	// it matters: without it, any workflow in the repository — including one
@@ -182,11 +183,10 @@ type Verifier struct {
 // pi-go's own state directory so that `pi verify` does not write into a
 // location shared with other Sigstore tooling.
 func TUFCacheDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
+	if _, err := os.UserHomeDir(); err != nil {
 		return "", fmt.Errorf("locating home directory: %w", err)
 	}
-	return filepath.Join(home, ".pi-go", "sigstore"), nil
+	return filepath.Join(config.PirateHome(), "sigstore"), nil
 }
 
 // NewVerifier builds a verifier for repo, refreshing the Sigstore TUF trust

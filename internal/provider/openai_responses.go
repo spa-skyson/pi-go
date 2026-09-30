@@ -169,7 +169,7 @@ func (m *openaiModel) buildResponsesParams(req *model.LLMRequest, modelName stri
 //
 // The budget form is the pre-existing per-request channel and keeps its
 // mapping (see oaiResponsesReasoning); the level form is what
-// `thinkingLevel` in ~/.pi-go/config.json and WithThinkingLevel reach, and it
+// `thinkingLevel` in ~/.pirate/config.json and WithThinkingLevel reach, and it
 // is clamped per model (see oaiReasoningEffortFor).
 func (m *openaiModel) responsesReasoning(config *genai.GenerateContentConfig) (shared.ReasoningParam, bool) {
 	if reasoning, ok := oaiResponsesReasoning(config); ok {

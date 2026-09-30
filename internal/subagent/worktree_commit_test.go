@@ -33,7 +33,7 @@ func writeWorktreeArtifacts(t *testing.T, wtPath, specName string, names ...stri
 // the only copy.
 //
 // The repo is created with the real repo's ignore rules (**/specs/ and
-// .pi-go/), because those are exactly what made a plain `git add -A` stage
+// .pirate/), because those are exactly what made a plain `git add -A` stage
 // nothing for the artifacts. Without them this test passed on machines whose
 // global gitignore didn't match, while the real checkout still lost everything.
 func TestCommitAll_PreservesUncommittedWork(t *testing.T) {

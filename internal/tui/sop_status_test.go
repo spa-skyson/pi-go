@@ -11,8 +11,8 @@ import (
 	"google.golang.org/adk/v2/runner"
 	"google.golang.org/adk/v2/session"
 
-	"github.com/dimetron/pi-go/internal/sop"
-	"github.com/dimetron/pi-go/internal/sop/exec"
+	"github.com/spa-skyson/pi-rate/internal/sop"
+	"github.com/spa-skyson/pi-rate/internal/sop/exec"
 )
 
 // runEmbeddedSOP executes a SOP through a real ADK runner and returns every

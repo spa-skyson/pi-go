@@ -5,7 +5,7 @@ import (
 
 	"google.golang.org/adk/v2/tool/geminitool"
 
-	"github.com/dimetron/pi-go/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/provider"
 )
 
 // GeminiGroundingTool gates on the provider name, but users select a model

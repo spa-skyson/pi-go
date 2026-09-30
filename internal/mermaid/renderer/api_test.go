@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/mermaid/graph"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/graph"
 )
 
 // buildGraph assembles a two-node graph directly, without going through the

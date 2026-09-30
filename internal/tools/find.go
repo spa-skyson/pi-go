@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/spa-skyson/pi-rate/internal/config"
+
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 )
@@ -150,8 +152,8 @@ func (w *findWalk) matches(path, name string) bool {
 
 // shouldSkipDir returns true for directories that should always be skipped.
 func shouldSkipDir(base string) bool {
-	// Explicitly do NOT skip .pi-go, .cursor, .claude - these contain agent/skill files
-	agentDirs := map[string]bool{".pi-go": true, ".cursor": true, ".claude": true}
+	// Explicitly do NOT skip .pirate, .cursor, .claude - these contain agent/skill files
+	agentDirs := map[string]bool{config.ProjectDirName: true, ".cursor": true, ".claude": true}
 	if strings.HasPrefix(base, ".") && base != "." && !agentDirs[base] {
 		return true
 	}

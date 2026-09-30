@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/cli"
-	"github.com/dimetron/pi-go/internal/otel"
+	"github.com/spa-skyson/pi-rate/internal/cli"
+	"github.com/spa-skyson/pi-rate/internal/otel"
 )
 
 // applyGCDefaults honors GOMEMLIMIT / GOGC if the user already set them and
@@ -49,7 +49,7 @@ func main() {
 // testable without spawning a process or running the real cobra command tree.
 // It returns the exit code.
 func run(stderr io.Writer, execute func() error) int {
-	// Load ~/.pi-go/.env and project .pi-go/.env before any CLI/provider setup
+	// Load ~/.pirate/.env and project .pirate/.env before any CLI/provider setup
 	// reads API keys or OTEL settings from the process environment.
 	cli.LoadDotEnv()
 

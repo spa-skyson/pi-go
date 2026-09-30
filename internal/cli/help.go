@@ -5,11 +5,11 @@ import (
 	"io"
 	"text/tabwriter"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/provider"
 )
 
-// roleFlags lists the roles pi can run as, in the order the footer prints them,
+// roleFlags lists the roles pirate can run as, in the order the footer prints them,
 // paired with the flag that selects each one.
 var roleFlags = []struct{ role, flag string }{
 	{"default", ""},
@@ -41,7 +41,7 @@ func writeRoleSummary(w io.Writer) {
 	// Both paths are named because config.Load merges them and a role shown
 	// here may come from either; pointing at only the global file would send
 	// someone editing the wrong one.
-	fmt.Fprint(w, "\nConfigured roles (~/.pi-go/config.json, overridden by ./.pi-go/config.json):\n\n")
+	fmt.Fprint(w, "\nConfigured roles (~/.pirate/config.json, overridden by ./.pirate/config.json):\n\n")
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "  ROLE\tFLAG\tMODEL\tPROVIDER\tCREDENTIAL")
@@ -88,7 +88,7 @@ func writeRoleSummary(w io.Writer) {
 //
 // agentgateway is a local OpenAI-compatible gateway and needs no credential
 // either; AGENTGATEWAY_API_KEY is only for a gateway that requires one, and is
-// reported as set when present so a key saved by `pi setup` is visible.
+// reported as set when present so a key saved by `pirate setup` is visible.
 func credentialStatus(prov, model string, keys map[string]string) string {
 	if prov == "ollama" && !provider.IsOllamaCloudModel(model) {
 		return "none (local daemon)"

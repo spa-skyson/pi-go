@@ -22,8 +22,8 @@ import (
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/otel"
-	"github.com/dimetron/pi-go/internal/procs"
+	"github.com/spa-skyson/pi-rate/internal/otel"
+	"github.com/spa-skyson/pi-rate/internal/procs"
 )
 
 // HookConfig defines a shell command hook that runs before or after tool calls.

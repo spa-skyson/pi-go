@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 )
 
 // newSessionStatsCmd exposes the session-stats analysis on the command line.
@@ -32,11 +32,11 @@ func newSessionStatsCmd() *cobra.Command {
 		Long: `Scan session events for a time window and report what went wrong, what it cost,
 and whether the observation and palace pipelines are still recording.
 
-Reads ~/.pi-go/sessions/*/events.jsonl. No LLM call, no network.`,
-		Example: `  pi session-stats                 # last 24h
-  pi session-stats --hours 72      # wider window
-  pi session-stats --all           # include sessions with no anomalies
-  pi session-stats --json          # machine-readable, for a cron wrapper`,
+Reads ~/.pirate/sessions/*/events.jsonl. No LLM call, no network.`,
+		Example: `  pirate session-stats                 # last 24h
+  pirate session-stats --hours 72      # wider window
+  pirate session-stats --all           # include sessions with no anomalies
+  pirate session-stats --json          # machine-readable, for a cron wrapper`,
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			out, err := tools.SessionStats(tools.SessionStatsInput{
@@ -74,7 +74,7 @@ Reads ~/.pi-go/sessions/*/events.jsonl. No LLM call, no network.`,
 	cmd.Flags().IntVar(&highToolCalls, "high-tool-calls", 20, "Tool calls above which a session is flagged")
 	cmd.Flags().IntVar(&highTurns, "high-turns", 5, "Turns above which a session is flagged")
 	cmd.Flags().BoolVar(&all, "all", false, "Include sessions with no anomalies")
-	cmd.Flags().StringVar(&sessionDir, "session-dir", "", "Session directory (default: ~/.pi-go/sessions)")
+	cmd.Flags().StringVar(&sessionDir, "session-dir", "", "Session directory (default: ~/.pirate/sessions)")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "Emit the summary counters as JSON")
 
 	return cmd

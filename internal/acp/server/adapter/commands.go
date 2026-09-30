@@ -3,8 +3,8 @@ package adapter
 import (
 	acp "github.com/coder/acp-go-sdk"
 
-	"github.com/dimetron/pi-go/internal/extension"
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 // metaCommands are always advertised, independent of which skills or

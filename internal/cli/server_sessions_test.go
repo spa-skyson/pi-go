@@ -18,7 +18,7 @@ func TestSessionsDirHonoursEnvOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sessionsDir() error = %v", err)
 	}
-	if want := filepath.Join(home, ".pi-go", "sessions"); got != want {
+	if want := filepath.Join(home, ".pirate", "sessions"); got != want {
 		t.Errorf("sessionsDir() = %q, want %q", got, want)
 	}
 

@@ -14,22 +14,22 @@ import (
 // or the CLI would make every future change to those a potential breaking
 // change here, which is exactly what a public package cannot afford.
 var forbiddenDeps = []string{
-	"github.com/dimetron/pi-go/internal/agent",
-	"github.com/dimetron/pi-go/internal/tools",
-	"github.com/dimetron/pi-go/internal/cli",
-	"github.com/dimetron/pi-go/internal/tui",
-	"github.com/dimetron/pi-go/internal/subagent",
-	"github.com/dimetron/pi-go/internal/extension",
-	"github.com/dimetron/pi-go/internal/palace",
-	"github.com/dimetron/pi-go/internal/memory",
-	"github.com/dimetron/pi-go/internal/session",
+	"github.com/spa-skyson/pi-rate/internal/agent",
+	"github.com/spa-skyson/pi-rate/internal/tools",
+	"github.com/spa-skyson/pi-rate/internal/cli",
+	"github.com/spa-skyson/pi-rate/internal/tui",
+	"github.com/spa-skyson/pi-rate/internal/subagent",
+	"github.com/spa-skyson/pi-rate/internal/extension",
+	"github.com/spa-skyson/pi-rate/internal/palace",
+	"github.com/spa-skyson/pi-rate/internal/memory",
+	"github.com/spa-skyson/pi-rate/internal/session",
 }
 
 // TestPimodelsStaysIsolated fails if the package acquires a dependency on the
 // agent side of pi-go. It is deliberately a build-graph assertion rather than a
 // convention in a doc comment, because a doc comment does not fail CI.
 func TestPimodelsStaysIsolated(t *testing.T) {
-	out, err := exec.Command("go", "list", "-deps", "github.com/dimetron/pi-go/pimodels").Output()
+	out, err := exec.Command("go", "list", "-deps", "github.com/spa-skyson/pi-rate/pimodels").Output()
 	if err != nil {
 		t.Skipf("go list unavailable: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestPimodelsStaysIsolated(t *testing.T) {
 // package returns the ADK interface an agent already consumes, so the two
 // halves meet at a type neither of them owns.
 func TestPimodelsDependsOnADKModel(t *testing.T) {
-	out, err := exec.Command("go", "list", "-deps", "github.com/dimetron/pi-go/pimodels").Output()
+	out, err := exec.Command("go", "list", "-deps", "github.com/spa-skyson/pi-rate/pimodels").Output()
 	if err != nil {
 		t.Skipf("go list unavailable: %v", err)
 	}

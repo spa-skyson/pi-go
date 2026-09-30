@@ -1,18 +1,16 @@
 package cli
 
 import (
-	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 // defaultPalaceModelPath returns the default embedding model path.
 func defaultPalaceModelPath() string {
-	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".pi-go", "models", "sentence-transformers_all-MiniLM-L6-v2")
-	}
-	return ""
+	return filepath.Join(config.PirateHome(), "models", "sentence-transformers_all-MiniLM-L6-v2")
 }
 
 func newMemoryCmd() *cobra.Command {

@@ -16,6 +16,7 @@ import (
 // emptied. On Windows it reads %USERPROFILE%, and clearing the environment
 // variable does not make it fail, so the path is unreachable there.
 func TestPluginCmd_WithoutHome(t *testing.T) {
+	t.Setenv("PIRATE_HOME", "")
 	t.Setenv("PI_GO_HOME", "")
 	t.Setenv("HOME", "")
 

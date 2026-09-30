@@ -42,7 +42,7 @@ func TestSetUnwritableHomeBlocksCreationBelowIt(t *testing.T) {
 	if got, _ := os.UserHomeDir(); got != home {
 		t.Errorf("UserHomeDir = %q, want %q", got, home)
 	}
-	if err := os.MkdirAll(filepath.Join(home, ".pi-go"), 0o755); err == nil {
+	if err := os.MkdirAll(filepath.Join(home, ".pirate"), 0o755); err == nil {
 		t.Error("MkdirAll below the file succeeded, want an error")
 	}
 }

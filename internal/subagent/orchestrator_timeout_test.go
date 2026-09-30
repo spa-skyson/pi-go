@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	sharedacp "github.com/dimetron/pi-go/internal/acp"
+	sharedacp "github.com/spa-skyson/pi-rate/internal/acp"
 )
 
 // captureSpawnOpts installs an ACP session constructor that records the

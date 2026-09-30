@@ -13,8 +13,8 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/extension"
 )
 
 type mockUpdater struct {

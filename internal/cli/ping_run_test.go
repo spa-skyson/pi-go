@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // newOllamaHTTPServer returns an httptest server that emulates the subset of
@@ -54,7 +54,7 @@ func TestRunPing_OllamaModel_Happy(t *testing.T) {
 	// Point OLLAMA_BASE_URL so provider.CheckOllama uses our mock.
 	t.Setenv("OLLAMA_BASE_URL", srv.URL)
 
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	_ = os.MkdirAll(cfgDir, 0o755)
 	_ = os.WriteFile(filepath.Join(cfgDir, "config.json"),
 		[]byte(`{"roles":{"default":{"model":"llama3:8b","provider":"ollama"}}}`), 0o644)
@@ -75,7 +75,7 @@ func TestRunPing_DNSResolutionFailure(t *testing.T) {
 	testenv.SetHome(t, tmpDir)
 	t.Setenv("OPENAI_API_KEY", "k")
 
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	_ = os.MkdirAll(cfgDir, 0o755)
 	_ = os.WriteFile(filepath.Join(cfgDir, "config.json"),
 		[]byte(`{"roles":{"default":{"model":"gpt-5.4","provider":"openai"}}}`), 0o644)
@@ -100,7 +100,7 @@ func TestRunPing_InvalidURLParse(t *testing.T) {
 	testenv.SetHome(t, tmpDir)
 	t.Setenv("OPENAI_API_KEY", "k")
 
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	_ = os.MkdirAll(cfgDir, 0o755)
 	_ = os.WriteFile(filepath.Join(cfgDir, "config.json"),
 		[]byte(`{"roles":{"default":{"model":"gpt-5.4","provider":"openai"}}}`), 0o644)
@@ -119,7 +119,7 @@ func TestRunPing_InvalidModelResolution(t *testing.T) {
 	tmpDir := t.TempDir()
 	testenv.SetHome(t, tmpDir)
 
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	_ = os.MkdirAll(cfgDir, 0o755)
 	_ = os.WriteFile(filepath.Join(cfgDir, "config.json"),
 		[]byte(`{"roles":{"default":{"model":"totally-bogus-model-name"}}}`), 0o644)
@@ -149,7 +149,7 @@ func TestRunPing_HTTPServerReachable(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	_ = os.MkdirAll(cfgDir, 0o755)
 	_ = os.WriteFile(filepath.Join(cfgDir, "config.json"),
 		[]byte(`{"roles":{"default":{"model":"gpt-5.4","provider":"openai"}}}`), 0o644)
@@ -174,7 +174,7 @@ func TestRunPing_HTTPServer401(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	_ = os.MkdirAll(cfgDir, 0o755)
 	_ = os.WriteFile(filepath.Join(cfgDir, "config.json"),
 		[]byte(`{"roles":{"default":{"model":"gpt-5.4","provider":"openai"}}}`), 0o644)
@@ -199,7 +199,7 @@ func TestRunPing_HTTPServer500(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	_ = os.MkdirAll(cfgDir, 0o755)
 	_ = os.WriteFile(filepath.Join(cfgDir, "config.json"),
 		[]byte(`{"roles":{"default":{"model":"gpt-5.4","provider":"openai"}}}`), 0o644)
@@ -227,7 +227,7 @@ func TestRunPing_AnthropicAuthHeaders(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	_ = os.MkdirAll(cfgDir, 0o755)
 	_ = os.WriteFile(filepath.Join(cfgDir, "config.json"),
 		[]byte(`{"roles":{"default":{"model":"claude-sonnet-4-6","provider":"anthropic"}}}`), 0o644)
@@ -258,7 +258,7 @@ func TestRunPing_WithPromptArg(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	_ = os.MkdirAll(cfgDir, 0o755)
 	_ = os.WriteFile(filepath.Join(cfgDir, "config.json"),
 		[]byte(`{"roles":{"default":{"model":"claude-sonnet-4-6","provider":"anthropic"}}}`), 0o644)
@@ -281,7 +281,7 @@ func TestRunPing_InvalidURL(t *testing.T) {
 
 	// Point config to a model that doesn't resolve.
 	tmpDir := t.TempDir()
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	os.MkdirAll(cfgDir, 0755)
 	os.WriteFile(filepath.Join(cfgDir, "config.json"), []byte(`{"roles":{"default":{"model":"nonexistent-model-12345"}}}`), 0644)
 

@@ -10,15 +10,15 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/auth"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/auth"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // TestMain globally disables real browser opens and process restart for every
 // test in this package, and redirects HOME to a throwaway directory.
 //
 // The HOME isolation matters because saveThemeToConfig and SaveDefaultRole
-// resolve ~/.pi-go/config.json through os.UserHomeDir and rewrite the whole
+// resolve ~/.pirate/config.json through os.UserHomeDir and rewrite the whole
 // file. Without it, running "go test ./..." overwrites the developer's real
 // theme and default model role.
 func TestMain(m *testing.M) {
@@ -212,7 +212,7 @@ func TestHandleLoginCommand_OpenAIDeviceFlow(t *testing.T) {
 
 func TestHandleLoginSave(t *testing.T) {
 	tmpDir := t.TempDir()
-	piDir := filepath.Join(tmpDir, ".pi-go")
+	piDir := filepath.Join(tmpDir, ".pirate")
 	if err := os.MkdirAll(piDir, 0700); err != nil {
 		t.Fatal(err)
 	}

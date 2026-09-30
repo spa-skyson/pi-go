@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/guardrail"
-	"github.com/dimetron/pi-go/internal/provider"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/guardrail"
+	"github.com/spa-skyson/pi-rate/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // The endpoint decision has to be the same one in every place that builds an

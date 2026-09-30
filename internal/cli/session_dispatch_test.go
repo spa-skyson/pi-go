@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/config"
 
-	pisession "github.com/dimetron/pi-go/internal/session"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
 )
 
 // TestResolveSessionID covers the two flag-driven branches. Both run before

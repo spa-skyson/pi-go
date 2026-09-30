@@ -9,7 +9,7 @@ import (
 
 	"google.golang.org/adk/v2/model"
 
-	"github.com/dimetron/pi-go/internal/retry"
+	"github.com/spa-skyson/pi-rate/internal/retry"
 )
 
 // scriptedLLM replays one canned outcome per call, so a test can make the

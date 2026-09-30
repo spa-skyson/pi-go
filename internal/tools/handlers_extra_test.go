@@ -125,7 +125,7 @@ func TestShouldSkipDir(t *testing.T) {
 			t.Errorf("shouldSkipDir(%q) = false, want true", d)
 		}
 	}
-	keep := []string{".", ".pi-go", ".cursor", ".claude", "src", "internal"}
+	keep := []string{".", ".pirate", ".cursor", ".claude", "src", "internal"}
 	for _, d := range keep {
 		if shouldSkipDir(d) {
 			t.Errorf("shouldSkipDir(%q) = true, want false", d)

@@ -37,7 +37,7 @@ func initTestRepo(t *testing.T) string {
 
 // initTestRepoWithIgnores is initTestRepo plus the ignore rules that hide spec
 // artifacts in the real repo: the global **/specs/ pattern and the project's
-// .pi-go/ rule. These are what let a plain `git add -A` silently stage nothing
+// .pirate/ rule. These are what let a plain `git add -A` silently stage nothing
 // for planner output, and they must be present for CommitAll's regression guard
 // to reproduce the loss in any environment, not just one whose ~/.gitignore
 // happens to match. Installed via core.excludesFile so the test stays hermetic
@@ -47,7 +47,7 @@ func initTestRepoWithIgnores(t *testing.T) string {
 	dir := initTestRepo(t)
 
 	ignore := filepath.Join(t.TempDir(), "global-gitignore")
-	content := "**/specs/\n.pi-go/\n"
+	content := "**/specs/\n.pirate/\n"
 	if err := os.WriteFile(ignore, []byte(content), 0o644); err != nil {
 		t.Fatalf("writing ignore file: %v", err)
 	}
@@ -76,10 +76,10 @@ func TestWorktree_CreateAndCleanup(t *testing.T) {
 		t.Fatal("worktree path is not a directory")
 	}
 
-	// Verify it's under .pi-go/tasks/.
+	// Verify it's under .pirate/tasks/.
 	relPath, _ := filepath.Rel(repo, path)
-	if !strings.HasPrefix(relPath, filepath.Join(".pi-go", "tasks")) {
-		t.Errorf("path %s not under .pi-go/tasks/", relPath)
+	if !strings.HasPrefix(relPath, filepath.Join(".pirate", "tasks")) {
+		t.Errorf("path %s not under .pirate/tasks/", relPath)
 	}
 
 	// Verify active count.
@@ -140,7 +140,7 @@ func TestWorktree_CreateWithRequestedName(t *testing.T) {
 	defer func() { _ = mgr.Cleanup("agent-abc12345") }()
 
 	relPath, _ := filepath.Rel(repo, path)
-	expectedPath := filepath.Join(".pi-go", "tasks", "features-too-004-acp-subagent")
+	expectedPath := filepath.Join(".pirate", "tasks", "features-too-004-acp-subagent")
 	if relPath != expectedPath {
 		t.Fatalf("worktree path = %q, want %q", relPath, expectedPath)
 	}
@@ -686,7 +686,7 @@ func TestWorktree_CreatePrunesStaleDir(t *testing.T) {
 	mgr := NewWorktreeManager(repo)
 
 	// Pre-create the directory that Create would normally choose.
-	wtPath := filepath.Join(repo, ".pi-go", "tasks", "stale-spec")
+	wtPath := filepath.Join(repo, ".pirate", "tasks", "stale-spec")
 	if err := os.MkdirAll(wtPath, 0o755); err != nil {
 		t.Fatalf("pre-create stale dir: %v", err)
 	}

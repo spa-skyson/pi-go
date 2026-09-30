@@ -14,12 +14,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/notice"
+	"github.com/spa-skyson/pi-rate/internal/notice"
 )
 
-const upgradeScriptURL = "https://raw.githubusercontent.com/dimetron/pi-go/main/scripts/install.sh"
-const upgradeScriptURLWin = "https://raw.githubusercontent.com/dimetron/pi-go/main/scripts/install.ps1"
-const latestReleaseURL = "https://api.github.com/repos/dimetron/pi-go/releases/latest"
+const upgradeScriptURL = "https://raw.githubusercontent.com/spa-skyson/pi-rate/main/scripts/install.sh"
+const upgradeScriptURLWin = "https://raw.githubusercontent.com/spa-skyson/pi-rate/main/scripts/install.ps1"
+const latestReleaseURL = "https://api.github.com/repos/spa-skyson/pi-rate/releases/latest"
 
 type releaseInfo struct {
 	TagName string `json:"tag_name"`
@@ -38,7 +38,7 @@ func checkForUpdate(ctx context.Context, currentVersion string) {
 		return
 	}
 	if isNewerVersion(currentVersion, latest) {
-		notice.Notifyf("update available: %s -> %s (run `pi upgrade`)", currentVersion, latest)
+		notice.Notifyf("update available: %s -> %s (run `pirate upgrade`)", currentVersion, latest)
 	}
 }
 
@@ -48,7 +48,7 @@ func fetchLatestVersion(ctx context.Context, client *http.Client, url string) (s
 		return "", fmt.Errorf("creating release request: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "pi-go/"+versionString())
+	req.Header.Set("User-Agent", "pirate/"+versionString())
 
 	resp, err := client.Do(req)
 	if err != nil {

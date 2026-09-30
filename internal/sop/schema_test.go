@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/sop/validate"
+	"github.com/spa-skyson/pi-rate/internal/sop/validate"
 )
 
 // The shipped definitions must parse, lint and compile. If they do not, the
@@ -341,7 +341,7 @@ func mustParse(t *testing.T, src string) *Definition {
 
 func writeOverride(t *testing.T, workDir, name, body string) {
 	t.Helper()
-	dir := filepath.Join(workDir, ".pi-go", "sops")
+	dir := filepath.Join(workDir, ".pirate", "sops")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}

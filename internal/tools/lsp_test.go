@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/lsp"
+	"github.com/spa-skyson/pi-rate/internal/lsp"
 )
 
 // allLanguages returns every language name in the default registry, for tests

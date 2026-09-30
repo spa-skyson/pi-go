@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/palace"
 )
 
 // newTestPalace opens a palace backed by a temp database, with no embedder, so

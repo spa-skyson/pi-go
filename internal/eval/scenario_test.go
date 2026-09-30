@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/atif"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/atif"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/memory"
 )
 
 func TestEvaluateScenario_ToolsAndChecks(t *testing.T) {
@@ -230,7 +230,7 @@ func TestSeedMemory_SearchableByTool(t *testing.T) {
 		t.Fatalf("SeedMemory(nil) = %v", err)
 	}
 
-	db, err := memory.OpenDB(filepath.Join(home, ".pi-go", "memory", "claude-mem.db"))
+	db, err := memory.OpenDB(filepath.Join(home, ".pirate", "memory", "claude-mem.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

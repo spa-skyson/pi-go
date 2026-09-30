@@ -9,7 +9,7 @@ import (
 
 	llmmodel "google.golang.org/adk/v2/model"
 
-	"github.com/dimetron/pi-go/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/agent"
 )
 
 // apiErrorLLM reproduces how every provider reports an HTTP failure: a

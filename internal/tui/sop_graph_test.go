@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 
-	"github.com/dimetron/pi-go/internal/sop"
+	"github.com/spa-skyson/pi-rate/internal/sop"
 )
 
 // compileEmbedded gives a test the real compiled graph. The diagram is only

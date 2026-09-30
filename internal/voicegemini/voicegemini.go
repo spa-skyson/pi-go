@@ -30,7 +30,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/voice"
+	"github.com/spa-skyson/pi-rate/internal/voice"
 )
 
 // DefaultModel is the Live API native-audio model. Override with

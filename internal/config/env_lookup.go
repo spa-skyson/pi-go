@@ -11,7 +11,7 @@ import (
 //
 // It exists because pi has two ways to hold a credential and only one of them
 // was reachable from a command's own flag handling. `pi login` writes keys to
-// ~/.pi-go/.env, config substitution reads .env files for MCP server URLs — yet
+// ~/.pirate/.env, config substitution reads .env files for MCP server URLs — yet
 // a command calling os.Getenv directly sees none of that, so a key that pi
 // itself saved reads as "not set" unless the user also exported it. Anything
 // asking for a credential should ask here.
@@ -20,9 +20,9 @@ import (
 // then the home file: an explicit export for one run must beat a file, and a
 // project's own key must beat the account-wide one. Files searched, in order:
 //
-//	<cwd or a parent>/.pi-go/.env    — the project key
+//	<cwd or a parent>/.pirate/.env    — the project key
 //	<cwd or a parent>/.env           — the plain dotenv a project may already have
-//	~/.pi-go/.env                    — what `pi login` writes
+//	~/.pirate/.env                    — what `pi login` writes
 //
 // names are tried in order, so a caller can accept an alias
 // (GEMINI_API_KEY, then GOOGLE_API_KEY) in one call. The returned source is
@@ -60,15 +60,13 @@ func LookupEnvFrom(cwd string, names ...string) (value, source string) {
 // envFileCandidates lists the .env files to consult, nearest first.
 func envFileCandidates(cwd string) []string {
 	var paths []string
-	if p := findNearestProjectFile(cwd, filepath.Join(".pi-go", ".env")); p != "" {
+	if p := findNearestProjectFile(cwd, filepath.Join(ProjectDirName, ".env")); p != "" {
 		paths = append(paths, p)
 	}
 	if p := findNearestProjectFile(cwd, ".env"); p != "" {
 		paths = append(paths, p)
 	}
-	if home, err := os.UserHomeDir(); err == nil {
-		paths = append(paths, filepath.Join(home, ".pi-go", ".env"))
-	}
+	paths = append(paths, filepath.Join(PirateHome(), ".env"))
 	return paths
 }
 

@@ -6,9 +6,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/provider"
-	"github.com/dimetron/pi-go/internal/tui"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/tui"
 )
 
 // modelCatalogFetchTimeout bounds the whole background refresh behind the

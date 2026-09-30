@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/dimetron/pi-go/internal/mermaid/renderer"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/renderer"
 )
 
 // timelineEvent holds one or more items at a time point.

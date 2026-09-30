@@ -7,13 +7,13 @@ import (
 
 	adktool "google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/lsp"
-	"github.com/dimetron/pi-go/internal/memory"
-	"github.com/dimetron/pi-go/internal/palace"
-	"github.com/dimetron/pi-go/internal/subagent"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/lsp"
+	"github.com/spa-skyson/pi-rate/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 )
 
 // ToolInfo describes one tool the pi agent can expose to the model.

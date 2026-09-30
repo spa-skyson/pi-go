@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/audit"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/audit"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 func TestNewAuditCmd(t *testing.T) {
@@ -116,8 +116,8 @@ func TestRunAuditStripForce(t *testing.T) {
 
 func TestDefaultSkillDirs(t *testing.T) {
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, ".pi-go", "skills"), 0o755); err != nil {
-		t.Fatalf("create .pi-go skills dir: %v", err)
+	if err := os.MkdirAll(filepath.Join(root, ".pirate", "skills"), 0o755); err != nil {
+		t.Fatalf("create .pirate skills dir: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Join(root, ".claude", "skills"), 0o755); err != nil {
 		t.Fatalf("create .claude skills dir: %v", err)

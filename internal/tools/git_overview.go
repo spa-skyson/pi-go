@@ -13,7 +13,7 @@ import (
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/otel"
+	"github.com/spa-skyson/pi-rate/internal/otel"
 )
 
 const defaultGitTimeout = 10 * time.Second

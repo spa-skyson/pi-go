@@ -16,8 +16,8 @@ import (
 	adktool "google.golang.org/adk/v2/tool"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // fakeLLM is the seam that makes an embed testable without a network: it
@@ -79,7 +79,7 @@ func (f *fakeLLM) systemPrompt() string {
 }
 
 // isolate points HOME at a scratch directory so a test never reads or writes
-// the developer's real ~/.pi-go, and returns a working directory to run in.
+// the developer's real ~/.pirate, and returns a working directory to run in.
 func isolate(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
@@ -478,7 +478,7 @@ func TestNewWithSubagentsAndMemory(t *testing.T) {
 func TestNewHonoursSkillsToggle(t *testing.T) {
 	isolate(t)
 	workDir := t.TempDir()
-	skillDir := filepath.Join(workDir, ".pi-go", "skills", "widget")
+	skillDir := filepath.Join(workDir, ".pirate", "skills", "widget")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}

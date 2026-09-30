@@ -2,13 +2,13 @@ package provider
 
 import "net/http"
 
-// App-attribution values sent to OpenRouter so usage is ranked under Pi-Go.
+// App-attribution values sent to OpenRouter so usage is ranked under Pi-rate.
 // HTTP-Referer is the required primary identifier — without it no app page is
 // created and usage does not appear in rankings.
 // See https://openrouter.ai/docs/app-attribution.
 const (
-	openrouterHTTPReferer   = "https://github.com/dimetron/pi-go"
-	openrouterAppTitle      = "Pi-Go"
+	openrouterHTTPReferer   = "https://github.com/spa-skyson/pi-rate"
+	openrouterAppTitle      = "Pi-rate"
 	openrouterAppCategories = "cli-agent"
 )
 

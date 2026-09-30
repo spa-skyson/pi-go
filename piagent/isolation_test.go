@@ -18,15 +18,15 @@ import (
 // siblings that compose in the embedder's code; if either imports the other
 // they are one package with extra steps.
 var forbiddenDeps = []string{
-	"github.com/dimetron/pi-go/internal/provider",
-	"github.com/dimetron/pi-go/internal/guardrail",
-	"github.com/dimetron/pi-go/pimodels",
+	"github.com/spa-skyson/pi-rate/internal/provider",
+	"github.com/spa-skyson/pi-rate/internal/guardrail",
+	"github.com/spa-skyson/pi-rate/pimodels",
 }
 
 // deps returns the transitive import set of the piagent package.
 func deps(t *testing.T) map[string]bool {
 	t.Helper()
-	out, err := exec.Command("go", "list", "-deps", "github.com/dimetron/pi-go/piagent").Output()
+	out, err := exec.Command("go", "list", "-deps", "github.com/spa-skyson/pi-rate/piagent").Output()
 	if err != nil {
 		t.Skipf("go list unavailable: %v", err)
 	}

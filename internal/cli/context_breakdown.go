@@ -3,10 +3,10 @@ package cli
 import (
 	"encoding/json"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/extension"
-	"github.com/dimetron/pi-go/internal/subagent"
-	"github.com/dimetron/pi-go/internal/tui"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/tui"
 
 	adktool "google.golang.org/adk/v2/tool"
 	"google.golang.org/genai"

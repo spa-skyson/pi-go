@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	shared "github.com/dimetron/pi-go/internal/acp"
+	shared "github.com/spa-skyson/pi-rate/internal/acp"
 )
 
 // envE2E gates the credentialed run. The ACP server refuses session/new until

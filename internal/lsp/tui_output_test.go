@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/notice"
+	"github.com/spa-skyson/pi-rate/internal/notice"
 )
 
 // captureNotices installs a notice sink for the duration of the test and

@@ -22,11 +22,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/eval"
-	"github.com/dimetron/pi-go/internal/provider"
-	"github.com/dimetron/pi-go/internal/subagent"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/eval"
+	"github.com/spa-skyson/pi-rate/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 
 	tea "charm.land/bubbletea/v2"
 	llmmodel "google.golang.org/adk/v2/model"
@@ -195,7 +195,7 @@ func TestEvalRun(t *testing.T) {
 	sampWG.Wait()
 
 	// --- metrics ------------------------------------------------------------
-	sessionsDir := filepath.Join(home, ".pi-go", "sessions")
+	sessionsDir := filepath.Join(home, ".pirate", "sessions")
 	loaded, loadErr := eval.LoadTrajectories(sessionsDir)
 	if loadErr != nil {
 		t.Logf("load trajectories: %v", loadErr)
@@ -383,7 +383,7 @@ func gopathBin() string {
 
 func writeHomeConfig(t *testing.T, home string, cfg *config.Config) {
 	t.Helper()
-	dir := filepath.Join(home, ".pi-go")
+	dir := filepath.Join(home, ".pirate")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}

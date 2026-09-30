@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/atif"
-	"github.com/dimetron/pi-go/internal/eval"
+	"github.com/spa-skyson/pi-rate/internal/atif"
+	"github.com/spa-skyson/pi-rate/internal/eval"
 )
 
 // TestScenarios_CoverInventory is the coverage gate: every tool the agent can

@@ -15,10 +15,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/dimetron/pi-go/internal/mermaid/diagram"
-	"github.com/dimetron/pi-go/internal/mermaid/graph"
-	"github.com/dimetron/pi-go/internal/mermaid/parser"
-	"github.com/dimetron/pi-go/internal/mermaid/renderer"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/diagram"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/graph"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/parser"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/renderer"
 )
 
 // config holds rendering options.

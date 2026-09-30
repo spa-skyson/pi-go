@@ -3,7 +3,7 @@
 (trace default) ;; logs all denials to: log show --predicate 'eventMessage CONTAINS "pi(" AND eventMessage CONTAINS "deny"' --last 1m
 
 ;; Usage:
-;;   sandbox-exec -p "$(sed -e '/^(param /d' -e "s|(param \"HOME\")|\"$HOME\"|g" -e "s|(param \"CWD\")|\"$PWD\"|g" pi-profile.sb)" pi [args...]
+;;   sandbox-exec -p "$(sed -e '/^(param /d' -e "s|(param \"HOME\")|\"$HOME\"|g" -e "s|(param \"CWD\")|\"$PWD\"|g" pirate-profile.sb)" pirate [args...]
 ;;
 ;; NOTE: -D flag does NOT work with (param) declarations — use sed substitution instead.
 ;; NOTE: DTrace sandbox probes (sandbox*:::sandbox-deny) are blocked by SIP.

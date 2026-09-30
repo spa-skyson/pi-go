@@ -173,7 +173,7 @@ func oaiSupportsTopEffort(modelName string) bool {
 //
 // Only an unset level is overridden — an explicit level from the caller, a
 // config file or WithThinkingLevel is a deliberate request and still wins, so
-// setting thinkingLevel in ~/.pi-go/config.json can lower luna again if wanted.
+// setting thinkingLevel in ~/.pirate/config.json can lower luna again if wanted.
 func oaiThinkingLevelForModel(modelName, thinkingLevel string) string {
 	if strings.TrimSpace(thinkingLevel) != "" {
 		return thinkingLevel

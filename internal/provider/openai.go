@@ -14,7 +14,7 @@ import (
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/auth"
+	"github.com/spa-skyson/pi-rate/internal/auth"
 )
 
 // openaiModel implements model.LLM for OpenAI-compatible APIs.

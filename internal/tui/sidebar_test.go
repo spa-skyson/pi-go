@@ -8,9 +8,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 
-	"github.com/dimetron/pi-go/internal/extension"
-	"github.com/dimetron/pi-go/internal/palace"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 func TestRenderSidebar_Minimal(t *testing.T) {

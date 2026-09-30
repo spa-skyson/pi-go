@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/palace"
 )
 
 func TestMemoryKGCmd_SubcommandsRegistered(t *testing.T) {
@@ -279,7 +279,7 @@ func TestOpenPalaceDB_ValidPath(t *testing.T) {
 }
 
 func TestOpenPalaceDB_EmptyPathUsesDefault(t *testing.T) {
-	// With empty path, uses ".pi-go/palace.db" relative to CWD.
+	// With empty path, uses ".pirate/palace.db" relative to CWD.
 	// May or may not exist. Test that the function doesn't panic.
 	_, err := openPalaceDB("")
 	if err == nil {

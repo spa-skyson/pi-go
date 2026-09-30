@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/palace"
 )
 
 func TestMemoryTickCmd_NoDB(t *testing.T) {
-	// No .pi-go/palace.db in the temp dir → nil status.
+	// No .pirate/palace.db in the temp dir → nil status.
 	workDir := t.TempDir()
 	cmd := memoryTickCmd(workDir)
 	msg := cmd()
@@ -24,7 +24,7 @@ func TestMemoryTickCmd_NoDB(t *testing.T) {
 
 func TestMemoryTickCmd_WithDB(t *testing.T) {
 	workDir := t.TempDir()
-	dbPath := filepath.Join(workDir, ".pi-go", "palace.db")
+	dbPath := filepath.Join(workDir, ".pirate", "palace.db")
 
 	// Create the palace DB so os.Stat passes and palace.New opens it.
 	p, err := palace.New(palace.WithDBPath(dbPath))
@@ -49,8 +49,8 @@ func TestMemoryTickCmd_WithDB(t *testing.T) {
 
 func TestMemoryTickCmd_PalaceNewError(t *testing.T) {
 	workDir := t.TempDir()
-	// Make .pi-go/palace.db a directory so palace.New fails to open it as a DB.
-	dbPath := filepath.Join(workDir, ".pi-go", "palace.db")
+	// Make .pirate/palace.db a directory so palace.New fails to open it as a DB.
+	dbPath := filepath.Join(workDir, ".pirate", "palace.db")
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}

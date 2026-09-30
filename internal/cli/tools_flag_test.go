@@ -7,8 +7,8 @@ import (
 
 	adktool "google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/extension"
 )
 
 func TestParseToolAllowlist(t *testing.T) {

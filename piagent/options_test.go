@@ -10,7 +10,7 @@ import (
 )
 
 // TestDefaultsReadConventionsButDoNotWriteSharedState pins the one line this
-// package draws differently from the CLI. Skills and subagents read .pi-go/,
+// package draws differently from the CLI. Skills and subagents read .pirate/,
 // which is why an embedder reaches for this package at all. Memory and palace
 // write to the stores a user's real pi sessions use, and an embedder's process
 // is not a pi session — so those are opt-in.
@@ -32,7 +32,7 @@ func TestDefaultsReadConventionsButDoNotWriteSharedState(t *testing.T) {
 		"palace": o.palaceEnabled,
 	} {
 		if on {
-			t.Errorf("%s is on by default; writing to the user's shared ~/.pi-go stores must be opt-in", name)
+			t.Errorf("%s is on by default; writing to the user's shared ~/.pirate stores must be opt-in", name)
 		}
 	}
 }

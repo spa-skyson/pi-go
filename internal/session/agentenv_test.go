@@ -19,7 +19,7 @@ func TestAgentContextFromEnvAbsentForInteractiveSessions(t *testing.T) {
 // A worktree path alone is not attribution: the orchestrator sets it for every
 // spawned agent, and it answers none of the questions the block exists for.
 func TestAgentContextFromEnvIgnoresWorktreeAlone(t *testing.T) {
-	t.Setenv(EnvWorktreeRoot, "/repo/.pi-go/tasks/763098722000")
+	t.Setenv(EnvWorktreeRoot, "/repo/.pirate/tasks/763098722000")
 	if got := AgentContextFromEnv(); got != nil {
 		t.Errorf("AgentContextFromEnv() = %+v, want nil when only the worktree is set", got)
 	}
@@ -33,7 +33,7 @@ func TestAgentContextFromEnv(t *testing.T) {
 	t.Setenv(EnvParentSession, "260827-0205-03249-00fa4")
 	t.Setenv(EnvSlice, "3")
 	t.Setenv(EnvCycle, "2")
-	t.Setenv(EnvWorktreeRoot, "/repo/.pi-go/tasks/x")
+	t.Setenv(EnvWorktreeRoot, "/repo/.pirate/tasks/x")
 	t.Setenv(EnvAgentBranch, "run/features-TOO-024")
 
 	got := AgentContextFromEnv()
@@ -43,7 +43,7 @@ func TestAgentContextFromEnv(t *testing.T) {
 	want := AgentContext{
 		AgentID: "agent-7", AgentType: "worker", RunID: "run-features-x-123",
 		SpecName: "features/TOO/024-mistral-provider", ParentID: "260827-0205-03249-00fa4",
-		Slice: 3, Cycle: 2, Worktree: "/repo/.pi-go/tasks/x", Branch: "run/features-TOO-024",
+		Slice: 3, Cycle: 2, Worktree: "/repo/.pirate/tasks/x", Branch: "run/features-TOO-024",
 	}
 	if *got != want {
 		t.Errorf("AgentContextFromEnv() = %+v, want %+v", *got, want)
@@ -106,7 +106,7 @@ func TestUpdateAndGetAgentContext(t *testing.T) {
 	want := &AgentContext{
 		AgentID: "agent-7", AgentType: "worker", RunID: "run-1",
 		SpecName: "features/x", Slice: 3, Cycle: 1,
-		Worktree: "/repo/.pi-go/tasks/x", Branch: "run/features-x",
+		Worktree: "/repo/.pirate/tasks/x", Branch: "run/features-x",
 	}
 	if err := svc.UpdateAgentContext(sessionID, want); err != nil {
 		t.Fatalf("UpdateAgentContext: %v", err)

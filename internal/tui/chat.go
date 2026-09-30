@@ -62,13 +62,9 @@ func (c *ChatModel) renderWelcome(p Palette) string {
 	dim := lipgloss.NewStyle().Foreground(p.Dim)
 	cmd := lipgloss.NewStyle().Foreground(p.Cyan)
 
-	// ASCII diagonals, matching the sidebar mascot: ╱ ╲ are East Asian Ambiguous
-	// and widen the row in CJK-configured terminals. See face.go.
-	face := accent.Render(
-		"" +
-			`  /\___/\` + "\n" +
-			"  ( ◕ ◕ )\n" +
-			`   / π \`)
+	// The same pirate the sidebar draws (MoodIdle.Mascot) — one art, one
+	// source, so the welcome screen cannot drift from the sidebar.
+	face := accent.Render(MoodIdle.Mascot())
 
 	lines := []string{
 		face,

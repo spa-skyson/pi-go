@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/sop"
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/sop"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 func TestCopyDir_RecursesAndOverwrites(t *testing.T) {
@@ -283,7 +283,7 @@ func TestBuildPlanInstruction_SOPOverride(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create project-level SOP override.
-	sopDir := filepath.Join(tmpDir, ".pi-go", "sops")
+	sopDir := filepath.Join(tmpDir, ".pirate", "sops")
 	if err := os.MkdirAll(sopDir, 0o755); err != nil {
 		t.Fatalf("mkdir failed: %v", err)
 	}

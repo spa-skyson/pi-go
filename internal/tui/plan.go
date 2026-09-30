@@ -10,9 +10,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/dimetron/pi-go/internal/session"
-	"github.com/dimetron/pi-go/internal/sop"
-	"github.com/dimetron/pi-go/internal/sop/validate"
+	"github.com/spa-skyson/pi-rate/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/sop"
+	"github.com/spa-skyson/pi-rate/internal/sop/validate"
 
 	tea "charm.land/bubbletea/v2"
 )

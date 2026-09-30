@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/palace"
 )
 
 // TestOllamaSetupError covers the one command that cannot degrade: an

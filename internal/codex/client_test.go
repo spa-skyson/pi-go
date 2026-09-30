@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // fakeServer is an in-process stand-in for `codex app-server`: it reads JSONL

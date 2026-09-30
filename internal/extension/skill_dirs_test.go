@@ -17,10 +17,10 @@ func TestDefaultSkillDirs(t *testing.T) {
 
 func TestDefaultSkillDirsIn(t *testing.T) {
 	root := t.TempDir()
-	piGoSkills := filepath.Join(root, ".pi-go", "skills")
+	piGoSkills := filepath.Join(root, ".pirate", "skills")
 	claudeSkills := filepath.Join(root, ".claude", "skills")
 	if err := os.MkdirAll(piGoSkills, 0o755); err != nil {
-		t.Fatalf("create .pi-go skills dir: %v", err)
+		t.Fatalf("create .pirate skills dir: %v", err)
 	}
 	if err := os.MkdirAll(claudeSkills, 0o755); err != nil {
 		t.Fatalf("create .claude skills dir: %v", err)
@@ -32,7 +32,7 @@ func TestDefaultSkillDirsIn(t *testing.T) {
 	}
 	t.Logf("DefaultSkillDirsIn: %v", dirs)
 
-	// Verify it finds .claude/skills and .pi-go/skills.
+	// Verify it finds .claude/skills and .pirate/skills.
 	foundClaude := false
 	foundPigo := false
 	for _, d := range dirs {
@@ -47,7 +47,7 @@ func TestDefaultSkillDirsIn(t *testing.T) {
 		t.Error("did not find .claude/skills")
 	}
 	if !foundPigo {
-		t.Error("did not find .pi-go/skills")
+		t.Error("did not find .pirate/skills")
 	}
 }
 
@@ -62,7 +62,7 @@ func TestDefaultSkillDirsInUserHome(t *testing.T) {
 		t.Skip("cannot get user home dir")
 	}
 
-	userDir := filepath.Join(userHome, ".pi-go", "skills")
+	userDir := filepath.Join(userHome, ".pirate", "skills")
 	found := false
 	for _, d := range dirs {
 		if d == userDir {
@@ -142,7 +142,7 @@ func TestLoadSkillsIgnoresFileSymlink(t *testing.T) {
 // loader's override rule.
 func TestPluginSkillDirsComeBeforeUserAndProject(t *testing.T) {
 	root := t.TempDir()
-	projectSkills := filepath.Join(root, ".pi-go", "skills")
+	projectSkills := filepath.Join(root, ".pirate", "skills")
 	if err := os.MkdirAll(projectSkills, 0o755); err != nil {
 		t.Fatal(err)
 	}

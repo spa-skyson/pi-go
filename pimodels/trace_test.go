@@ -11,7 +11,7 @@ import (
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/pimodels"
+	"github.com/spa-skyson/pi-rate/pimodels"
 )
 
 // sinkCollector is a trace sink that records what it was handed. Callbacks

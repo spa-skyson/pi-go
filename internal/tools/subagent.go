@@ -10,7 +10,7 @@ import (
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 // backgroundEntry holds the collected result of a background agent.

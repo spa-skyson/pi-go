@@ -12,8 +12,8 @@ import (
 	adktool "google.golang.org/adk/v2/tool"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/extension"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 )
 
 // TestComposedAfterChainReachesCompactor is the end-to-end guard for the

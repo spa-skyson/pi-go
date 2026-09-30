@@ -1,6 +1,6 @@
 package config
 
-import "github.com/dimetron/pi-go/internal/ratelimit"
+import "github.com/spa-skyson/pi-rate/internal/ratelimit"
 
 // ResolveRateLimits returns the pacing budget for one provider/model pair.
 //

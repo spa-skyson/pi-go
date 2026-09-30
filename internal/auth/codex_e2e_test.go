@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // TestCodexLoginE2E_BrowserPKCE is the primary e2e test for codex login.
@@ -22,7 +22,7 @@ import (
 //  2. Open browser → auth URL with PKCE challenge, scopes, audience
 //  3. User authenticates → redirect to localhost callback with code
 //  4. Exchange code + verifier for token
-//  5. Extract API key → save to ~/.pi-go/.env
+//  5. Extract API key → save to ~/.pirate/.env
 func TestCodexLoginE2E_BrowserPKCE(t *testing.T) {
 	var capturedAuthParams url.Values
 
@@ -177,7 +177,7 @@ func TestCodexLoginE2E_BrowserPKCE(t *testing.T) {
 		t.Fatalf("SaveKey() error: %v", err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(tmpDir, ".pi-go", ".env"))
+	data, err := os.ReadFile(filepath.Join(tmpDir, ".pirate", ".env"))
 	if err != nil {
 		t.Fatalf("error reading .env: %v", err)
 	}

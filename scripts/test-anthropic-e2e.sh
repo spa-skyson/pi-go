@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# E2E test: run pi with Anthropic Claude (default params) to explore codebase and generate PI.md
+# E2E test: run pirate with Anthropic Claude (default params) to explore codebase and generate PI.md
 # Usage: ./scripts/test-anthropic-e2e.sh [model]
 # Default model: claude-sonnet-4-6 (pi-go default)
 #
@@ -33,16 +33,16 @@ info "Checking prerequisites..."
 
 # Check ANTHROPIC_API_KEY is set
 if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-    # Try loading from ~/.pi-go/.env
-    if [ -f "$HOME/.pi-go/.env" ]; then
-        export $(grep -v '^#' "$HOME/.pi-go/.env" | grep ANTHROPIC_API_KEY | xargs)
+    # Try loading from ~/.pirate/.env
+    if [ -f "$HOME/.pirate/.env" ]; then
+        export $(grep -v '^#' "$HOME/.pirate/.env" | grep ANTHROPIC_API_KEY | xargs)
     fi
 fi
 
 if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
     fail "ANTHROPIC_API_KEY is not set"
     echo "  Set it with: export ANTHROPIC_API_KEY=sk-ant-..."
-    echo "  Or run: pi /login anthropic"
+    echo "  Or run: pirate /login anthropic"
     exit 1
 fi
 pass "ANTHROPIC_API_KEY is set (${#ANTHROPIC_API_KEY} chars)"
@@ -57,10 +57,10 @@ pass "jq is available"
 
 # --- Build ---
 
-info "Building pi binary..."
+info "Building pirate binary..."
 cd "$PROJECT_DIR"
 go build -o "$PI_BIN" ./cmd/pi
-pass "pi binary built"
+pass "pirate binary built"
 
 # --- Test 1: Simple text response (no tools, --mode print) ---
 
@@ -77,7 +77,7 @@ END_TIME=$(date +%s)
 SIMPLE_DURATION=$((END_TIME - START_TIME))
 
 if [ "$SIMPLE_EXIT" -ne 0 ]; then
-    error "Test 1 FAILED: pi exited with code ${SIMPLE_EXIT} (${SIMPLE_DURATION}s)"
+    error "Test 1 FAILED: pirate exited with code ${SIMPLE_EXIT} (${SIMPLE_DURATION}s)"
     if [ -f "${PROJECT_DIR}/.test-stderr-simple.log" ]; then
         echo "  stderr:"
         head -20 "${PROJECT_DIR}/.test-stderr-simple.log"
@@ -104,7 +104,7 @@ JSON_EXIT=$?
 set -e
 
 if [ "$JSON_EXIT" -ne 0 ]; then
-    error "Test 2 FAILED: pi exited with code ${JSON_EXIT}"
+    error "Test 2 FAILED: pirate exited with code ${JSON_EXIT}"
     if [ -f "${PROJECT_DIR}/.test-stderr-json.log" ]; then
         echo "  stderr:"
         head -20 "${PROJECT_DIR}/.test-stderr-json.log"
@@ -166,7 +166,7 @@ echo ""
 info "Agent finished in ${DURATION}s (exit code: ${PI_EXIT})"
 
 if [ "$PI_EXIT" -ne 0 ] && [ "$PI_EXIT" -ne 124 ]; then
-    error "pi exited with code ${PI_EXIT}"
+    error "pirate exited with code ${PI_EXIT}"
     if [ -f "${PROJECT_DIR}/.test-stderr.log" ]; then
         echo "  stderr:"
         head -20 "${PROJECT_DIR}/.test-stderr.log"
@@ -174,7 +174,7 @@ if [ "$PI_EXIT" -ne 0 ] && [ "$PI_EXIT" -ne 124 ]; then
 fi
 
 if [ "$PI_EXIT" -eq 124 ]; then
-    error "pi timed out after ${TIMEOUT}s"
+    error "pirate timed out after ${TIMEOUT}s"
 fi
 
 # --- Validate PI.md ---
@@ -202,7 +202,7 @@ fi
 
 info "Validating session logs..."
 
-LOG_DIR="$HOME/.pi-go/log/$(date +%Y-%m-%d)"
+LOG_DIR="$HOME/.pirate/log/$(date +%Y-%m-%d)"
 if [ ! -d "$LOG_DIR" ]; then
     error "No log directory found at ${LOG_DIR}"
 else

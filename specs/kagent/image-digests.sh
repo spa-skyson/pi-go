@@ -19,7 +19,7 @@
 set -euo pipefail
 
 TAG="${1:?usage: image-digests.sh <tag> (e.g. v0.0.87)}"
-IMAGE="ghcr.io/dimetron/pi-go-kagent"
+IMAGE="ghcr.io/spa-skyson/pi-go-kagent"
 REF="${IMAGE}:${TAG}"
 
 if ! docker buildx imagetools inspect "${REF}" >/dev/null 2>&1; then

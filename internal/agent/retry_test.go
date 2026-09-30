@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/retry"
+	"github.com/spa-skyson/pi-rate/internal/retry"
 
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/session"

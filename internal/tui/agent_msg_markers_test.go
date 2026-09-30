@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 func TestWaitForSystemNotice_NilChannelReturnsNoCmd(t *testing.T) {
@@ -51,7 +51,7 @@ func TestSystemNoticeMsg_LandsInChatTranscript(t *testing.T) {
 		chatModel: ChatModel{Messages: []message{{role: "user", content: "hi"}}},
 		cfg:       Config{SystemNoticeCh: noticeCh},
 	}
-	noticeCh <- "pi-go: lsp hook: typescript-language-server not found in PATH"
+	noticeCh <- "pirate: lsp hook: typescript-language-server not found in PATH"
 
 	// Deliver exactly as the TUI does: waitForSystemNotice -> updateAgentStream.
 	msg := waitForSystemNotice(noticeCh)()

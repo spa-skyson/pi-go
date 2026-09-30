@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 func TestLoadRootConfig_ModelOverride(t *testing.T) {
@@ -51,7 +51,7 @@ func TestBuildRootRuntime_InvalidModel(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "key")
 	t.Setenv("ANTHROPIC_API_KEY", "key")
 
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	_ = os.MkdirAll(cfgDir, 0o755)
 	_ = os.WriteFile(filepath.Join(cfgDir, "config.json"),
 		[]byte(`{"roles":{"default":{"model":"definitely-not-a-real-model-xyz"}}}`), 0o644)
@@ -204,7 +204,7 @@ func TestExecute_HelpFlag(t *testing.T) {
 func TestRunRoot_InvalidDotEnv(t *testing.T) {
 	// Test with a corrupted .env file in a custom home.
 	tmpDir := t.TempDir()
-	piDir := filepath.Join(tmpDir, ".pi-go")
+	piDir := filepath.Join(tmpDir, ".pirate")
 	os.MkdirAll(piDir, 0755)
 	// Write invalid .env (should not crash loadDotEnv).
 	os.WriteFile(filepath.Join(piDir, ".env"), []byte("invalid yaml: ["), 0644)
@@ -222,7 +222,7 @@ func TestRunRoot_InvalidDotEnv(t *testing.T) {
 func TestRunRoot_NoAPIKeyWithOllamaModel(t *testing.T) {
 	tmpDir := t.TempDir()
 	testenv.SetHome(t, tmpDir)
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	os.MkdirAll(cfgDir, 0755)
 	os.WriteFile(filepath.Join(cfgDir, "config.json"), []byte(`{"roles":{"default":{"model":"llama3:8b","provider":"ollama"}}}`), 0644)
 

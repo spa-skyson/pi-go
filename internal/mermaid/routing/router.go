@@ -4,8 +4,8 @@ import (
 	"math"
 	"sort"
 
-	"github.com/dimetron/pi-go/internal/mermaid/graph"
-	"github.com/dimetron/pi-go/internal/mermaid/layout"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/graph"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/layout"
 )
 
 // AttachDir represents which side of a node an edge attaches to.

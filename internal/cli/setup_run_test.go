@@ -11,9 +11,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/testenv"
-	"github.com/dimetron/pi-go/internal/tui"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/tui"
 )
 
 // wizardKeys is one scripted interaction: named keys (enter, esc) or text.
@@ -102,7 +102,7 @@ func TestRunSetupSavesGatewayKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("runSetup: %v", err)
 	}
-	for _, want := range []string{"Configured agentgateway", "key    ~/.pi-go/.env", "model  anthropic/claude-sonnet-5"} {
+	for _, want := range []string{"Configured agentgateway", "key    ~/.pirate/.env", "model  anthropic/claude-sonnet-5"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("summary missing %q:\n%s", want, out)
 		}
@@ -111,7 +111,7 @@ func TestRunSetupSavesGatewayKey(t *testing.T) {
 		t.Errorf("summary printed the key unmasked:\n%s", out)
 	}
 
-	data, err := os.ReadFile(filepath.Join(home, ".pi-go", ".env"))
+	data, err := os.ReadFile(filepath.Join(home, ".pirate", ".env"))
 	if err != nil {
 		t.Fatalf("reading .env: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestRunSetupOpenGatewaySkipsKey(t *testing.T) {
 	if strings.Contains(out, "key    ") {
 		t.Errorf("summary reports a key that was never entered:\n%s", out)
 	}
-	if _, err := os.Stat(filepath.Join(home, ".pi-go", ".env")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(home, ".pirate", ".env")); !os.IsNotExist(err) {
 		t.Errorf("a blank gateway key wrote .env (stat err = %v)", err)
 	}
 	assertDefaultRole(t, "my-route", "agentgateway")
@@ -171,7 +171,7 @@ func TestRunSetupReportsWizardFailure(t *testing.T) {
 // not block the command that exists to repair it: setup warns and continues.
 func TestRunSetupStartsFromDefaultsOnBrokenConfig(t *testing.T) {
 	home := setupRunEnv(t, "", "")
-	dir := filepath.Join(home, ".pi-go")
+	dir := filepath.Join(home, ".pirate")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}

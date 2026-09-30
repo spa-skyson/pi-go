@@ -17,16 +17,16 @@ import (
 	"google.golang.org/adk/v2/session"
 	adktool "google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/autocompact"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/extension"
-	"github.com/dimetron/pi-go/internal/logger"
-	"github.com/dimetron/pi-go/internal/lsp"
-	"github.com/dimetron/pi-go/internal/memory"
-	pisession "github.com/dimetron/pi-go/internal/session"
-	"github.com/dimetron/pi-go/internal/subagent"
-	"github.com/dimetron/pi-go/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/autocompact"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/logger"
+	"github.com/spa-skyson/pi-rate/internal/lsp"
+	"github.com/spa-skyson/pi-rate/internal/memory"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/tools"
 )
 
 // Agent is an embedded pi-go coding agent: an ADK runner assembled with
@@ -52,7 +52,7 @@ type Agent struct {
 	// memSessions records, in order, the sessions this agent created. Close
 	// summarizes and completes them: a session that is never completed stays
 	// 'active' in the memory database forever, which is what the CLI has been
-	// doing — ~/.pi-go/memory/claude-mem.db held thousands of active sessions
+	// doing — ~/.pirate/memory/claude-mem.db held thousands of active sessions
 	// and zero completed ones.
 	memSessions []string
 	// project is the memory store's project key, which is the working
@@ -557,7 +557,7 @@ type providerNamer interface{ Provider() string }
 // means importing internal/provider, and that is exactly the dependency
 // TestPiagentStaysIsolated exists to prevent. So the window is stated rather
 // than inferred — [WithContextWindow] first, then context_window in
-// ~/.pi-go/config.json.
+// ~/.pirate/config.json.
 //
 // A zero result leaves compaction off rather than guessing, which is what an
 // unknown window means everywhere else in pi-go. An embedder using pimodels

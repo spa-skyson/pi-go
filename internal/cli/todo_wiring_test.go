@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 
 	adktool "google.golang.org/adk/v2/tool"
 )

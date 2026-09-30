@@ -152,7 +152,7 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-        run: go build -o pi ./cmd/pi
+        run: go build -o pirate ./cmd/pirate
       - name: Verify binary
         if: matrix.goos == 'linux'
-        run: ./pi --help || true
+        run: ./pirate --help || true

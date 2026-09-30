@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/atif"
+	"github.com/spa-skyson/pi-rate/internal/atif"
 )
 
 // The literals in this file were captured by running these exact fixtures

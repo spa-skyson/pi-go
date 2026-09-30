@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/webserver"
+	"github.com/spa-skyson/pi-rate/internal/webserver"
 )
 
 // --voice must fail at startup on Windows before any key is looked up, so the

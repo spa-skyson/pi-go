@@ -12,8 +12,8 @@ import (
 // session_id fields, it computes relative paths to the subagent trajectory files
 // and calls SetSubagentRef to link them in the parent trajectory.
 //
-// parentSessionDir is the directory of the parent session (e.g. ~/.pi-go/sessions/<id>).
-// sessionsBaseDir is the root sessions directory (e.g. ~/.pi-go/sessions).
+// parentSessionDir is the directory of the parent session (e.g. ~/.pirate/sessions/<id>).
+// sessionsBaseDir is the root sessions directory (e.g. ~/.pirate/sessions).
 func (w *Writer) LinkSubagentTrajectories(event *session.Event, parentSessionDir, sessionsBaseDir string) {
 	if event == nil || event.Content == nil {
 		return

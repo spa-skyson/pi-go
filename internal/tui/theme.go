@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 //go:embed themes.json
@@ -217,14 +219,12 @@ func (tm *ThemeManager) ClosestMatches(query string, max int) []string {
 	return matches
 }
 
-// saveThemeToConfig persists the theme name to ~/.pi-go/config.json.
+// saveThemeToConfig persists the theme name to ~/.pirate/config.json.
 func saveThemeToConfig(name string) {
-	home, err := os.UserHomeDir()
-	if err != nil {
+	if _, err := os.UserHomeDir(); err != nil {
 		return
 	}
-	configDir := filepath.Join(home, ".pi-go")
-	configPath := filepath.Join(configDir, "config.json")
+	configPath := filepath.Join(config.PirateHome(), "config.json")
 
 	// Read existing config.
 	var raw map[string]any
@@ -243,6 +243,6 @@ func saveThemeToConfig(name string) {
 	if err != nil {
 		return
 	}
-	_ = os.MkdirAll(configDir, 0o755)
+	_ = os.MkdirAll(filepath.Dir(configPath), 0o755)
 	_ = os.WriteFile(configPath, out, 0o644)
 }

@@ -7,7 +7,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/dimetron/pi-go/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/extension"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"

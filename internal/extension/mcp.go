@@ -23,10 +23,10 @@ import (
 	"google.golang.org/adk/v2/tool/toolutils"
 	"google.golang.org/genai"
 
-	piauth "github.com/dimetron/pi-go/internal/auth" // SDK auth pkg is imported above
-	"github.com/dimetron/pi-go/internal/browser"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/notice"
+	piauth "github.com/spa-skyson/pi-rate/internal/auth" // SDK auth pkg is imported above
+	"github.com/spa-skyson/pi-rate/internal/browser"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/notice"
 )
 
 var mcpConnectTimeout = 30 * time.Second

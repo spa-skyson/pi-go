@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/extension"
-	pisession "github.com/dimetron/pi-go/internal/session"
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -663,7 +663,7 @@ func (m *model) handleModelCommand(args []string) (tea.Model, tea.Cmd) {
 }
 
 // saveModelToConfig persists the model as the default role in
-// ~/.pi-go/config.json. Silently ignores errors (best-effort persistence).
+// ~/.pirate/config.json. Silently ignores errors (best-effort persistence).
 func saveModelToConfig(modelName string) {
 	_ = config.SaveDefaultRole(modelName, "")
 }
@@ -1199,7 +1199,7 @@ func (m *model) handleMCPCommand() {
 	if len(servers) == 0 {
 		m.chatModel.Messages = append(m.chatModel.Messages, message{
 			role:    "assistant",
-			content: "No MCP servers configured. Add servers under `mcp.servers` in `~/.pi-go/config.json`.",
+			content: "No MCP servers configured. Add servers under `mcp.servers` in `~/.pirate/config.json`.",
 		})
 		return
 	}

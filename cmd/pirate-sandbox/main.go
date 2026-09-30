@@ -16,12 +16,12 @@ import (
 	"syscall"
 )
 
-//go:embed pi-profile.sb
+//go:embed pirate-profile.sb
 var profile string
 
 const logPredicate = `eventMessage CONTAINS "sandbox" AND eventMessage CONTAINS "deny"`
 
-// paramDecl matches the "(param ...)" declarations in pi-profile.sb.
+// paramDecl matches the "(param ...)" declarations in pirate-profile.sb.
 // sandbox-exec does not accept them, so they are stripped before use — the same
 // thing the sed pipeline in the profile's usage comment does.
 var paramDecl = regexp.MustCompile(`(?m)^\(param\s+.*\)\s*$\n?`)
@@ -52,7 +52,7 @@ func exitCodeFor(err error, stderr io.Writer) int {
 	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		return exitErr.ExitCode()
 	}
-	fmt.Fprintf(stderr, "pi-sandbox: exec failed: %v\n", err)
+	fmt.Fprintf(stderr, "pirate-sandbox: exec failed: %v\n", err)
 	return 1
 }
 
@@ -61,7 +61,7 @@ func exitCodeFor(err error, stderr io.Writer) int {
 // actually spawning sandbox-exec and the macOS log stream.
 type config struct {
 	profile    string
-	piName     string   // binary to look up on PATH ("pi")
+	piName     string   // binary to look up on PATH ("pirate")
 	sandboxCmd string   // "sandbox-exec"
 	logCmd     []string // macOS log stream command
 	logPath    string   // where denials are appended
@@ -74,7 +74,7 @@ type config struct {
 func defaultConfig() config {
 	return config{
 		profile:    profile,
-		piName:     "pi",
+		piName:     "pirate",
 		sandboxCmd: "sandbox-exec",
 		logCmd:     []string{"log", "stream", "--style", "compact", "--predicate", logPredicate},
 		logPath:    "sandbox.log",
@@ -94,12 +94,12 @@ func main() {
 func run(ctx context.Context, cfg config) int {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Fprintf(cfg.stderr, "pi-sandbox: cannot determine HOME: %v\n", err)
+		fmt.Fprintf(cfg.stderr, "pirate-sandbox: cannot determine HOME: %v\n", err)
 		return 1
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
-		fmt.Fprintf(cfg.stderr, "pi-sandbox: cannot determine CWD: %v\n", err)
+		fmt.Fprintf(cfg.stderr, "pirate-sandbox: cannot determine CWD: %v\n", err)
 		return 1
 	}
 
@@ -107,7 +107,7 @@ func run(ctx context.Context, cfg config) int {
 
 	piBin, err := exec.LookPath(cfg.piName)
 	if err != nil {
-		fmt.Fprintf(cfg.stderr, "pi-sandbox: cannot find %q in PATH: %v\n", cfg.piName, err)
+		fmt.Fprintf(cfg.stderr, "pirate-sandbox: cannot find %q in PATH: %v\n", cfg.piName, err)
 		return 1
 	}
 
@@ -116,7 +116,7 @@ func run(ctx context.Context, cfg config) int {
 
 	logFile, err := os.OpenFile(cfg.logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
-		fmt.Fprintf(cfg.stderr, "pi-sandbox: cannot open %s: %v\n", cfg.logPath, err)
+		fmt.Fprintf(cfg.stderr, "pirate-sandbox: cannot open %s: %v\n", cfg.logPath, err)
 		return 1
 	}
 	defer logFile.Close()
@@ -126,12 +126,12 @@ func run(ctx context.Context, cfg config) int {
 	logCmd := exec.CommandContext(ctx, cfg.logCmd[0], cfg.logCmd[1:]...)
 	logPipe, err := logCmd.StdoutPipe()
 	if err != nil {
-		fmt.Fprintf(cfg.stderr, "pi-sandbox: log stream pipe: %v\n", err)
+		fmt.Fprintf(cfg.stderr, "pirate-sandbox: log stream pipe: %v\n", err)
 		return 1
 	}
 	logCmd.Stderr = cfg.stderr
 	if err := logCmd.Start(); err != nil {
-		fmt.Fprintf(cfg.stderr, "pi-sandbox: log stream start: %v\n", err)
+		fmt.Fprintf(cfg.stderr, "pirate-sandbox: log stream start: %v\n", err)
 		return 1
 	}
 	logWg.Add(1)

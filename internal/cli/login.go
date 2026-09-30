@@ -8,10 +8,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/auth"
-	"github.com/dimetron/pi-go/internal/browser"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/auth"
+	"github.com/spa-skyson/pi-rate/internal/browser"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/provider"
 )
 
 var flagLoginModel string
@@ -26,8 +26,8 @@ Supported providers:
   codex        ChatGPT (chatgpt.com) — device auth
 
 Examples:
-  pi login codex                        # Authenticate with Codex
-  pi login                              # Interactive provider selection`,
+  pirate login codex                        # Authenticate with Codex
+  pirate login                              # Interactive provider selection`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runLogin,
 	}
@@ -190,7 +190,7 @@ func saveResult(result *auth.Result) error {
 
 	masked := maskKey(result.APIKey)
 	fmt.Printf("\nSuccessfully logged in to %s\n", result.Provider)
-	fmt.Printf("Key saved to ~/.pi-go/.env (%s)\n", masked)
+	fmt.Printf("Key saved to ~/.pirate/.env (%s)\n", masked)
 	return nil
 }
 

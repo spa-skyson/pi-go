@@ -5,7 +5,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/dimetron/pi-go/internal/sop"
+	"github.com/spa-skyson/pi-rate/internal/sop"
 )
 
 // stageStatus is what the sidebar draws for one node of the SOP graph. It

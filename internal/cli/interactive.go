@@ -18,23 +18,23 @@ import (
 	adkmodel "google.golang.org/adk/v2/model"
 	adktool "google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/agent"
-	"github.com/dimetron/pi-go/internal/autocompact"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/ctxwindow"
-	"github.com/dimetron/pi-go/internal/extension"
-	"github.com/dimetron/pi-go/internal/guardrail"
-	"github.com/dimetron/pi-go/internal/httplog"
-	"github.com/dimetron/pi-go/internal/logger"
-	"github.com/dimetron/pi-go/internal/lsp"
-	"github.com/dimetron/pi-go/internal/memory"
-	"github.com/dimetron/pi-go/internal/notice"
-	"github.com/dimetron/pi-go/internal/permission"
-	"github.com/dimetron/pi-go/internal/provider"
-	pisession "github.com/dimetron/pi-go/internal/session"
-	"github.com/dimetron/pi-go/internal/subagent"
-	"github.com/dimetron/pi-go/internal/tools"
-	"github.com/dimetron/pi-go/internal/tui"
+	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/autocompact"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/ctxwindow"
+	"github.com/spa-skyson/pi-rate/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/guardrail"
+	"github.com/spa-skyson/pi-rate/internal/httplog"
+	"github.com/spa-skyson/pi-rate/internal/logger"
+	"github.com/spa-skyson/pi-rate/internal/lsp"
+	"github.com/spa-skyson/pi-rate/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/notice"
+	"github.com/spa-skyson/pi-rate/internal/permission"
+	"github.com/spa-skyson/pi-rate/internal/provider"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/tools"
+	"github.com/spa-skyson/pi-rate/internal/tui"
 )
 
 // initResources tracks resources created during deferred init for cleanup.
@@ -577,10 +577,8 @@ func deferredInitCoreTools(sandboxRoot, worktreeDir, headerSessionID string, tod
 	}
 	res.sandbox = sandbox
 
-	// Allow agent tools to access ~/.pi-go/ (logs, sessions, config).
-	if home, hErr := os.UserHomeDir(); hErr == nil {
-		_ = sandbox.AddExtraDir(filepath.Join(home, ".pi-go"))
-	}
+	// Allow agent tools to access the Pi-rate home (logs, sessions, config).
+	_ = sandbox.AddExtraDir(config.PirateHome())
 
 	// The supervisor is built here, before the UI event channel exists, because
 	// the bash tool needs it at construction time. Its sink is attached later,
@@ -1185,11 +1183,7 @@ func deferredMemoryDBPath(memCfg config.MemoryConfig) string {
 	if memCfg.DBPath != "" {
 		return memCfg.DBPath
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".pi-go", "memory", "claude-mem.db")
+	return filepath.Join(config.PirateHome(), "memory", "claude-mem.db")
 }
 
 func deferredInitTotal(cfg config.Config) int {

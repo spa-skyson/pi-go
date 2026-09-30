@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/voicegemini"
+	"github.com/spa-skyson/pi-rate/internal/voicegemini"
 )
 
 // fakePty returns a bridge that is "running" without a child process, plus the

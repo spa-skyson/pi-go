@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // writeGlobalConfig points HOME at a temp dir holding the given config, so
@@ -18,7 +18,7 @@ func writeGlobalConfig(t *testing.T, cfg map[string]any) {
 	home := t.TempDir()
 	testenv.SetHome(t, home)
 
-	dir := filepath.Join(home, ".pi-go")
+	dir := filepath.Join(home, ".pirate")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -30,7 +30,7 @@ func writeGlobalConfig(t *testing.T, cfg map[string]any) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	// config.Load also merges ./.pi-go/config.json from the process working
+	// config.Load also merges ./.pirate/config.json from the process working
 	// directory, which during `go test` is the package source tree. Move to a
 	// clean dir so the repo's own config cannot alter the result.
 	t.Chdir(t.TempDir())

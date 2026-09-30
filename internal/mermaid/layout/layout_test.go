@@ -3,7 +3,7 @@ package layout
 import (
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/mermaid/graph"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/graph"
 )
 
 func TestComputeLayoutSimpleChain(t *testing.T) {

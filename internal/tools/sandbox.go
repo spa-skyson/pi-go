@@ -13,6 +13,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 const (
@@ -511,8 +513,8 @@ func shouldSkipPath(relPath string, d fs.DirEntry, patterns []GitignorePattern) 
 	base := d.Name()
 
 	// Hardcoded directory skips
-	// Explicitly do NOT skip .pi-go, .cursor, .claude - these contain agent/skill files
-	agentDirs := map[string]bool{".pi-go": true, ".cursor": true, ".claude": true}
+	// Explicitly do NOT skip .pirate, .cursor, .claude - these contain agent/skill files
+	agentDirs := map[string]bool{config.ProjectDirName: true, ".cursor": true, ".claude": true}
 	if (strings.HasPrefix(base, ".") && base != "." && !agentDirs[base]) || base == "node_modules" || base == "vendor" || base == "__pycache__" {
 		return true
 	}

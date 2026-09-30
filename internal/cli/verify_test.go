@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/attest"
+	"github.com/spa-skyson/pi-rate/internal/attest"
 )
 
 func provenanceReport() verifyReport {
@@ -19,19 +19,19 @@ func provenanceReport() verifyReport {
 		Results: []*attest.Result{
 			{
 				PredicateType:  attest.PredicateSLSAProvenanceV1,
-				SignerIdentity: "https://github.com/dimetron/pi-go/.github/workflows/release.yml@refs/tags/v0.0.74",
+				SignerIdentity: "https://github.com/spa-skyson/pi-rate/.github/workflows/release.yml@refs/tags/v0.0.74",
 				SignedAt:       time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC),
 				Provenance: &attest.Provenance{
-					Repository: "github.com/dimetron/pi-go",
+					Repository: "github.com/spa-skyson/pi-rate",
 					Workflow:   ".github/workflows/release.yml",
 					Ref:        "refs/tags/v0.0.74",
 					Commit:     "4086645",
-					RunURL:     "https://github.com/dimetron/pi-go/actions/runs/1234",
+					RunURL:     "https://github.com/spa-skyson/pi-rate/actions/runs/1234",
 				},
 			},
 			{
 				PredicateType:  "https://spdx.dev/Document/v2.3",
-				SignerIdentity: "https://github.com/dimetron/pi-go/.github/workflows/release.yml@refs/tags/v0.0.74",
+				SignerIdentity: "https://github.com/spa-skyson/pi-rate/.github/workflows/release.yml@refs/tags/v0.0.74",
 				SBOM: &attest.SBOM{
 					Format:     "SPDX",
 					Version:    "2.3",
@@ -52,7 +52,7 @@ func TestWriteVerifyText_Verified(t *testing.T) {
 		"/usr/local/bin/pi",
 		"sha256:deadbeef",
 		"✓ build provenance",
-		"github.com/dimetron/pi-go",
+		"github.com/spa-skyson/pi-rate",
 		".github/workflows/release.yml@refs/tags/v0.0.74",
 		"4086645",
 		"✓ SBOM",

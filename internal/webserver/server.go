@@ -15,7 +15,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/dimetron/pi-go/internal/voicegemini"
+	"github.com/spa-skyson/pi-rate/internal/voicegemini"
 )
 
 // ServerV2 is the main web server.

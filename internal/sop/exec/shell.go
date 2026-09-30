@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dimetron/pi-go/internal/sop"
-	"github.com/dimetron/pi-go/internal/sop/validate"
+	"github.com/spa-skyson/pi-rate/internal/sop"
+	"github.com/spa-skyson/pi-rate/internal/sop/validate"
 )
 
 // RetryExitCode is the exit status a stage script uses to say "not yet" rather

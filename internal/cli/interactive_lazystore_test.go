@@ -7,9 +7,9 @@ import (
 
 	adktool "google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/memory"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // mockNamedTool is a minimal adktool.Tool used to drive afterTool.

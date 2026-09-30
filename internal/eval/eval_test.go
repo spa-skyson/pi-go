@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/atif"
+	"github.com/spa-skyson/pi-rate/internal/atif"
 )
 
 // writeTraj writes traj to <dir>/<sessionID>/trajectory.atif.json and returns

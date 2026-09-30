@@ -1,6 +1,11 @@
 package tui
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/charmbracelet/x/ansi"
+)
 
 func TestFaceRenderer_DefaultMood(t *testing.T) {
 	fr := NewFaceRenderer()
@@ -62,6 +67,42 @@ func TestAgentMood_Eyes(t *testing.T) {
 	got := AgentMood(999).Eyes()
 	if got != "◕ ◕" {
 		t.Errorf("Eyes() for unknown mood = %q, want %q", got, "◕ ◕")
+	}
+}
+
+// TestMascot_PirateArtGrid pins the pirate's slot: every mood draws the same
+// 8×5 monospace box, and no two moods draw the same art. The width is the
+// sidebar slot — if a mood's row measures differently, the top of the frame
+// shifts on every mood change.
+func TestMascot_PirateArtGrid(t *testing.T) {
+	moods := []AgentMood{
+		MoodIdle, MoodThinking, MoodProcessing,
+		MoodToolCall, MoodSpeaking, MoodHappy, MoodSad,
+	}
+
+	seen := map[string]bool{}
+	for _, mood := range moods {
+		art := mood.Mascot()
+		if art == "" {
+			t.Fatalf("mood %v: empty mascot", mood)
+		}
+		if seen[art] {
+			t.Errorf("mood %v: mascot art is not distinct from another mood", mood)
+		}
+		seen[art] = true
+
+		rows := strings.Split(art, "\n")
+		if len(rows) != 5 {
+			t.Errorf("mood %v: mascot has %d rows, want 5", mood, len(rows))
+		}
+		for i, row := range rows {
+			if w := ansi.StringWidth(row); w != 8 {
+				t.Errorf("mood %v: mascot row %d is %d cells wide, want 8 (the sidebar slot)", mood, i, w)
+			}
+		}
+	}
+	if len(seen) != len(moods) {
+		t.Errorf("got %d distinct mascots, want %d", len(seen), len(moods))
 	}
 }
 

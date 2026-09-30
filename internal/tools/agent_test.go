@@ -3,8 +3,8 @@ package tools
 import (
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 func TestAgentTool_Registration(t *testing.T) {

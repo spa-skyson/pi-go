@@ -180,7 +180,7 @@ func TestPluginCmd_EmptyStates(t *testing.T) {
 	if !strings.Contains(out, "No plugins installed") {
 		t.Errorf("empty list output = %q", out)
 	}
-	if !strings.Contains(out, "pi plugin install") {
+	if !strings.Contains(out, "pirate plugin install") {
 		t.Error("empty list should tell the user how to install a plugin")
 	}
 
@@ -230,8 +230,8 @@ func TestPluginCmd_ArgValidation(t *testing.T) {
 }
 
 func TestPluginHome(t *testing.T) {
-	t.Run("honors PI_GO_HOME", func(t *testing.T) {
-		t.Setenv("PI_GO_HOME", "/custom/home")
+	t.Run("honors PIRATE_HOME", func(t *testing.T) {
+		t.Setenv("PIRATE_HOME", "/custom/home")
 		got, err := pluginHome()
 		if err != nil {
 			t.Fatal(err)
@@ -241,6 +241,7 @@ func TestPluginHome(t *testing.T) {
 		}
 	})
 	t.Run("defaults under the user home", func(t *testing.T) {
+		t.Setenv("PIRATE_HOME", "")
 		t.Setenv("PI_GO_HOME", "")
 		got, err := pluginHome()
 		if err != nil {
@@ -250,7 +251,7 @@ func TestPluginHome(t *testing.T) {
 		if err != nil {
 			t.Skip("no user home available")
 		}
-		if got != filepath.Join(userHome, ".pi-go") {
+		if got != filepath.Join(userHome, ".pirate") {
 			t.Errorf("pluginHome() = %q", got)
 		}
 	})

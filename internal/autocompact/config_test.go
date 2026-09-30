@@ -3,10 +3,10 @@ package autocompact
 import (
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/logger"
-	pisession "github.com/dimetron/pi-go/internal/session"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/logger"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // TestAutoCompactConfigFrom covers the config.Config -> AutoCompactConfig
@@ -98,7 +98,7 @@ func withEnabled(c pisession.AutoCompactConfig, v bool) pisession.AutoCompactCon
 }
 
 // newTempLogger builds a logger rooted in a temp HOME so the test never
-// appends to the developer's real ~/.pi-go/log tree.
+// appends to the developer's real ~/.pirate/log tree.
 func newTempLogger(t *testing.T) *logger.Logger {
 	t.Helper()
 	testenv.SetHome(t, t.TempDir())
@@ -131,7 +131,7 @@ func TestAutoCompactDepsReport(t *testing.T) {
 		}
 	})
 
-	// The Log sink writes to ~/.pi-go/log, so these point HOME at a temp dir.
+	// The Log sink writes to ~/.pirate/log, so these point HOME at a temp dir.
 	t.Run("Log alone does not panic and does not need Notify", func(t *testing.T) {
 		d := Deps{Log: newTempLogger(t)}
 		d.report("logged only")

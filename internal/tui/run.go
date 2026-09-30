@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/procs"
-	"github.com/dimetron/pi-go/internal/retry"
-	"github.com/dimetron/pi-go/internal/session"
-	"github.com/dimetron/pi-go/internal/sop"
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/procs"
+	"github.com/spa-skyson/pi-rate/internal/retry"
+	"github.com/spa-skyson/pi-rate/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/sop"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 
 	tea "charm.land/bubbletea/v2"
 )

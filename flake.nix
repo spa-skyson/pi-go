@@ -37,13 +37,13 @@
             ldflags = [
               "-s"
               "-w"
-              "-X github.com/dimetron/pi-go/internal/cli.Version=${version}"
-              "-X github.com/dimetron/pi-go/internal/cli.BuildTag=${self.shortRev or "source"}"
+              "-X github.com/spa-skyson/pi-rate/internal/cli.Version=${version}"
+              "-X github.com/spa-skyson/pi-rate/internal/cli.BuildTag=${self.shortRev or "source"}"
             ];
 
             meta = {
               description = "An extensible AI coding agent";
-              homepage = "https://github.com/dimetron/pi-go";
+              homepage = "https://github.com/spa-skyson/pi-rate";
               license = pkgs.lib.licenses.mit;
               mainProgram = "pi";
             };

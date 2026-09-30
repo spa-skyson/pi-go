@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/subagent"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 // Tests pinning the behavior of find.go, session_sweep.go and subagent.go
@@ -53,7 +53,7 @@ func cogATree(t *testing.T) *Sandbox {
 	mk("__pycache__/x.go", "package x")
 	mk(".hidden/h.go", "package h")
 	mk(".claude/agent.go", "package agent")
-	mk(".pi-go/tasks/t.go", "package t")
+	mk(".pirate/tasks/t.go", "package t")
 	return sb
 }
 
@@ -67,12 +67,12 @@ func TestCogAFindHandlerGolden(t *testing.T) {
 	}{
 		{
 			// Bare name pattern: matched against the file name, so it reaches
-			// every depth. .claude and .pi-go survive; .hidden, node_modules,
+			// every depth. .claude and .pirate survive; .hidden, node_modules,
 			// vendor, __pycache__ and the gitignored build/ and ignored.go do not.
 			name:    "name pattern reaches every depth",
 			pattern: "*.go",
 			want: []string{
-				".claude/agent.go", ".pi-go/tasks/t.go", "main.go",
+				".claude/agent.go", ".pirate/tasks/t.go", "main.go",
 				"src/app.go", "src/app_test.go", "src/deep/nested/thing.go",
 			},
 		},
@@ -80,7 +80,7 @@ func TestCogAFindHandlerGolden(t *testing.T) {
 			name:    "leading doublestar is stripped and behaves the same",
 			pattern: "**/*.go",
 			want: []string{
-				".claude/agent.go", ".pi-go/tasks/t.go", "main.go",
+				".claude/agent.go", ".pirate/tasks/t.go", "main.go",
 				"src/app.go", "src/app_test.go", "src/deep/nested/thing.go",
 			},
 		},
@@ -107,7 +107,7 @@ func TestCogAFindHandlerGolden(t *testing.T) {
 			name:    "star matches every surviving file",
 			pattern: "*",
 			want: []string{
-				".claude/agent.go", ".pi-go/tasks/t.go", "main.go", "readme.md",
+				".claude/agent.go", ".pirate/tasks/t.go", "main.go", "readme.md",
 				"src/app.go", "src/app_test.go", "src/deep/nested/thing.go",
 			},
 		},
@@ -117,7 +117,7 @@ func TestCogAFindHandlerGolden(t *testing.T) {
 			name:    "trailing-slash doublestar matches everything",
 			pattern: "**/",
 			want: []string{
-				".claude/agent.go", ".pi-go/tasks/t.go", "main.go", "readme.md",
+				".claude/agent.go", ".pirate/tasks/t.go", "main.go", "readme.md",
 				"src/app.go", "src/app_test.go", "src/deep/nested/thing.go",
 			},
 		},

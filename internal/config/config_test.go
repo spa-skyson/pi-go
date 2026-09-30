@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 func TestDefaults(t *testing.T) {
@@ -285,7 +285,7 @@ func TestLoad_WithGlobalAndProjectConfig(t *testing.T) {
 	home := t.TempDir()
 
 	// Create global config
-	globalDir := filepath.Join(home, ".pi-go")
+	globalDir := filepath.Join(home, ".pirate")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +295,7 @@ func TestLoad_WithGlobalAndProjectConfig(t *testing.T) {
 	}
 
 	// Create project config
-	projectDir := filepath.Join(dir, ".pi-go")
+	projectDir := filepath.Join(dir, ".pirate")
 	if err := os.MkdirAll(projectDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -340,7 +340,7 @@ func TestLoad_MergesDefaultModelWithExistingRoles(t *testing.T) {
 }
 
 func TestExtraHeadersFromConfig(t *testing.T) {
-	// Load() merges ~/.pi-go/config.json under the project config, so without
+	// Load() merges ~/.pirate/config.json under the project config, so without
 	// a scratch HOME the developer's own settings leak into the assertions.
 	testenv.SetHome(t, t.TempDir())
 	tmp := t.TempDir()
@@ -350,7 +350,7 @@ func TestExtraHeadersFromConfig(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(origDir) }()
 
-	cfgDir := filepath.Join(tmp, ".pi-go")
+	cfgDir := filepath.Join(tmp, ".pirate")
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +398,7 @@ func TestInsecureSkipTLSFromConfig(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(origDir) }()
 
-	cfgDir := filepath.Join(tmp, ".pi-go")
+	cfgDir := filepath.Join(tmp, ".pirate")
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -437,7 +437,7 @@ func TestCACertFromConfig(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(origDir) }()
 
-	cfgDir := filepath.Join(tmp, ".pi-go")
+	cfgDir := filepath.Join(tmp, ".pirate")
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -501,7 +501,7 @@ func TestMemoryConfigFromJSON(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(origDir) }()
 
-	cfgDir := filepath.Join(tmp, ".pi-go")
+	cfgDir := filepath.Join(tmp, ".pirate")
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -561,7 +561,7 @@ func TestLoad_MigratesDefaultModelToRolesActual(t *testing.T) {
 	home := t.TempDir()
 
 	// Write only a global config with defaultModel and NO roles.
-	globalDir := filepath.Join(home, ".pi-go")
+	globalDir := filepath.Join(home, ".pirate")
 	if err := os.MkdirAll(globalDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -600,7 +600,7 @@ func TestLoad_MigratesDefaultModelWhenDefaultRoleMissing(t *testing.T) {
 	tmp := t.TempDir()
 	home := t.TempDir()
 
-	globalDir := filepath.Join(home, ".pi-go")
+	globalDir := filepath.Join(home, ".pirate")
 	if err := os.MkdirAll(globalDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -682,7 +682,7 @@ func TestAutoDetectProviderOpenAIPrefix(t *testing.T) {
 func TestLoadMCPServers_GlobalOnly(t *testing.T) {
 	home := t.TempDir()
 
-	globalDir := filepath.Join(home, ".pi-go")
+	globalDir := filepath.Join(home, ".pirate")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -706,7 +706,7 @@ func TestLoadMCPServers_ProjectOverridesGlobal(t *testing.T) {
 	home := t.TempDir()
 
 	// Global has a server.
-	globalDir := filepath.Join(home, ".pi-go")
+	globalDir := filepath.Join(home, ".pirate")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -716,7 +716,7 @@ func TestLoadMCPServers_ProjectOverridesGlobal(t *testing.T) {
 	}
 
 	// Project has a different server.
-	projectDir := filepath.Join(tmp, ".pi-go")
+	projectDir := filepath.Join(tmp, ".pirate")
 	if err := os.MkdirAll(projectDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -764,7 +764,7 @@ func TestLoad_MergesMCPJSON(t *testing.T) {
 	home := t.TempDir()
 
 	// Global config.json with no MCP servers.
-	globalDir := filepath.Join(home, ".pi-go")
+	globalDir := filepath.Join(home, ".pirate")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -800,7 +800,7 @@ func TestLoad_MCPConfigOverridesMCPJSON(t *testing.T) {
 	tmp := t.TempDir()
 	home := t.TempDir()
 
-	globalDir := filepath.Join(home, ".pi-go")
+	globalDir := filepath.Join(home, ".pirate")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -847,7 +847,7 @@ func TestLoadFrom_UsesProvidedCWDForProjectMCPJSON(t *testing.T) {
 	}
 
 	home := t.TempDir()
-	globalDir := filepath.Join(home, ".pi-go")
+	globalDir := filepath.Join(home, ".pirate")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -856,7 +856,7 @@ func TestLoadFrom_UsesProvidedCWDForProjectMCPJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	projectDir := filepath.Join(projectRoot, ".pi-go")
+	projectDir := filepath.Join(projectRoot, ".pirate")
 	if err := os.MkdirAll(projectDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -892,7 +892,7 @@ func TestLoadFrom_MergesMCPJSONWithConfigServers(t *testing.T) {
 	tmp := t.TempDir()
 	home := t.TempDir()
 
-	globalDir := filepath.Join(home, ".pi-go")
+	globalDir := filepath.Join(home, ".pirate")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -940,12 +940,12 @@ func TestLoadMCPServers_ObjectFormat(t *testing.T) {
 	// Claude Desktop format: mcpServers is an object keyed by server name.
 	tmp := t.TempDir()
 	home := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(home, ".pi-go"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, ".pirate"), 0755); err != nil {
 		t.Fatal(err)
 	}
 	// Object format (Claude Desktop / NPM compatible).
 	objJSON := `{"mcpServers": {"everything": {"command": "go", "args": ["run", "hack/test/mcp/main.go"]}, "cloudflare-api": {"url": "https://mcp.cloudflare.com/mcp"}}}`
-	if err := os.WriteFile(filepath.Join(home, ".pi-go", "mcp.json"), []byte(objJSON), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(home, ".pirate", "mcp.json"), []byte(objJSON), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1203,7 +1203,7 @@ func TestSubstituteEnv_MissingVar(t *testing.T) {
 
 func TestLoadEnvFileFrom_FileNotFound(t *testing.T) {
 	// When the .env file doesn't exist, should return empty map (not error).
-	// However, loadEnvFileFrom also checks HOME/.pi-go/.env which may exist.
+	// However, loadEnvFileFrom also checks HOME/.pirate/.env which may exist.
 	// So we test the underlying mergeEnvFile function directly.
 	dst := make(map[string]string)
 	mergeEnvFile(dst, "/nonexistent/path/.env")
@@ -1286,7 +1286,7 @@ func TestConfig_Save(t *testing.T) {
 	}
 
 	// Verify the file was written.
-	configPath := filepath.Join(tmpDir, ".pi-go", "config.json")
+	configPath := filepath.Join(tmpDir, ".pirate", "config.json")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("failed to read saved config: %v", err)
@@ -1313,7 +1313,7 @@ func TestSaveDefaultRole(t *testing.T) {
 	}
 
 	// Verify the default role was saved.
-	configPath := filepath.Join(tmpDir, ".pi-go", "config.json")
+	configPath := filepath.Join(tmpDir, ".pirate", "config.json")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("failed to read saved config: %v", err)
@@ -1378,7 +1378,7 @@ func TestResolveBaseURLs_NilConfigMapFallsBackToEnv(t *testing.T) {
 func TestLoad_BaseURLsFromJSON(t *testing.T) {
 	testenv.SetHome(t, t.TempDir())
 	dir := t.TempDir()
-	projectDir := filepath.Join(dir, ".pi-go")
+	projectDir := filepath.Join(dir, ".pirate")
 	if err := os.MkdirAll(projectDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -1406,11 +1406,11 @@ func clearBaseURLEnv(t *testing.T) {
 }
 
 // TestSave_DoesNotPersistMCPJSONServers verifies that servers merged from
-// .pi-go/mcp.json are stripped on Save, so SaveDefaultRole (Load → mutate →
+// .pirate/mcp.json are stripped on Save, so SaveDefaultRole (Load → mutate →
 // Save) cannot copy project-scoped servers into the global config.json.
 func TestSave_DoesNotPersistMCPJSONServers(t *testing.T) {
 	home := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(home, ".pi-go"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, ".pirate"), 0755); err != nil {
 		t.Fatal(err)
 	}
 	testenv.SetHome(t, home)
@@ -1424,7 +1424,7 @@ func TestSave_DoesNotPersistMCPJSONServers(t *testing.T) {
 		t.Fatalf("Save() error: %v", err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(home, ".pi-go", "config.json"))
+	data, err := os.ReadFile(filepath.Join(home, ".pirate", "config.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

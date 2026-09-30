@@ -9,9 +9,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dimetron/pi-go/internal/audit"
-	"github.com/dimetron/pi-go/internal/notice"
-	"github.com/dimetron/pi-go/internal/plugin"
+	"github.com/spa-skyson/pi-rate/internal/audit"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/notice"
+	"github.com/spa-skyson/pi-rate/internal/plugin"
 )
 
 // Skill represents a loaded skill from a SKILL.md file.
@@ -77,7 +78,7 @@ func LoadSkillsWithOptions(opts LoadOptions, dirs ...string) ([]Skill, error) {
 	}
 
 	if len(blocked) > 0 {
-		notice.Notifyf("%d skill(s) blocked due to security audit. Run 'pi audit' for details.", len(blocked))
+		notice.Notifyf("%d skill(s) blocked due to security audit. Run 'pirate audit' for details.", len(blocked))
 	}
 
 	return skills, nil
@@ -451,8 +452,8 @@ func SkillBodySize(skills []Skill, name string) (int, bool) {
 }
 
 // DefaultSkillDirs returns the default skill directories to search.
-// It returns user-level (~/.pi-go/skills) plus project-level directories
-// (.pi-go/skills, .claude/skills, .cursor/skills) found by walking up
+// It returns user-level (~/.pirate/skills) plus project-level directories
+// (.pirate/skills, .claude/skills, .cursor/skills) found by walking up
 // from the current working directory.
 func DefaultSkillDirs() []string {
 	cwd, err := os.Getwd()
@@ -464,8 +465,8 @@ func DefaultSkillDirs() []string {
 
 // DefaultSkillDirsIn returns skill directories relative to the given root.
 // Installed plugins come first (lowest priority), then the user-level skill
-// directory (~/.pi-go/skills), then the project-level directories
-// (.pi-go/skills, .claude/skills, .cursor/skills) found by walking up from root.
+// directory (~/.pirate/skills), then the project-level directories
+// (.pirate/skills, .claude/skills, .cursor/skills) found by walking up from root.
 //
 // Order is precedence: a later directory overrides an earlier one, so a plugin
 // can never silently replace a skill the user wrote or customized under the
@@ -498,12 +499,12 @@ func DefaultSkillDirsIn(root string) []string {
 
 	// User-level skill directory.
 	if homeDir != "" {
-		add(filepath.Join(homeDir, ".pi-go", "skills"))
+		add(filepath.Join(config.PirateHome(), "skills"))
 	}
 
 	// Project-level skill directories, walking up from root.
 	for _, rel := range []string{
-		filepath.Join(".pi-go", "skills"),
+		filepath.Join(config.ProjectDirName, "skills"),
 		filepath.Join(".claude", "skills"),
 		filepath.Join(".cursor", "skills"),
 	} {

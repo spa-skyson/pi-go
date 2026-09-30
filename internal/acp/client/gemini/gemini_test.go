@@ -10,7 +10,7 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 
-	shared "github.com/dimetron/pi-go/internal/acp"
+	shared "github.com/spa-skyson/pi-rate/internal/acp"
 )
 
 // TestRunnerStartRejectsEmptyPrompt verifies that an empty prompt is rejected.

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/dimetron/pi-go/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/extension"
 )
 
 // CompletionType identifies what kind of completion to perform.

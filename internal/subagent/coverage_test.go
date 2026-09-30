@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	sharedacp "github.com/dimetron/pi-go/internal/acp"
-	"github.com/dimetron/pi-go/internal/testenv"
+	sharedacp "github.com/spa-skyson/pi-rate/internal/acp"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // TestOrchestrator_SetProviderOptions exercises the 0%-covered provider-option
@@ -531,7 +531,7 @@ func (e stubError) Error() string { return string(e) }
 
 // TestDiscoverAgents_UserDirLoadError injects a path that Stat sees as a dir
 // but ReadDir cannot read — we fall back to the "loading user agents" branch
-// only if readdir errors. Use a file named .pi-go/agents that's actually a
+// only if readdir errors. Use a file named .pirate/agents that's actually a
 // regular file so ReadDir returns a not-a-directory error.
 func TestDiscoverAgents_UserDirReadError(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -543,10 +543,10 @@ func TestDiscoverAgents_UserDirReadError(t *testing.T) {
 	tmpHome := t.TempDir()
 	testenv.SetHome(t, tmpHome)
 
-	// Create ~/.pi-go/agents as a FILE (not a dir) so ReadDir errors.
-	piDir := filepath.Join(tmpHome, ".pi-go")
+	// Create ~/.pirate/agents as a FILE (not a dir) so ReadDir errors.
+	piDir := filepath.Join(tmpHome, ".pirate")
 	if err := os.MkdirAll(piDir, 0o755); err != nil {
-		t.Fatalf("mkdir .pi-go: %v", err)
+		t.Fatalf("mkdir .pirate: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(piDir, "agents"), []byte("not a dir"), 0o644); err != nil {
 		t.Fatalf("write file: %v", err)
@@ -554,7 +554,7 @@ func TestDiscoverAgents_UserDirReadError(t *testing.T) {
 
 	_, err := DiscoverAgents(t.TempDir(), ScopeBoth)
 	if err == nil {
-		t.Fatal("expected error when ~/.pi-go/agents is a file")
+		t.Fatal("expected error when ~/.pirate/agents is a file")
 	}
 }
 

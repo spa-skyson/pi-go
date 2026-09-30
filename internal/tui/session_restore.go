@@ -6,7 +6,7 @@ import (
 
 	"google.golang.org/adk/v2/session"
 
-	"github.com/dimetron/pi-go/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/agent"
 )
 
 // restoreTranscript rebuilds the visible chat transcript from a resumed

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/permission"
+	"github.com/spa-skyson/pi-rate/internal/permission"
 )
 
 // The real-world shape: flat tool rules plus a nested bash block with quoted

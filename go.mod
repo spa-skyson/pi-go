@@ -1,4 +1,4 @@
-module github.com/dimetron/pi-go
+module github.com/spa-skyson/pi-rate
 
 go 1.27.0
 

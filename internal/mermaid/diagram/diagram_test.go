@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/mermaid/renderer"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/renderer"
 )
 
 func assertCanvasContains(t *testing.T, c *renderer.Canvas, substr string) {

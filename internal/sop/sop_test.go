@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 func TestLoadPDD_EmbeddedDefault(t *testing.T) {
@@ -25,7 +25,7 @@ func TestLoadPDD_EmbeddedDefault(t *testing.T) {
 
 func TestLoadPDD_ProjectOverride(t *testing.T) {
 	dir := t.TempDir()
-	sopDir := filepath.Join(dir, ".pi-go", "sops")
+	sopDir := filepath.Join(dir, ".pirate", "sops")
 	if err := os.MkdirAll(sopDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestLoadPDD_GlobalOverrideFromHome(t *testing.T) {
 	home := t.TempDir()
 	testenv.SetHome(t, home)
 
-	globalSOPDir := filepath.Join(home, ".pi-go", "sops")
+	globalSOPDir := filepath.Join(home, ".pirate", "sops")
 	if err := os.MkdirAll(globalSOPDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestLoadPDD_GlobalOverrideFromHome(t *testing.T) {
 func TestLoadPDD_ProjectOverGlobal(t *testing.T) {
 	// If project override exists, it should take precedence
 	dir := t.TempDir()
-	sopDir := filepath.Join(dir, ".pi-go", "sops")
+	sopDir := filepath.Join(dir, ".pirate", "sops")
 	if err := os.MkdirAll(sopDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestLoadPDD_ProjectOverGlobal(t *testing.T) {
 func TestLoadPDD_UnreadableFile(t *testing.T) {
 	// If the override file exists but is unreadable, should fall back
 	dir := t.TempDir()
-	sopDir := filepath.Join(dir, ".pi-go", "sops")
+	sopDir := filepath.Join(dir, ".pirate", "sops")
 	if err := os.MkdirAll(sopDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

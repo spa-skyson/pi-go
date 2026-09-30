@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/memory"
 )
 
 // Scenario is one tool-coverage eval case: a seeded workspace, a prompt that
@@ -381,7 +381,7 @@ func subagentSpawned(loaded []*LoadedTrajectory) (bool, string) {
 // HomeEnv returns the environment entries that point the home directory at
 // home for a child process. os.UserHomeDir reads HOME on Unix but USERPROFILE
 // on Windows, so both are set there; with HOME alone a pi process on Windows
-// would silently read and write the runner's real ~/.pi-go (the same trap
+// would silently read and write the runner's real ~/.pirate (the same trap
 // internal/testenv.SetHome guards against in tests).
 func HomeEnv(home string) []string {
 	env := []string{"HOME=" + home}
@@ -471,7 +471,7 @@ func SeedMemory(ctx context.Context, home, project string, seeds []MemorySeed) e
 	if len(seeds) == 0 {
 		return nil
 	}
-	dbPath := filepath.Join(home, ".pi-go", "memory", "claude-mem.db")
+	dbPath := filepath.Join(home, config.ProjectDirName, "memory", "claude-mem.db")
 	db, err := memory.OpenDB(dbPath)
 	if err != nil {
 		return fmt.Errorf("seed memory: %w", err)

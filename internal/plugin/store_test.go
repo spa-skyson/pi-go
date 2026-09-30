@@ -74,12 +74,12 @@ func TestSave_LeavesNoTemporaryFiles(t *testing.T) {
 	}
 }
 
-// A plugin's skills directory defaults to .pi-go/skills, then skills/, then the
+// A plugin's skills directory defaults to .pirate/skills, then skills/, then the
 // plugin root. An explicit SkillsDir always wins.
 func TestResolveSkillsDir(t *testing.T) {
-	t.Run("prefers .pi-go/skills", func(t *testing.T) {
+	t.Run("prefers .pirate/skills", func(t *testing.T) {
 		dir := t.TempDir()
-		want := filepath.Join(dir, ".pi-go", "skills")
+		want := filepath.Join(dir, ".pirate", "skills")
 		if err := os.MkdirAll(want, 0o755); err != nil {
 			t.Fatal(err)
 		}

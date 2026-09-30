@@ -15,7 +15,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/dimetron/pi-go/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/extension"
 )
 
 // --- toolCallSummary for agent ---

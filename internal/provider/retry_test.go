@@ -11,7 +11,7 @@ import (
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/retry"
+	"github.com/spa-skyson/pi-rate/internal/retry"
 )
 
 // TestMain shrinks the stream-retry budget for the whole package. Several

@@ -15,7 +15,7 @@ import (
 
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/agent"
 )
 
 // Request is a JSON-RPC request from the client.
@@ -106,7 +106,7 @@ func (s *Server) Run(ctx context.Context) error {
 	defer func() { _ = s.listener.Close() }()
 	defer func() { _ = os.Remove(s.socketPath) }()
 
-	fmt.Fprintf(os.Stderr, "pi-go: RPC server listening on %s\n", s.socketPath)
+	fmt.Fprintf(os.Stderr, "pirate: RPC server listening on %s\n", s.socketPath)
 
 	// Handle graceful shutdown.
 	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)

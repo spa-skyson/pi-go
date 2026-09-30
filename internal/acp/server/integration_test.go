@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	shared "github.com/dimetron/pi-go/internal/acp"
-	"github.com/dimetron/pi-go/internal/acp/client"
+	shared "github.com/spa-skyson/pi-rate/internal/acp"
+	"github.com/spa-skyson/pi-rate/internal/acp/client"
 )
 
 var piBinary string
@@ -45,7 +45,7 @@ func buildAndRun(m *testing.M) (int, error) {
 		return 0, err
 	}
 
-	build := exec.Command("go", "build", "-o", bin, "./cmd/pi")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/pirate")
 	build.Dir = repoRoot
 	if out, err := build.CombinedOutput(); err != nil {
 		return 0, fmt.Errorf("build pi: %w\n%s", err, out)

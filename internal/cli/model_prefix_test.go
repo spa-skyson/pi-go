@@ -3,8 +3,8 @@ package cli
 import (
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // multiProviderConfig is the shape a user hits after /model has written a

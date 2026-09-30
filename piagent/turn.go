@@ -8,7 +8,7 @@ import (
 
 	"google.golang.org/adk/v2/session"
 
-	"github.com/dimetron/pi-go/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/agent"
 )
 
 // TurnInfo describes a turn that has finished, and is what an [AfterTurnFunc]

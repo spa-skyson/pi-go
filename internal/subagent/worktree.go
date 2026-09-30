@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 // WorktreeManager manages git worktrees for isolated subagent execution.
@@ -334,7 +336,7 @@ func (m *WorktreeManager) create(agentID, base string, requestedName ...string) 
 		name = requestedName[0]
 	}
 	pathID, branch := worktreeNames(agentID, name)
-	wtPath := filepath.Join(m.repoRoot, ".pi-go", "tasks", pathID)
+	wtPath := filepath.Join(m.repoRoot, config.ProjectDirName, "tasks", pathID)
 
 	// Ensure parent directory exists.
 	if err := os.MkdirAll(filepath.Dir(wtPath), 0o755); err != nil {
@@ -457,7 +459,7 @@ func (m *WorktreeManager) CommitAll(agentID, message string) (bool, error) {
 
 	// Force-add everything an agent left in the worktree, ignoring ignore rules.
 	// A plain `git status --porcelain` + `git add -A` silently drops planner
-	// output: the real repo ignores **/specs/ (global) and .pi-go/ (project),
+	// output: the real repo ignores **/specs/ (global) and .pirate/ (project),
 	// both of which match the artifacts written into a worktree
 	// (specs/<task>/...). Ignored files do not show in plain `--porcelain`, so a
 	// status-first gate would report "nothing to commit", skip the snapshot, and
@@ -695,7 +697,7 @@ func (m *WorktreeManager) findStashByMessage(msg string) (ref, oid string, found
 func (m *WorktreeManager) recoverWorktreeInfo(agentID string) (worktreeInfo, error) {
 	sid := shortID(agentID)
 	info := worktreeInfo{
-		Path:   filepath.Join(m.repoRoot, ".pi-go", "tasks", sid),
+		Path:   filepath.Join(m.repoRoot, config.ProjectDirName, "tasks", sid),
 		Branch: "pi-agent-" + sid,
 	}
 

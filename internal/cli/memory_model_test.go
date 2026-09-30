@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/palace"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 func TestRunMemoryModelDownload_AutoDetectPlatformBranch(t *testing.T) {
@@ -172,7 +172,7 @@ func TestRunMemoryModelDownload_DefaultDest(t *testing.T) {
 		}
 	})
 
-	wantDest := filepath.Join(home, ".pi-go", "models")
+	wantDest := filepath.Join(home, ".pirate", "models")
 	if got.dest != wantDest {
 		t.Errorf("dest = %q, want the default under HOME %q", got.dest, wantDest)
 	}

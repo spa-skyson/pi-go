@@ -8,7 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/palace"
 )
 
 func newMemoryStatusCmd() *cobra.Command {
@@ -22,20 +23,20 @@ func newMemoryStatusCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&flagDB, "db", "", "Palace database path (default: .pi-go/palace.db)")
+	cmd.Flags().StringVar(&flagDB, "db", "", "Palace database path (default: .pirate/palace.db)")
 
 	return cmd
 }
 
 func runMemoryStatus(dbPath string) error {
 	if dbPath == "" {
-		dbPath = filepath.Join(".pi-go", "palace.db")
+		dbPath = filepath.Join(config.ProjectDirName, "palace.db")
 	}
 
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		fmt.Println("No palace database found.")
 		fmt.Printf("Looked at: %s\n", dbPath)
-		fmt.Println("\nRun 'pi memory init' to create one.")
+		fmt.Println("\nRun 'pirate memory init' to create one.")
 		return nil
 	}
 

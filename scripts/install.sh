@@ -2,14 +2,14 @@
 # exit on error
 set -e
 
-# pi-go installer (fork: spa-skyson/pi-go).
+# pi-rate installer (fork: spa-skyson/pi-rate).
 #
 # Two install modes:
 #   1. release — download the latest published GitHub release asset and
-#      install `pi` (used whenever the repo has a published release).
+#      install `pirate` (used whenever the repo has a published release).
 #   2. source  — fallback when no release is published yet or the asset
 #      download fails: shallow-clone the repo, run `make build`, and install
-#      both `pi` and `pi-sandbox`. Requires git and Go (>= the go.mod
+#      both `pirate` and `pirate-sandbox`. Requires git and Go (>= the go.mod
 #      minimum). Set DRY_RUN=1 to print the chosen path without installing.
 
 # Colors for output
@@ -23,9 +23,9 @@ NC='\033[0m' # No Color
 
 # Configuration (REPO/BRANCH overridable via environment — useful for forks,
 # mirrors and testing, e.g. REPO=owner/repo ./install.sh)
-REPO="${REPO:-spa-skyson/pi-go}"
+REPO="${REPO:-spa-skyson/pi-rate}"
 BRANCH="${BRANCH:-main}"
-BINARY_NAME="pi"
+BINARY_NAME="pirate"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 
 # Helper functions
@@ -55,7 +55,7 @@ log_error() {
 
 log_header() {
     echo -e "\n${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}" >&2
-    echo -e "${BOLD}${CYAN}  🚀 pi-go Installer${NC}" >&2
+    echo -e "${BOLD}${CYAN}  🚀 pi-rate Installer${NC}" >&2
     echo -e "${BOLD}${CYAN}  repo: ${REPO}${NC}" >&2
     echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n" >&2
 }
@@ -131,7 +131,7 @@ get_latest_version() {
 }
 
 # URL of the release archive for a version/platform pair (GoReleaser naming:
-# tag v0.0.13 -> asset pi-go_0.0.13_darwin_arm64.tar.gz).
+# tag v0.0.13 -> asset pi-rate_0.0.13_darwin_arm64.tar.gz).
 asset_url() {
     local version="$1"
     local platform="$2"
@@ -142,8 +142,8 @@ asset_url() {
     if [[ "$platform" == windows-* ]]; then
         ext="zip"
     fi
-    # Assets use underscore: pi-go_0.0.13_darwin_arm64.tar.gz
-    echo "https://github.com/${REPO}/releases/download/${version}/pi-go_${version_nov}_${platform//-/_}.${ext}"
+    # Assets use underscore: pi-rate_0.0.13_darwin_arm64.tar.gz
+    echo "https://github.com/${REPO}/releases/download/${version}/pi-rate_${version_nov}_${platform//-/_}.${ext}"
 }
 
 # Download binary. Returns 1 on failure so the caller can fall back to a
@@ -154,9 +154,9 @@ download_binary() {
 
     local download_url
     download_url=$(asset_url "$version" "$platform")
-    local temp_file="/tmp/pi-install.$$.archive"
+    local temp_file="/tmp/pirate-install.$$.archive"
 
-    log_step "Downloading pi-go ${BOLD}${version}${NC} for ${BOLD}${platform}${NC}..."
+    log_step "Downloading pi-rate ${BOLD}${version}${NC} for ${BOLD}${platform}${NC}..."
 
     if command_exists curl; then
         curl -fsSL -o "$temp_file" "$download_url" || { rm -f "$temp_file"; return 1; }
@@ -185,14 +185,14 @@ install_binary() {
 
     # Extract archive
     if [[ "$temp_file" == *.zip ]]; then
-        unzip -o "$temp_file" -d "/tmp/pi-install.$$"
-        mv "/tmp/pi-install.$$/pi.exe" "$install_path" 2>/dev/null || mv "/tmp/pi-install.$$/pi" "$install_path"
-        rm -rf "/tmp/pi-install.$$"
+        unzip -o "$temp_file" -d "/tmp/pirate-install.$$"
+        mv "/tmp/pirate-install.$$/pirate.exe" "$install_path" 2>/dev/null || mv "/tmp/pirate-install.$$/pirate" "$install_path"
+        rm -rf "/tmp/pirate-install.$$"
     else
         tar -xzf "$temp_file" -C /tmp
-        local extracted_file=$(tar -tzf "$temp_file" | grep -E '^pi(-exe)?$' | head -1)
+        local extracted_file=$(tar -tzf "$temp_file" | grep -E '^pirate(-exe)?$' | head -1)
         if [ -z "$extracted_file" ]; then
-            extracted_file="pi"
+            extracted_file="pirate"
         fi
         mv "/tmp/${extracted_file}" "$install_path"
     fi
@@ -210,8 +210,8 @@ verify_installation() {
     log_step "Verifying installation..."
 
     if [[ ":$PATH:" == *":${INSTALL_DIR}:"* ]]; then
-        log_step_complete "Installation verified! ${BOLD}pi${NC} is in PATH"
-        echo -e "${BLUE}ℹ️  ${NC}Run ${BOLD}pi${NC} to start" >&2
+        log_step_complete "Installation verified! ${BOLD}pirate${NC} is in PATH"
+        echo -e "${BLUE}ℹ️  ${NC}Run ${BOLD}pirate${NC} to start" >&2
     else
         echo "" >&2
         log_warn "${BINARY_NAME} installed but ${BOLD}${INSTALL_DIR}${NC} is not in PATH"
@@ -252,14 +252,14 @@ check_go_version() {
 }
 
 # Build and install from source — fallback when no release exists or the
-# release asset cannot be downloaded. Installs BOTH `pi` and `pi-sandbox`.
+# release asset cannot be downloaded. Installs BOTH `pirate` and `pirate-sandbox`.
 build_and_install_from_source() {
     if [ -n "${DRY_RUN:-}" ]; then
         log_info "DRY_RUN: source path selected (nothing will be cloned, built or installed):"
-        log_info "DRY_RUN:   git clone --depth 1 --branch ${BRANCH} https://github.com/${REPO}.git /tmp/pi-src.<pid>"
+        log_info "DRY_RUN:   git clone --depth 1 --branch ${BRANCH} https://github.com/${REPO}.git /tmp/pirate-src.<pid>"
         log_info "DRY_RUN:   go version check: >= minimum from go.mod (otherwise error + https://go.dev/dl/)"
         log_info "DRY_RUN:   make build  (in the clone)"
-        log_info "DRY_RUN:   install pi and pi-sandbox into ${INSTALL_DIR}"
+        log_info "DRY_RUN:   install pirate and pirate-sandbox into ${INSTALL_DIR}"
         return 0
     fi
 
@@ -268,10 +268,10 @@ build_and_install_from_source() {
         exit 1
     fi
 
-    local src_dir="/tmp/pi-src.$$"
+    local src_dir="/tmp/pirate-src.$$"
     # shellcheck disable=SC2064  — $$ is stable in the parent shell; expands to
     # the same PID at trap-fire time and sidesteps local-var scoping in traps.
-    trap 'rm -rf /tmp/pi-src.$$' EXIT
+    trap 'rm -rf /tmp/pirate-src.$$' EXIT
 
     log_step "Cloning ${BOLD}${REPO}${NC} (branch ${BOLD}${BRANCH}${NC}, shallow)..."
     if ! git clone --depth 1 --branch "$BRANCH" "https://github.com/${REPO}.git" "$src_dir"; then
@@ -297,14 +297,14 @@ build_and_install_from_source() {
 
     log_step "Installing binaries to ${BOLD}${INSTALL_DIR}${NC}..."
     mkdir -p "$INSTALL_DIR"
-    install -m 0755 "$src_dir/pi" "${INSTALL_DIR}/pi"
-    install -m 0755 "$src_dir/pi-sandbox" "${INSTALL_DIR}/pi-sandbox"
+    install -m 0755 "$src_dir/pirate" "${INSTALL_DIR}/pirate"
+    install -m 0755 "$src_dir/pirate-sandbox" "${INSTALL_DIR}/pirate-sandbox"
 
-    log_success "Installed ${INSTALL_DIR}/pi and ${INSTALL_DIR}/pi-sandbox (source build, branch ${BRANCH})"
-    verify_installation "${INSTALL_DIR}/pi"
+    log_success "Installed ${INSTALL_DIR}/pirate and ${INSTALL_DIR}/pirate-sandbox (source build, branch ${BRANCH})"
+    verify_installation "${INSTALL_DIR}/pirate"
 }
 
-# Release path: download the published archive and install `pi`.
+# Release path: download the published archive and install `pirate`.
 # Returns 1 on any failure so the caller can fall back to a source build.
 install_from_release() {
     local version="$1"
@@ -313,7 +313,7 @@ install_from_release() {
     if [ -n "${DRY_RUN:-}" ]; then
         log_info "DRY_RUN: release path selected (nothing will be downloaded or installed):"
         log_info "DRY_RUN:   curl/wget $(asset_url "$version" "$platform")"
-        log_info "DRY_RUN:   extract and install to ${INSTALL_DIR}/pi"
+        log_info "DRY_RUN:   extract and install to ${INSTALL_DIR}/pirate"
         return 0
     fi
 
@@ -330,7 +330,7 @@ install_from_release() {
 
 finish() {
     echo -e "\n${BOLD}${GREEN}🎉 Installation complete!${NC}" >&2
-    echo -e "${GREEN}   Run ${BOLD}pi${NC}${GREEN} to start.${NC}\n" >&2
+    echo -e "${GREEN}   Run ${BOLD}pirate${NC}${GREEN} to start.${NC}\n" >&2
 }
 
 # Main installation function
@@ -373,15 +373,15 @@ main() {
 # Handle command line arguments
 case "${1:-}" in
     -h|--help)
-        echo -e "${BOLD}${CYAN}🚀 pi-go Installer${NC}"
+        echo -e "${BOLD}${CYAN}🚀 pi-rate Installer${NC}"
         echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo -e "\n${BOLD}USAGE:${NC}"
         echo -e "  $0 [OPTIONS]"
         echo -e "\n${BOLD}OPTIONS:${NC}"
         echo -e "  -h, --help     Show this help message"
         echo -e "\n${BOLD}MODES:${NC}"
-        echo -e "  release   Install 'pi' from the latest GitHub release (default when one exists)"
-        echo -e "  source    Fallback: shallow-clone the repo, make build, install 'pi' + 'pi-sandbox'"
+        echo -e "  release   Install 'pirate' from the latest GitHub release (default when one exists)"
+        echo -e "  source    Fallback: shallow-clone the repo, make build, install 'pirate' + 'pirate-sandbox'"
         echo -e "\n${BOLD}ENVIRONMENT VARIABLES:${NC}"
         echo -e "  INSTALL_DIR    Installation directory (default: \$HOME/.local/bin)"
         echo -e "  REPO           GitHub repository to install from (default: ${REPO})"

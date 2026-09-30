@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/auth"
+	"github.com/spa-skyson/pi-rate/internal/auth"
 )
 
 func TestRunLogin_FindProviderSuccess_ManualCodeEmpty(t *testing.T) {

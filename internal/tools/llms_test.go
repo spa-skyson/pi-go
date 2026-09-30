@@ -20,8 +20,8 @@ import (
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // newLLMSTestServer starts an httptest TLS server serving a fixed body and
@@ -251,7 +251,7 @@ func newLLMSCacheTestServer(t *testing.T) (*httptest.Server, *LLMSToolset, *int3
 	withAllowedTestHosts(t, "127.0.0.1", "::1")
 	withLLMSClient(t, srv.Client())
 
-	// A not-yet-existing subdirectory, as ~/.pi-go/llms-cache is on first
+	// A not-yet-existing subdirectory, as ~/.pirate/llms-cache is on first
 	// use, so the tests exercise the directory creation path too.
 	ts := NewLLMSToolsetWithCache(&config.LLMSConfig{
 		Sources: []config.LLMSSource{
@@ -365,7 +365,7 @@ func TestNewLLMSCachedToolsetUsesDefaultCacheDir(t *testing.T) {
 	if ts.cacheDir != LLMSDefaultCacheDir() {
 		t.Fatalf("cacheDir = %q, want %q", ts.cacheDir, LLMSDefaultCacheDir())
 	}
-	if want := filepath.Join(home, ".pi-go", "llms-cache"); ts.cacheDir != want {
+	if want := filepath.Join(home, ".pirate", "llms-cache"); ts.cacheDir != want {
 		t.Fatalf("cacheDir = %q, want %q (under the test HOME)", ts.cacheDir, want)
 	}
 }

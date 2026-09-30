@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/guardrail"
-	"github.com/dimetron/pi-go/internal/permission"
-	"github.com/dimetron/pi-go/internal/testenv"
-	"github.com/dimetron/pi-go/internal/tui"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/guardrail"
+	"github.com/spa-skyson/pi-rate/internal/permission"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/tui"
 )
 
 // -----------------------------------------------------------------------
@@ -145,7 +145,7 @@ func TestDeferredInit_WithMemoryEnabled(t *testing.T) {
 	flagMemoryOff = false // Enable memory.
 
 	// Pre-create the memory DB directory so OpenDB succeeds.
-	memDir := filepath.Join(tmpHome, ".pi-go", "memory")
+	memDir := filepath.Join(tmpHome, ".pirate", "memory")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -369,7 +369,7 @@ func TestDeferredInit_WithSkillDir(t *testing.T) {
 	testenv.SetHome(t, tmpHome)
 
 	// Create a skill file.
-	skillsDir := filepath.Join(tmpHome, ".pi-go", "skills", "my-skill")
+	skillsDir := filepath.Join(tmpHome, ".pirate", "skills", "my-skill")
 	_ = os.MkdirAll(skillsDir, 0o755)
 	_ = os.WriteFile(filepath.Join(skillsDir, "SKILL.md"),
 		[]byte("---\nname: my-skill\ndescription: test skill\n---\n\nBody"), 0o644)

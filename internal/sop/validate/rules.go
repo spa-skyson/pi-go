@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/sop/specdoc"
+	"github.com/spa-skyson/pi-rate/internal/sop/specdoc"
 )
 
 // Target is what a rule is asked about: one artifact, plus the spec it belongs

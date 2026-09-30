@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/sop"
-	"github.com/dimetron/pi-go/internal/sop/specdoc"
-	"github.com/dimetron/pi-go/internal/sop/validate"
+	"github.com/spa-skyson/pi-rate/internal/sop"
+	"github.com/spa-skyson/pi-rate/internal/sop/specdoc"
+	"github.com/spa-skyson/pi-rate/internal/sop/validate"
 )
 
 // maxPlanFixCycles bounds automatic validation repair. It matches the plan

@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/guardrail"
-	"github.com/dimetron/pi-go/internal/provider"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/guardrail"
+	"github.com/spa-skyson/pi-rate/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 func TestResolveMode_ExplicitFlag(t *testing.T) {
@@ -132,7 +132,7 @@ func TestRunNonInteractive_WithSystemAndHooks(t *testing.T) {
 	testenv.SetHome(t, tmpDir)
 	t.Setenv("OPENAI_API_KEY", "k")
 
-	cfgDir := filepath.Join(tmpDir, ".pi-go")
+	cfgDir := filepath.Join(tmpDir, ".pirate")
 	_ = os.MkdirAll(cfgDir, 0o755)
 	_ = os.WriteFile(filepath.Join(cfgDir, "config.json"), []byte(`{
 		"roles": {"default": {"model":"gpt-5.4","provider":"openai"}},

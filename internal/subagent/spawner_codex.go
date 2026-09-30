@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dimetron/pi-go/internal/codex"
+	"github.com/spa-skyson/pi-rate/internal/codex"
 )
 
 // codexAgentNames is the set of bundled agent names backed by the Codex

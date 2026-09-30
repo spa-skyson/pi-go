@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/dimetron/pi-go/pimodels"
+	"github.com/spa-skyson/pi-rate/pimodels"
 )
 
 // The common case: name a model, get a client. The provider is inferred from

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/spa-skyson/pi-rate/internal/config"
+
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 )
@@ -51,13 +53,12 @@ type TodoState struct {
 	Items      []TodoItem `json:"items"`                 // full list for the popup
 }
 
-// todoSessionDir returns the session's todos directory under ~/.pi-go/sessions/.
+// todoSessionDir returns the session's todos directory under ~/.pirate/sessions/.
 func todoSessionDir(sessionID string) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
+	if _, err := os.UserHomeDir(); err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".pi-go", "sessions", sessionID)
+	return filepath.Join(config.PirateHome(), "sessions", sessionID)
 }
 
 // todoFilePath returns the path to the todos.json file for a session.

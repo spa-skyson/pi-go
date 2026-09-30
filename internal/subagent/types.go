@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/session"
+	"github.com/spa-skyson/pi-rate/internal/session"
 )
 
 // SpawnInput is the input to spawn a subagent with an AgentConfig.

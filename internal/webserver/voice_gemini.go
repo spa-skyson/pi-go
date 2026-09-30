@@ -13,7 +13,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/dimetron/pi-go/internal/voicegemini"
+	"github.com/spa-skyson/pi-rate/internal/voicegemini"
 )
 
 // The Gemini Live transport is a server-side WebSocket relay.
@@ -160,7 +160,7 @@ func (s *ServerV2) voiceRelayTarget(w http.ResponseWriter, r *http.Request) (*vo
 	}
 	if !s.voiceEnabled() {
 		voiceHTTPError(w, http.StatusServiceUnavailable,
-			fmt.Errorf("voice is not configured — set GEMINI_API_KEY and run `pi serve --voice`"))
+			fmt.Errorf("voice is not configured — set GEMINI_API_KEY and run `pirate serve --voice`"))
 		return nil, false
 	}
 	sessionID := r.URL.Query().Get("session")

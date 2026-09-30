@@ -16,8 +16,8 @@ import (
 	"image/png"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/eval"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/eval"
 )
 
 // GrepTool is the content-search tool's name: "grep" in a plain build, or
@@ -33,7 +33,7 @@ var Exclusions = []eval.Exclusion{
 	{Tool: "google_search", Reason: "Gemini provider built-in, not a pi tool; only present when the eval model is a Gemini model"},
 	{Tool: "web_search", Reason: "reaches the network: needs a running Ollama daemon or OLLAMA_API_KEY, and spends the account's monthly search quota"},
 	{Tool: "agent_result", Reason: "needs a live subagent goroutine (spawned by subagent with background=true) — network dependency; behaviour covered by unit tests in internal/tools: registry/agent_result/background"},
-	{Tool: "todo_write", Reason: "writes the session plan file under ~/.pi-go/sessions/<id>/; no scenario — behaviour covered by unit tests in internal/tools: todo (round-trip, validation, notifier, atomic save)"},
+	{Tool: "todo_write", Reason: "writes the session plan file under ~/.pirate/sessions/<id>/; no scenario — behaviour covered by unit tests in internal/tools: todo (round-trip, validation, notifier, atomic save)"},
 	{Tool: "todo_read", Reason: "reads the session plan file back; no scenario — behaviour covered by unit tests in internal/tools: todo (round-trip)"},
 }
 

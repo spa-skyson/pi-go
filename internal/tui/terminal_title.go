@@ -5,15 +5,21 @@ import (
 	"time"
 )
 
-// terminalTitleApp is the constant prefix used when constructing the terminal
-// window/tab title for the TUI. The π matches the mascot on the sidebar (see
-// internal/tui/face.go); keeping the prefix short leaves room for the
+// terminalTitleName is the application name in the terminal window/tab title.
+// The π prefix and the name match the pirate on the sidebar (see
+// internal/tui/face.go); the name is short so there is still room for the
 // prompt-derived title in a typical tab.
-const terminalTitleApp = "π -"
+const terminalTitleName = "π Pi-rate"
+
+// terminalTitleApp is terminalTitleName with the idle placeholder in the
+// symbol slot: the trailing "-" stands in for the braille cell that rotates
+// through the slot while a turn runs (see terminalTitleWorkingSymbols).
+const terminalTitleApp = terminalTitleName + " -"
 
 // terminalTitleWorkingSymbols rotate through the prefix's symbol slot while a
-// turn is running, so the tab title itself animates ("π ⠋", "π ⠙", "π ⠹", …)
-// and a backgrounded session is visibly still working.
+// turn is running, so the tab title itself animates ("π Pi-rate ⠋",
+// "π Pi-rate ⠙", "π Pi-rate ⠹", …) and a backgrounded session is visibly
+// still working.
 //
 // They are braille cells, not the ASCII/∙ set the status-bar spinner uses,
 // because the tab title is rendered in a proportional font where the status
@@ -37,7 +43,8 @@ func terminalTitleSpinIndex(now time.Time) int {
 }
 
 // terminalTitlePrefix returns the prefix for the current turn state: the static
-// "π -" when idle, or "π <symbol>" for the given phase while running.
+// "π Pi-rate -" when idle, or "π Pi-rate <symbol>" for the given phase while
+// running.
 func terminalTitlePrefix(running bool, spin int) string {
 	if !running {
 		return terminalTitleApp
@@ -46,7 +53,7 @@ func terminalTitlePrefix(running bool, spin int) string {
 	// Defensive modulo: spin comes from the model and a negative or out-of-range
 	// value must not panic the render path.
 	i := ((spin % n) + n) % n
-	return "π " + string(terminalTitleWorkingSymbols[i])
+	return terminalTitleName + " " + string(terminalTitleWorkingSymbols[i])
 }
 
 // terminalTitleMax caps the title so it fits on a single terminal line. The
@@ -82,10 +89,10 @@ func deriveSessionTitle(prompt string) string {
 	return title
 }
 
-// formatTerminalTitle builds the window title "π - <title>" (or just "π -"
-// when title is empty). Any control characters in title have already been
-// stripped by session.sanitizeSessionTitle — this is a defensive net for
-// callers that don't go through the session service.
+// formatTerminalTitle builds the window title "π Pi-rate - <title>" (or just
+// "π Pi-rate -" when title is empty). Any control characters in title have
+// already been stripped by session.sanitizeSessionTitle — this is a defensive
+// net for callers that don't go through the session service.
 //
 // The result is handed to Bubble Tea as View.WindowTitle; the renderer wraps it
 // in the escape sequence and writes it in order with the frame. Scrubbing
@@ -99,24 +106,25 @@ func formatTerminalTitle(title string) string {
 }
 
 // formatTerminalTitleWithCWD builds a context-aware window title:
-// "π - <cwd> | <command>". The CWD basename gives the user a fixed anchor
-// across turns (so different sessions in different repos are visually
+// "π Pi-rate - <cwd> | <command>". The CWD basename gives the user a fixed
+// anchor across turns (so different sessions in different repos are visually
 // distinguishable in the tab bar), and the slash command / prompt is shown
 // after a separator. The command is stripped to terminalTitleCmdMax runes so
 // the assembled title still fits a typical tab width.
 //
-// Pass an empty cwd to fall back to the no-context shape ("π - <command>"
-// or just "π -") — this matches what callers and tests have always produced
-// for an unconfigured WorkDir. The command portion is run through the same
-// control-character scrub as formatTerminalTitle so the OSC 0 envelope stays
-// well-formed.
+// Pass an empty cwd to fall back to the no-context shape
+// ("π Pi-rate - <command>" or just "π Pi-rate -") — this matches what callers
+// and tests have always produced for an unconfigured WorkDir. The command
+// portion is run through the same control-character scrub as
+// formatTerminalTitle so the OSC 0 envelope stays well-formed.
 func formatTerminalTitleWithCWD(title, cwd string) string {
 	return formatTerminalTitleWithPrefix(terminalTitleApp, title, cwd)
 }
 
 // formatTerminalTitleWithPrefix is formatTerminalTitleWithCWD with the leading
-// "π -" made a parameter, so a running turn can swap in the rotating symbol
-// (see terminalTitlePrefix) without duplicating the assembly and scrubbing.
+// "π Pi-rate -" made a parameter, so a running turn can swap in the rotating
+// symbol (see terminalTitlePrefix) without duplicating the assembly and
+// scrubbing.
 func formatTerminalTitleWithPrefix(prefix, title, cwd string) string {
 	// Scrub the CWD basename the same way the prompt is scrubbed. On Unix a
 	// directory name may legally contain ESC, BEL, or other C0 controls, and

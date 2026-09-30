@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dimetron/pi-go/internal/mermaid/renderer"
+	"github.com/spa-skyson/pi-rate/internal/mermaid/renderer"
 )
 
 // packetField is one bit-range field in a packet diagram. end is inclusive.

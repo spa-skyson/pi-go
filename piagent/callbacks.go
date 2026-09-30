@@ -7,8 +7,8 @@ import (
 	"google.golang.org/adk/v2/agent/llmagent"
 	adktool "google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/memory"
 )
 
 // composeAfterTool folds a chain of after-tool callbacks into the single

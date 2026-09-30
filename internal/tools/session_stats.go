@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spa-skyson/pi-rate/internal/config"
+
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 )
@@ -24,7 +26,7 @@ type SessionStatsInput struct {
 	HighTurns int `json:"high_turns,omitempty"`
 	// Show all sessions (not just anomalous ones). Default: false.
 	All bool `json:"all,omitempty"`
-	// Session directory override. Default: ~/.pi-go/sessions.
+	// Session directory override. Default: ~/.pirate/sessions.
 	SessionDir string `json:"session_dir,omitempty"`
 }
 
@@ -98,11 +100,10 @@ func resolveSessionStatsOptions(input SessionStatsInput) (sessionStatsOptions, e
 
 	// Resolve session directory.
 	if opts.sessionDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
+		if _, err := os.UserHomeDir(); err != nil {
 			return sessionStatsOptions{}, fmt.Errorf("getting home dir: %w", err)
 		}
-		opts.sessionDir = filepath.Join(home, ".pi-go", "sessions")
+		opts.sessionDir = filepath.Join(config.PirateHome(), "sessions")
 	}
 
 	// Resolve thresholds.

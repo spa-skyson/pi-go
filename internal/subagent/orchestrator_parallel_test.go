@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	sharedacp "github.com/dimetron/pi-go/internal/acp"
+	sharedacp "github.com/spa-skyson/pi-rate/internal/acp"
 )
 
 // TestOrchestrator_ParallelSpawn_PiAndACPAgents drives the full mixed spawn

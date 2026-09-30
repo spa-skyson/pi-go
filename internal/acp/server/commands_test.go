@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/dimetron/pi-go/internal/extension"
+	"github.com/spa-skyson/pi-rate/internal/extension"
 )
 
 func TestNormalizeDiscoveryCWD(t *testing.T) {
@@ -37,7 +37,7 @@ func TestDefaultSkillDirsIn(t *testing.T) {
 
 	// Should return at least the user skills dir when home dir is available
 	if homeDir, err := os.UserHomeDir(); err == nil {
-		userSkillsDir := filepath.Join(homeDir, ".pi-go", "skills")
+		userSkillsDir := filepath.Join(homeDir, ".pirate", "skills")
 		found := false
 		for _, d := range dirs {
 			if d == userSkillsDir {

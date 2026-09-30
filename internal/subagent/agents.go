@@ -10,7 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dimetron/pi-go/internal/permission"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/permission"
 )
 
 // minAgentTimeoutMs is the smallest frontmatter `timeout:` treated as a real
@@ -480,11 +481,11 @@ func LoadAgentsFromDir(dir string) ([]AgentConfig, error) {
 	return agents, nil
 }
 
-// findNearestProjectAgentsDir walks up from cwd looking for .pi-go/agents/.
+// findNearestProjectAgentsDir walks up from cwd looking for .pirate/agents/.
 func findNearestProjectAgentsDir(cwd string) (string, error) {
 	dir := cwd
 	for {
-		agentsDir := filepath.Join(dir, ".pi-go", "agents")
+		agentsDir := filepath.Join(dir, config.ProjectDirName, "agents")
 		if info, err := os.Stat(agentsDir); err == nil && info.IsDir() {
 			return agentsDir, nil
 		}
@@ -537,16 +538,16 @@ func DiscoverAgents(cwd string, scope AgentScope) (*AgentDiscoveryResult, error)
 	}
 	result.Bundled = bundledAgents
 
-	// Load user agents (~/.pi-go/agents/)
-	if homeDir, homeErr := os.UserHomeDir(); homeErr == nil {
-		userAgents, err := loadAgentsWithSource(filepath.Join(homeDir, ".pi-go", "agents"), "user")
+	// Load user agents (~/.pirate/agents/)
+	if _, homeErr := os.UserHomeDir(); homeErr == nil {
+		userAgents, err := loadAgentsWithSource(filepath.Join(config.PirateHome(), "agents"), "user")
 		if err != nil {
 			return nil, fmt.Errorf("loading user agents: %w", err)
 		}
 		result.User = userAgents
 	}
 
-	// Load project agents (.pi-go/agents/ in nearest ancestor)
+	// Load project agents (.pirate/agents/ in nearest ancestor)
 	if projectDir, findErr := findNearestProjectAgentsDir(cwd); findErr == nil {
 		projectAgents, err := loadAgentsWithSource(projectDir, "project")
 		if err != nil {

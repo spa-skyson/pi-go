@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// The failure from ~/.pi-go/sessions/260822-0917-d94e2-b868d: the stream's
+// The failure from ~/.pirate/sessions/260822-0917-d94e2-b868d: the stream's
 // local socket went away (EADDRNOTAVAIL) and the turn died on the spot. Both
 // the macOS and Linux spellings must be retryable, since a fresh dial picks a
 // live address.

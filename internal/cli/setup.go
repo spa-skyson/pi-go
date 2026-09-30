@@ -10,13 +10,13 @@ import (
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/auth"
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/provider"
-	"github.com/dimetron/pi-go/internal/tui"
+	"github.com/spa-skyson/pi-rate/internal/auth"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/tui"
 )
 
-// setupProviderEntry is what `pi setup` knows about a provider before the user
+// setupProviderEntry is what `pirate setup` knows about a provider before the user
 // has chosen one: which env var authenticates it, whether it needs one at all,
 // and where to get a key.
 //
@@ -124,8 +124,8 @@ The wizard asks three questions:
      for agentgateway, which only needs one behind an apiKey policy)
   3. which model should be the default
 
-On confirm it writes the key to ~/.pi-go/.env and the provider and model to
-the "default" role in ~/.pi-go/config.json — the same places ` + "`pi login`" + ` and a
+On confirm it writes the key to ~/.pirate/.env and the provider and model to
+the "default" role in ~/.pirate/config.json — the same places ` + "`pirate login`" + ` and a
 hand-edited config use, so nothing is configured in a form only this command
 understands.
 
@@ -135,8 +135,8 @@ no offline catalog (Ollama, agentgateway, Azure) the model is typed in by hand,
 because only the user knows which models their daemon or deployment serves.
 
 Examples:
-  pi setup                 # configure a provider
-  pi login codex           # OAuth login (ChatGPT subscription)`,
+  pirate setup                 # configure a provider
+  pirate login codex           # OAuth login (ChatGPT subscription)`,
 		Args: cobra.NoArgs,
 		RunE: runSetup,
 	}
@@ -162,7 +162,7 @@ func runSetup(cmd *cobra.Command, _ []string) error {
 	loadDotEnv()
 
 	if !setupTerminal() {
-		return fmt.Errorf("pi setup needs a terminal; on a headless host set the key directly, e.g. ANTHROPIC_API_KEY=... in ~/.pi-go/.env")
+		return fmt.Errorf("pirate setup needs a terminal; on a headless host set the key directly, e.g. ANTHROPIC_API_KEY=... in ~/.pirate/.env")
 	}
 
 	cfg, err := config.Load()
@@ -204,11 +204,11 @@ func runSetup(cmd *cobra.Command, _ []string) error {
 	out := cmd.OutOrStdout()
 	fmt.Fprintf(out, "\nConfigured %s\n", entry.label)
 	if entry.writesKey(result.APIKey) {
-		fmt.Fprintf(out, "  key    ~/.pi-go/.env (%s)\n", maskKey(result.APIKey))
+		fmt.Fprintf(out, "  key    ~/.pirate/.env (%s)\n", maskKey(result.APIKey))
 	}
 	fmt.Fprintf(out, "  model  %s\n", result.Model)
-	fmt.Fprintf(out, "  config ~/.pi-go/config.json\n")
-	fmt.Fprintln(out, "\nRun `pi` to start a session.")
+	fmt.Fprintf(out, "  config ~/.pirate/config.json\n")
+	fmt.Fprintln(out, "\nRun `pirate` to start a session.")
 	return nil
 }
 
@@ -259,7 +259,7 @@ func setupWizardProviders() []tui.SetupProvider {
 //
 // It checks isatty rather than the os.ModeCharDevice bit used by isTerminal:
 // /dev/null is a character device but not a terminal, so a char-device check
-// accepts it. That matters here because `pi setup < /dev/null` — a plausible
+// accepts it. That matters here because `pirate setup < /dev/null` — a plausible
 // thing to run from a script or a Makefile — would then start an interactive
 // program on a dead input, and the wizard would sit on an empty read forever
 // instead of reporting that it has nowhere to draw.
@@ -275,11 +275,11 @@ func setupHasTTY() bool {
 // It reads provider.CatalogFor, which merges the embedded modeldata snapshots
 // with KnownModels and any cached live catalog. Reusing that function rather
 // than the raw snapshot is what makes the wizard offer a model the user has
-// already fetched with `pi model list` — and, because it is the same source
-// ValidateModel checks against, every model offered is one pi will accept.
+// already fetched with `pirate model list` — and, because it is the same source
+// ValidateModel checks against, every model offered is one pirate will accept.
 //
 // Providers with no catalog (ollama, agentgateway, azure) get no entry on
-// purpose: their models live on a daemon or in a subscription pi cannot
+// purpose: their models live on a daemon or in a subscription pirate cannot
 // enumerate offline, and inventing a list would offer names that do not exist.
 // The wizard falls back to free-text entry for them.
 func setupModelCandidates() map[string][]string {

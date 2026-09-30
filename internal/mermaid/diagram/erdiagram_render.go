@@ -1,6 +1,6 @@
 package diagram
 
-import "github.com/dimetron/pi-go/internal/mermaid/renderer"
+import "github.com/spa-skyson/pi-rate/internal/mermaid/renderer"
 
 // RenderERDiagram parses and renders a Mermaid ER diagram.
 func RenderERDiagram(source string, useASCII bool) *renderer.Canvas {

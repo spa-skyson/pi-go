@@ -19,7 +19,7 @@ import (
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 
-	"github.com/dimetron/pi-go/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 // llmsFetchTimeout bounds the total time spent fetching a single llms.txt
@@ -38,7 +38,7 @@ const llmsMaxBytes = 2 * 1024 * 1024 // 2 MB
 
 // llmsUserAgent identifies pi-go to remote documentation hosts. Some CDNs
 // refuse requests without a UA.
-const llmsUserAgent = "pi-go/1.0 (+https://github.com/dimetron/pi-go)"
+const llmsUserAgent = "pirate/1.0 (+https://github.com/spa-skyson/pi-rate)"
 
 // llmsClientOverride is a test-only override for the HTTP client used to
 // fetch documentation. Production code leaves it nil and uses the toolset's
@@ -131,7 +131,7 @@ func NewLLMSToolsetWithCache(cfg *config.LLMSConfig, dir string) *LLMSToolset {
 }
 
 // NewLLMSCachedToolset creates a new llms.txt toolset whose fetch cache lives
-// under the shared pi-go documentation cache directory (~/.pi-go/llms-cache).
+// under the shared pi-go documentation cache directory (~/.pirate/llms-cache).
 // Every mode that wires fetch_docs — the piagent, the one-shot CLI, and the
 // interactive TUI (which the voice agent drives) — shares this one directory,
 // so a page fetched by one is a cache hit for the others. Caching degrades to
@@ -145,11 +145,10 @@ func NewLLMSCachedToolset(cfg *config.LLMSConfig) *LLMSToolset {
 // empty result disables the fetch cache rather than failing construction: doc
 // fetching is a best effort feature.
 func LLMSDefaultCacheDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
+	if _, err := os.UserHomeDir(); err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".pi-go", "llms-cache")
+	return filepath.Join(config.PirateHome(), "llms-cache")
 }
 
 // checkRedirectURL validates one redirect hop. It is the CheckRedirect hook

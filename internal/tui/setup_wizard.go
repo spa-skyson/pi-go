@@ -451,7 +451,7 @@ func (w *SetupWizard) View() tea.View {
 		sp := w.provider()
 		b.WriteString(label.Render(fmt.Sprintf("Paste your %s API key", sp.Label)))
 		b.WriteString("\n")
-		b.WriteString(dim.Render("stored in ~/.pi-go/.env as " + sp.EnvVar))
+		b.WriteString(dim.Render("stored in ~/.pirate/.env as " + sp.EnvVar))
 		b.WriteString("\n\n")
 		b.WriteString(w.keyInput.View())
 		b.WriteString("\n\n")

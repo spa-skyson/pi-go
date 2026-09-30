@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	config "github.com/spa-skyson/pi-rate/internal/config"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,7 +24,7 @@ type Logf func(format string, args ...any)
 
 // Manager performs plugin and marketplace operations against one pi-go home.
 type Manager struct {
-	// PiHome is the pi-go home directory, normally ~/.pi-go.
+	// PiHome is the pi-go home directory, normally ~/.pirate.
 	PiHome string
 	// Log receives progress messages; nil is safe and discards them.
 	Log Logf
@@ -419,7 +420,7 @@ func (m *Manager) Install(ctx context.Context, spec string) (*Installed, error) 
 	// but the user should hear about it, since skills are what pi-go consumes
 	// today.
 	if !dirExists(filepath.Join(srcDir, "skills")) &&
-		!dirExists(filepath.Join(srcDir, ".pi-go", "skills")) &&
+		!dirExists(filepath.Join(srcDir, config.ProjectDirName, "skills")) &&
 		!dirExists(filepath.Join(srcDir, "SKILL.md")) {
 		m.logf("note: plugin %s has no skills directory; pi-go will read no skills from it", entry.Name)
 	}

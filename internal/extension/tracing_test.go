@@ -12,7 +12,7 @@ import (
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 
-	piotel "github.com/dimetron/pi-go/internal/otel"
+	piotel "github.com/spa-skyson/pi-rate/internal/otel"
 )
 
 // newSpanRecorder installs an in-memory tracer provider and returns the

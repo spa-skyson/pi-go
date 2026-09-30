@@ -8,7 +8,7 @@ import (
 
 	adkagent "google.golang.org/adk/v2/agent"
 
-	"github.com/dimetron/pi-go/internal/permission"
+	"github.com/spa-skyson/pi-rate/internal/permission"
 )
 
 // nameOnlyTool exposes just the name the permission gate matches on.

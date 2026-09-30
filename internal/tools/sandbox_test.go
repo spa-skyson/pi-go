@@ -655,7 +655,7 @@ func TestSandbox_SetWorktreeDir(t *testing.T) {
 func TestSandbox_ExtraDir_ReadWrite(t *testing.T) {
 	// Primary sandbox root.
 	projectDir := t.TempDir()
-	// Extra directory (simulates ~/.pi-go/).
+	// Extra directory (simulates ~/.pirate/).
 	extraDir := t.TempDir()
 
 	sb, err := NewSandbox(projectDir)
@@ -1076,7 +1076,7 @@ func TestShouldSkipPath(t *testing.T) {
 		{"vendor skipped", "vendor", fakeDirEntry{name: "vendor", isDir: true}, true},
 		{"__pycache__ skipped", "__pycache__", fakeDirEntry{name: "__pycache__", isDir: true}, true},
 		{"hidden dir skipped", ".secret", fakeDirEntry{name: ".secret", isDir: true}, true},
-		{"agent .pi-go NOT skipped", ".pi-go", fakeDirEntry{name: ".pi-go", isDir: true}, false},
+		{"agent .pirate NOT skipped", ".pirate", fakeDirEntry{name: ".pirate", isDir: true}, false},
 		{"agent .cursor NOT skipped", ".cursor", fakeDirEntry{name: ".cursor", isDir: true}, false},
 		{"agent .claude NOT skipped", ".claude", fakeDirEntry{name: ".claude", isDir: true}, false},
 		{"target dir skipped", "target", fakeDirEntry{name: "target", isDir: true}, true},

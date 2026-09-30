@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/provider"
-	"github.com/dimetron/pi-go/internal/testenv"
-	"github.com/dimetron/pi-go/internal/tui"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/tui"
 )
 
 // TestSetupCmdIsRegistered proves `pi setup` is reachable from the root command
@@ -36,8 +36,8 @@ func TestSetupCmdIsRegistered(t *testing.T) {
 }
 
 // TestSaveSetupResultWritesKeyAndRole proves the wizard's result lands in the
-// two files pi actually reads: the key in ~/.pi-go/.env, the provider and model
-// in the default role of ~/.pi-go/config.json.
+// two files pi actually reads: the key in ~/.pirate/.env, the provider and model
+// in the default role of ~/.pirate/config.json.
 //
 // This is the test that would catch a wiring mistake the wizard's own tests
 // cannot see, because the wizard returns data and this is the only place that
@@ -61,7 +61,7 @@ func TestSaveSetupResultWritesKeyAndRole(t *testing.T) {
 		t.Fatalf("saveSetupResult: %v", err)
 	}
 
-	envData, err := os.ReadFile(filepath.Join(home, ".pi-go", ".env"))
+	envData, err := os.ReadFile(filepath.Join(home, ".pirate", ".env"))
 	if err != nil {
 		t.Fatalf("reading .env: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestSaveSetupResultWritesKeyAndRole(t *testing.T) {
 		t.Errorf(".env does not contain the key value:\n%s", envData)
 	}
 
-	cfgData, err := os.ReadFile(filepath.Join(home, ".pi-go", "config.json"))
+	cfgData, err := os.ReadFile(filepath.Join(home, ".pirate", "config.json"))
 	if err != nil {
 		t.Fatalf("reading config.json: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestSaveSetupResultSkipsKeyForLocalProvider(t *testing.T) {
 		t.Fatalf("saveSetupResult: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(home, ".pi-go", ".env")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(home, ".pirate", ".env")); !os.IsNotExist(err) {
 		t.Errorf("a key-less provider wrote a .env file (stat err = %v)", err)
 	}
 
@@ -333,7 +333,7 @@ func TestSaveSetupResultOptionalGatewayKey(t *testing.T) {
 	home := t.TempDir()
 	testenv.SetHome(t, home)
 	t.Chdir(t.TempDir())
-	envPath := filepath.Join(home, ".pi-go", ".env")
+	envPath := filepath.Join(home, ".pirate", ".env")
 
 	entry, ok := lookupSetupProvider("agentgateway")
 	if !ok {

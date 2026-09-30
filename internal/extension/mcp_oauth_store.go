@@ -13,7 +13,8 @@ import (
 
 	"golang.org/x/oauth2"
 
-	"github.com/dimetron/pi-go/internal/notice"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/notice"
 )
 
 // mcpOAuthTokenTTL bounds how long a persisted MCP OAuth token is reused.
@@ -22,7 +23,7 @@ import (
 const mcpOAuthTokenTTL = 24 * time.Hour
 
 // mcpOAuthToken is the JSON document persisted per MCP server under
-// ~/.pi-go/mcp-oauth/. ClientID and TokenURL are captured from the OAuth
+// ~/.pirate/mcp-oauth/. ClientID and TokenURL are captured from the OAuth
 // config at authorize time so a later session can rebuild a refreshing token
 // source (refreshing needs both) without re-running discovery/registration.
 // Server and URL identify the cache entry: a token minted for one endpoint
@@ -45,9 +46,12 @@ type mcpOAuthToken struct {
 // full SHA-256 of "name\0url" for uniqueness, so distinct identities never
 // share a file and renaming or retargeting a server invalidates old entries.
 func mcpOAuthTokenFile(server, serverURL string) (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("cannot determine home directory: %w", err)
+	// Fail up front when no home can be resolved, so the token cache never
+	// lands on a relative fallback path.
+	if os.Getenv("PIRATE_HOME") == "" && os.Getenv("PI_GO_HOME") == "" {
+		if _, err := os.UserHomeDir(); err != nil {
+			return "", fmt.Errorf("resolving home directory: %w", err)
+		}
 	}
 	var sb strings.Builder
 	for _, r := range strings.ToLower(server) {
@@ -59,7 +63,7 @@ func mcpOAuthTokenFile(server, serverURL string) (string, error) {
 	}
 	sum := sha256.Sum256([]byte(server + "\x00" + serverURL))
 	name := fmt.Sprintf("%s-%x.json", sb.String(), sum)
-	return filepath.Join(home, ".pi-go", "mcp-oauth", name), nil
+	return filepath.Join(config.PirateHome(), "mcp-oauth", name), nil
 }
 
 // loadMCPOAuthTokenSource returns a token source rebuilt from the cached

@@ -10,7 +10,7 @@ import (
 	adktool "google.golang.org/adk/v2/tool"
 	"google.golang.org/adk/v2/tool/functiontool"
 
-	"github.com/dimetron/pi-go/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 // markerTool is a do-nothing tool whose only job is to be identifiable by name
@@ -271,10 +271,10 @@ func TestNewWiresRuntimeIntoTheAgent(t *testing.T) {
 func TestNewRejectsMalformedConfig(t *testing.T) {
 	isolate(t)
 	workDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(workDir, ".pi-go"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(workDir, ".pirate"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(workDir, ".pi-go", "config.json"), []byte("{not json"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workDir, ".pirate", "config.json"), []byte("{not json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

@@ -10,8 +10,8 @@ import (
 
 	adksession "google.golang.org/adk/v2/session"
 
-	piagent "github.com/dimetron/pi-go/internal/agent"
-	pisession "github.com/dimetron/pi-go/internal/session"
+	piagent "github.com/spa-skyson/pi-rate/internal/agent"
+	pisession "github.com/spa-skyson/pi-rate/internal/session"
 )
 
 // SessionSummary describes one persisted session, as reported by session/list.

@@ -10,7 +10,7 @@ import (
 
 	adkmodel "google.golang.org/adk/v2/model"
 
-	"github.com/dimetron/pi-go/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/agent"
 )
 
 // decodeLines parses NDJSON output into generic maps.

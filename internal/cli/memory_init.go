@@ -7,7 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dimetron/pi-go/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/palace"
 )
 
 func newMemoryInitCmd() *cobra.Command {
@@ -45,7 +46,7 @@ func runMemoryInit(dir, wing string) error {
 		wing = filepath.Base(absDir)
 	}
 
-	dbPath := filepath.Join(absDir, ".pi-go", "palace.db")
+	dbPath := filepath.Join(absDir, config.ProjectDirName, "palace.db")
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		return fmt.Errorf("creating palace directory: %w", err)
 	}
@@ -86,15 +87,15 @@ func runMemoryInit(dir, wing string) error {
 // and common non-source directories.
 func scanRoomCandidates(dir string) []string {
 	skipDirs := map[string]bool{
-		"node_modules": true,
-		"vendor":       true,
-		".git":         true,
-		".pi-go":       true,
-		"__pycache__":  true,
-		"dist":         true,
-		"build":        true,
-		".idea":        true,
-		".vscode":      true,
+		"node_modules":        true,
+		"vendor":              true,
+		".git":                true,
+		config.ProjectDirName: true,
+		"__pycache__":         true,
+		"dist":                true,
+		"build":               true,
+		".idea":               true,
+		".vscode":             true,
 	}
 
 	entries, err := os.ReadDir(dir)
@@ -119,7 +120,7 @@ func scanRoomCandidates(dir string) []string {
 func writeMempalaceYAML(path, wing string, rooms []string) error {
 	var content string
 	content += "# MemPalace configuration\n"
-	content += "# See: pi memory mine --help\n\n"
+	content += "# See: pirate memory mine --help\n\n"
 	content += fmt.Sprintf("wing: %s\n\n", wing)
 	content += "rooms:\n"
 	for _, r := range rooms {

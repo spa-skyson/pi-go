@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dimetron/pi-go/internal/atif"
+	"github.com/spa-skyson/pi-rate/internal/atif"
 )
 
 // --- Report structure ---

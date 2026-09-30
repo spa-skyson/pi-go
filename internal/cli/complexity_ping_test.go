@@ -17,11 +17,11 @@ import (
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 
-	"github.com/dimetron/pi-go/internal/config"
-	"github.com/dimetron/pi-go/internal/memory"
-	"github.com/dimetron/pi-go/internal/palace"
-	"github.com/dimetron/pi-go/internal/provider"
-	"github.com/dimetron/pi-go/internal/testenv"
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/memory"
+	"github.com/spa-skyson/pi-rate/internal/palace"
+	"github.com/spa-skyson/pi-rate/internal/provider"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // These tests pin the branch structure that the complexity refactor extracted

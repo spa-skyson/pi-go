@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dimetron/pi-go/internal/voice"
+	"github.com/spa-skyson/pi-rate/internal/voice"
 )
 
 // Compile-time contract: Creator must satisfy voice.SessionCreator, so an
