@@ -1964,6 +1964,11 @@ func (m *model) handleAgentSubEvent(msg agentSubEventMsg) (tea.Model, tea.Cmd) {
 			m.chatModel.Messages[idx].pipelineMode = msg.pipelineMode
 			m.chatModel.Messages[idx].pipelineStep = msg.pipelineStep
 			m.chatModel.Messages[idx].pipelineTotal = msg.pipelineTotal
+			// The card's clock starts here — the spawn event carries no
+			// timestamp, so arrival time is the stamp. Subsecond drift
+			// against the orchestrator's own StartedAt is invisible at a
+			// seconds-granularity timer.
+			m.chatModel.Messages[idx].agentStarted = time.Now()
 		}
 	} else {
 		if msg.kind == "done" && msg.background {
@@ -1976,6 +1981,13 @@ func (m *model) handleAgentSubEvent(msg agentSubEventMsg) (tea.Model, tea.Cmd) {
 				evKind := msg.kind
 				if evKind == "text_delta" {
 					evKind = "text"
+				}
+				if evKind == "done" && m.chatModel.Messages[i].agentEnded.IsZero() {
+					// The terminal event freezes the card's clock at its
+					// final duration. Cancel and kill paths reach this too:
+					// the tool wrapper emits done after the stream closes,
+					// whatever the outcome.
+					m.chatModel.Messages[i].agentEnded = time.Now()
 				}
 				// Merge consecutive text chunks so streaming deltas render as
 				// one growing line instead of a stack of one-char rows.
@@ -1998,7 +2010,10 @@ func (m *model) handleAgentSubEvent(msg agentSubEventMsg) (tea.Model, tea.Cmd) {
 	// the popup is closed or showing another mode.
 	m.refreshSubagentsPopup()
 	m.chatModel.Scroll = 0
-	return m, waitForSubEvent(m.cfg.AgentEventCh)
+	// armCardTick is nil unless a background agent outlives the turn: then
+	// the sea tick is dead and this is the only thing keeping its card's
+	// timer alive.
+	return m, tea.Batch(waitForSubEvent(m.cfg.AgentEventCh), m.armCardTick())
 }
 
 // handleAgentDone processes an agentDoneMsg.
@@ -2059,7 +2074,9 @@ func (m *model) handleAgentDone(msg agentDoneMsg) (tea.Model, tea.Cmd) {
 		model, next := m.startNextPrompt()
 		return model, tea.Batch(m.turnDoneAttention(), next)
 	}
-	return m, m.turnDoneAttention()
+	// The sea tick dies with the turn; a background agent still running keeps
+	// its card timer alive on the card tick instead.
+	return m, tea.Batch(m.turnDoneAttention(), m.armCardTick())
 }
 
 // runLifecycleHooks fires every configured lifecycle hook for the given event,

@@ -42,6 +42,9 @@ type StatusRenderInput struct {
 	LoadingItems map[string]bool // item -> done; nil means not loading
 	Flash        string          // transient notice ("Copied!"); empty when none
 	Palette      Palette         // resolved theme palette; zero = dark default
+	// RunningAgents is the number of live subagents, for the ⚓ counter. Zero
+	// renders nothing.
+	RunningAgents int
 }
 
 // runCycleInfo carries /run state for the status bar.
@@ -109,6 +112,7 @@ func (s *StatusModel) Render(in StatusRenderInput) string {
 	parts = append(parts, statusTokenField(in, dim, p)...)
 	parts = append(parts, statusLocationField(in, dim, p)...)
 	parts = append(parts, s.statusToolField(p)...)
+	parts = append(parts, statusSubagentsField(in, p)...)
 	parts = append(parts, statusRunCycleField(in, p)...)
 
 	return bar.Render(strings.Join(parts, sep))
@@ -249,6 +253,17 @@ func (s *StatusModel) statusToolField(p Palette) []string {
 		return []string{toolStyle.Render(fmt.Sprintf("tool: %s (%s)", s.ActiveTool, elapsed))}
 	}
 	return nil
+}
+
+// statusSubagentsField renders the live-subagent counter, "⚓ N". It sits next
+// to the tool field — both answer "what is working right now" — and is silent
+// at zero, so the bar does not grow an anchor for an empty sea.
+func statusSubagentsField(in StatusRenderInput, p Palette) []string {
+	if in.RunningAgents <= 0 {
+		return nil
+	}
+	anchorStyle := lipgloss.NewStyle().Foreground(p.Blue)
+	return []string{anchorStyle.Render(fmt.Sprintf("⚓ %d", in.RunningAgents))}
 }
 
 // statusRunCycleField renders the /run cycle indicator. The spec name is

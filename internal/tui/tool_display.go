@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
@@ -268,28 +269,53 @@ func (t *ToolDisplayModel) agentCardHeader(msg message, p Palette) string {
 	if label != "" {
 		b.WriteString(typeStyle.Render("[" + label + "]"))
 	}
+	// The card's clock: "· running 1m26s" while the agent is live, the frozen
+	// final duration once done. It sits between the label and the title, and
+	// the title is fitted to the width that is left.
+	timer := agentCardTimer(msg)
+	reserve := 0
+	if timer != "" {
+		reserve = len(" · ") + len([]rune(timer))
+		b.WriteString(" ")
+		b.WriteString(lipgloss.NewStyle().Foreground(p.Faint).Render("· " + timer))
+	}
 	if msg.agentTitle != "" {
 		b.WriteString(" ")
-		b.WriteString(titleStyle.Render(agentTitleFit(msg.agentTitle, t.titleWidth(label))))
+		b.WriteString(titleStyle.Render(agentTitleFit(msg.agentTitle, t.titleWidth(label, reserve))))
 	}
 	b.WriteString("\n")
 	return b.String()
 }
 
+// agentCardTimer returns the card's clock segment: "running 1m26s" while the
+// agent is live, the frozen final duration once done, and "" when the card has
+// no clock — no spawn stamp (a restored session), or a result that landed
+// without the done event, where no honest end time exists.
+func agentCardTimer(msg message) string {
+	switch {
+	case msg.agentRunning():
+		return "running " + time.Since(msg.agentStarted).Truncate(time.Second).String()
+	case !msg.agentEnded.IsZero():
+		return msg.agentEnded.Sub(msg.agentStarted).Truncate(time.Second).String()
+	default:
+		return ""
+	}
+}
+
 // titleWidth returns the max runes for the agent card title given the terminal
 // width and the bracketed label that precedes it. The label is counted so a
 // compound "[claude+pi+gemini]" leaves less room for the title than a bare
-// "[pi]", keeping the header within one line. A floor of 60 keeps narrow
-// terminals readable, and the storage cap (maxStoredAgentTitle) bounds what a
-// wide terminal can ever show.
-func (t ToolDisplayModel) titleWidth(label string) int {
+// "[pi]", as is reserve — the header clock's width, when the card has one. A
+// floor of 60 keeps narrow terminals readable, and the storage cap
+// (maxStoredAgentTitle) bounds what a wide terminal can ever show.
+func (t ToolDisplayModel) titleWidth(label string, reserve int) int {
 	w := t.Width
 	if w < 40 {
 		w = 80 // sensible default when width unknown
 	}
 	// Reserve the bullet (2), "agent" (5), the bracketed label ("[...]" is
-	// len(label)+2), and the separator space (1).
-	used := 2 + len("agent") + len(label) + 2 + 1
+	// len(label)+2), the separator space (1), and any clock segment.
+	used := 2 + len("agent") + len(label) + 2 + 1 + reserve
 	if w-used < 60 {
 		return 60
 	}
@@ -347,37 +373,147 @@ func renderableAgentEvents(evs []agentEv) []agentEv {
 	return renderable
 }
 
-// agentWindowLines renders the newest maxAgentOutputLines lines of the event
-// stream, so the user always sees the latest activity — not a stream truncated
-// into silence — plus the note describing what was withheld.
-//
-// The budget is in rendered lines, not events. A single event carries an
-// unbounded amount of text — a subagent's final analysis is one "text" event —
-// so an event count caps nothing: five of them still soft-wrap into a
-// screenful. Walk newest-first and stop once the window is full.
-//
-// The note is written whenever output was withheld. A single huge event is
-// clipped without any whole event being dropped, and hiding 60-odd lines with
-// no mark would read as if that were all the agent said.
-func agentWindowLines(renderable []agentEv, st agentEventStyles, cw int) (lines []string, note string) {
-	used := 0
-	for i := len(renderable) - 1; i >= 0 && len(lines) < maxAgentOutputLines; i-- {
-		lines = append(agentEventLines(renderable[i], st, cw), lines...)
-		used++
+// agentUnit is one visual block of the card window: the rendered lines it
+// occupies (usually one) and how many stream events it consumed. The window
+// budget counts lines, not units, so a soft-wrapped line still costs what it
+// renders.
+type agentUnit struct {
+	lines  []string
+	events int
+}
+
+// isAgentTextKind reports whether an event kind carries the agent's speech.
+func isAgentTextKind(kind string) bool {
+	return kind == "text" || kind == "text_delta"
+}
+
+// Per-row caps for the merged tool rows: a call name and its result summary
+// that together fit a normal terminal's content width (cw is ~0.8×width−4, so
+// ~89 cells fit a 120-column terminal).
+const (
+	maxAgentToolNameRunes = 28
+	maxAgentResultRunes   = 56
+)
+
+// pendingCall is a tool call unit still waiting for its result: where the unit
+// lives and how wide its name row already is, so the result summary is capped
+// to the room the merged row has left.
+type pendingCall struct {
+	unit    int
+	nameLen int
+}
+
+// agentUnits folds the renderable stream into the card's units: the agent's
+// latest thought first (the caller pins it above the tool trail), then one
+// unit per tool call with its result folded into the same line, then the
+// remaining single-line events — errors, steering markers, thinking. Every
+// unit occupies exactly one rendered row, so the window is unit-counted.
+// Older text events are dropped entirely — the latest thought supersedes them
+// — and are returned as dropped so the window's note can report them.
+func agentUnits(renderable []agentEv, st agentEventStyles, cw int) (units []agentUnit, dropped int, hasThought bool) {
+	thought := -1
+	for i := len(renderable) - 1; i >= 0; i-- {
+		if isAgentTextKind(renderable[i].kind) {
+			thought = i
+			break
+		}
 	}
-	skipped := len(renderable) - used
-	clipped := len(lines) > maxAgentOutputLines
-	if clipped {
-		// The oldest event still in the window overflows it; show its tail,
-		// which is the part nearest the newer output below it.
-		lines = lines[len(lines)-maxAgentOutputLines:]
+	if thought >= 0 {
+		// Reserve two cells for the "» " marker so the row fits cw.
+		text := truncateRunes(collapseToSingleLine(renderable[thought].content), max(1, cw-2))
+		units = append(units, agentUnit{lines: oneLine(st.text.Render("» "+text), cw), events: 1})
+		hasThought = true
 	}
 
-	switch {
-	case skipped > 0:
+	var open []pendingCall // tool calls still awaiting their result, oldest first
+	for i, ev := range renderable {
+		if i == thought {
+			continue
+		}
+		switch ev.kind {
+		case "text", "text_delta":
+			dropped++
+		case "tool_call":
+			name := truncateRunes(collapseToSingleLine(ev.content), maxAgentToolNameRunes)
+			units = append(units, agentUnit{lines: oneLine(st.tool.Render("⚙ "+name), cw), events: 1})
+			open = append(open, pendingCall{unit: len(units) - 1, nameLen: len([]rune(name))})
+		case "tool_result":
+			mark, style := "✓ ", st.result
+			if isFailedToolResult(ev.content) {
+				mark, style = "✗ ", st.failure
+			}
+			if n := len(open); n > 0 {
+				// The call and what came back read as one row. The summary
+				// cap shrinks to what the row still has room for, so the
+				// merged row stays a single line wherever it can.
+				p := open[0]
+				open = open[1:]
+				cap := maxAgentResultRunes
+				if room := cw - 5 - p.nameLen; room < cap {
+					cap = max(room, 8)
+				}
+				summary := truncateRunes(toolResultSummary(ev.content), cap)
+				units[p.unit].lines = oneLine(units[p.unit].lines[0]+style.Render(" "+mark+summary), cw)
+				continue
+			}
+			// An orphan result — its call scrolled past the window ages ago.
+			// Show what came back on its own row rather than dropping it.
+			summary := truncateRunes(toolResultSummary(ev.content), maxAgentResultRunes)
+			units = append(units, agentUnit{lines: oneLine(style.Render(mark+summary), cw), events: 1})
+		default:
+			units = append(units, agentUnit{lines: oneLine(agentEventLines(ev, st, cw)[0], cw), events: 1})
+		}
+	}
+	return units, dropped, hasThought
+}
+
+// oneLine soft-wraps a styled line to width and keeps only its first row —
+// the hard cap that keeps one event from occupying several budget lines. The
+// content truncation at the call sites is what normally holds a line to one
+// row; softWrap is the backstop for wide runes.
+func oneLine(line string, width int) []string {
+	wrapped := softWrap(line, width)
+	if len(wrapped) <= 1 {
+		return wrapped
+	}
+	return wrapped[:1]
+}
+
+// agentWindowLines renders the card's live window, at most maxAgentOutputLines
+// lines, newest activity last, plus the note describing what was withheld.
+//
+// The layout is the collapsed card the issue asked for: the agent's latest
+// thought pinned on the first line, then the tool trail below it — one row per
+// tool call with its own result appended in place — so a call and what came
+// back read as a single line. The newest tools are the ones kept; anything
+// older is summarized by the note. The full stream stays in the card and is
+// one glance away in the monitor's viewer.
+func agentWindowLines(renderable []agentEv, st agentEventStyles, cw int) (lines []string, note string) {
+	units, dropped, hasThought := agentUnits(renderable, st, cw)
+	if len(units) == 0 {
+		return nil, ""
+	}
+
+	// The thought is pinned: it takes the first line, and every remaining
+	// budget line goes to the newest tool rows.
+	body := units
+	keep := maxAgentOutputLines
+	if hasThought {
+		body = units[1:]
+		keep--
+	}
+	shown := min(keep, len(body))
+	skipped := dropped + len(body) - shown
+
+	lines = make([]string, 0, shown+1)
+	if hasThought {
+		lines = append(lines, units[0].lines[0])
+	}
+	for _, u := range body[len(body)-shown:] {
+		lines = append(lines, u.lines[0])
+	}
+	if skipped > 0 {
 		note = fmt.Sprintf("... %d earlier events", skipped)
-	case clipped:
-		note = "... earlier output"
 	}
 	return lines, note
 }
@@ -452,11 +588,12 @@ func (t *ToolDisplayModel) renderLiveOutput(msg message, dim lipgloss.Style, p P
 	return b.String()
 }
 
-// maxAgentOutputLines bounds a subagent card's live output window. The card is
-// a progress indicator, not a transcript: the agent's full answer arrives in the
-// result summary and in the parent's own reply, so the stream only has to show
-// enough to see what the agent is doing right now.
-const maxAgentOutputLines = 3
+// maxAgentOutputLines bounds a subagent card's live output window: the pinned
+// latest thought plus the newest tool rows. The card is a progress indicator,
+// not a transcript — the full stream is one glance away in the monitor's
+// viewer (↓ on an empty prompt, or Ctrl+T), and the agent's final answer still
+// arrives in the result summary and in the parent's own reply.
+const maxAgentOutputLines = 8
 
 // agentEventStyles is the per-kind stylesheet for a subagent card's event
 // window. The card mixes four different sorts of line — what the agent said,

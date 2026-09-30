@@ -19,8 +19,8 @@ func newTestSpinner(verb string) *spinnerState {
 func TestSpinnerInitialSymbol(t *testing.T) {
 	s := newTestSpinner("Thinking")
 	got := s.tick()
-	if got != "* Thinking...          " {
-		t.Fatalf("expected padded '* Thinking...          ' got %q", got)
+	if got != "* Thinking...        " {
+		t.Fatalf("expected padded '* Thinking...        ' got %q", got)
 	}
 }
 
@@ -79,8 +79,8 @@ func TestSpinnerWordChangesAfter3Rotations(t *testing.T) {
 		t.Fatalf("expected symbol reset to '*' after 3 rotations, got %q", got)
 	}
 	if strings.Contains(got, "Testing") {
-		// Could theoretically pick the same word randomly, but extremely unlikely
-		// with 100+ words. Accept if it happens.
+		// Could theoretically pick the same word randomly, but unlikely
+		// with 58 words. Accept if it happens.
 		t.Logf("word stayed 'Testing' (random chance) — acceptable")
 	}
 }
@@ -105,11 +105,11 @@ func TestSpinnerFormat(t *testing.T) {
 
 func TestSpinnerVerbFixedWidth(t *testing.T) {
 	short := newTestSpinner("Thinking").tick()
-	long := newTestSpinner("Whatchamacalliting").tick()
+	long := newTestSpinner("Doublooncounting").tick()
 	if len(short) != len(long) {
 		t.Fatalf("spinner lengths differ: short=%d %q long=%d %q", len(short), short, len(long), long)
 	}
-	if !strings.Contains(short, "Thinking...          ") {
+	if !strings.Contains(short, "Thinking...        ") {
 		t.Fatalf("expected short verb to be padded after ellipsis, got %q", short)
 	}
 }
@@ -127,5 +127,25 @@ func TestSpinnerVerbNotEmpty(t *testing.T) {
 	trimmed := strings.TrimRight(got, " ")
 	if !strings.HasSuffix(trimmed, "...") {
 		t.Fatalf("expected ellipsis before padding, got %q", got)
+	}
+}
+
+func TestSpinnerVerbsInvariants(t *testing.T) {
+	for i, verb := range spinnerVerbs {
+		if i > 0 && spinnerVerbs[i-1] >= verb {
+			t.Errorf("list not strictly sorted at %q (previous %q)", verb, spinnerVerbs[i-1])
+		}
+		if !strings.HasSuffix(verb, "ing") {
+			t.Errorf("%q is not a gerund", verb)
+		}
+		for _, r := range verb {
+			asciiSafe := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r == '\'' || r == '-'
+			if !asciiSafe {
+				t.Errorf("%q contains rune %q outside ASCII letters, apostrophe, hyphen", verb, r)
+			}
+		}
+		if len(verb) > 16 {
+			t.Errorf("%q is %d chars wide; spinner width budget is 16", verb, len(verb))
+		}
 	}
 }

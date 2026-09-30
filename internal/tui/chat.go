@@ -139,6 +139,12 @@ type message struct {
 	agentType   string    // subagent type (e.g. "task", "explore")
 	agentTitle  string    // short description from prompt
 	agentEvents []agentEv // streamed events from the subagent
+	// agentStarted/agentEnded stamp the card's clock: started on the spawn
+	// event, ended on the done event. Zero started means no clock (cards from
+	// a restored session have neither); ended set freezes the header timer at
+	// the final duration.
+	agentStarted time.Time
+	agentEnded   time.Time
 	// agentLabel is the verbatim string rendered inside "agent[...]" for a
 	// card whose label is not derived from agentType. A2A calls set it to the
 	// configured agent name (e.g. "istio-agent") so the card reads
@@ -224,6 +230,13 @@ func (m *message) renderKey(width int, compactTools, hasSeparator, streamingPlac
 	if blinkOn && m.toolPending() {
 		h = fnvByte(h, 1)
 	}
+	// A running card's header timer ticks once a second; folding the current
+	// second into the key invalidates the cache exactly once per second and
+	// only while running. A finished card carries no clock in its key, so its
+	// cached render never invalidates again.
+	if m.agentRunning() {
+		h = fnvInt(h, int(time.Since(m.agentStarted).Truncate(time.Second)))
+	}
 
 	var flags uint16
 	if m.isWarning {
@@ -267,6 +280,15 @@ func (m *message) toolPending() bool {
 type agentEv struct {
 	kind    string // "tool_call", "tool_result", "text"
 	content string
+}
+
+// agentRunning reports whether the card's subagent is still live: a spawn
+// stamp without a done stamp and without a result. The result check is the
+// belt-and-braces that stops the clock (and the once-a-second card tick) even
+// when the done event was dropped by the event channel's non-blocking send —
+// the tool result always lands, the event may not.
+func (m *message) agentRunning() bool {
+	return !m.agentStarted.IsZero() && m.agentEnded.IsZero() && m.content == ""
 }
 
 // traceEntry represents a single entry in the debug trace log.
