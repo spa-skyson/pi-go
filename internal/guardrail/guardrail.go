@@ -4,11 +4,12 @@ package guardrail
 import (
 	"encoding/json"
 	"fmt"
-	config "github.com/spa-skyson/pi-rate/internal/config"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 // DefaultMaxDailyTokens is the default daily token limit.

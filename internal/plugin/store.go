@@ -3,11 +3,12 @@ package plugin
 import (
 	"encoding/json"
 	"fmt"
-	config "github.com/spa-skyson/pi-rate/internal/config"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 // RegistryVersion is the on-disk schema version of installed.json.

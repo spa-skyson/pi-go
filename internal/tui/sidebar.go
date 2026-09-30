@@ -548,7 +548,7 @@ func sidebarModeLines(in SidebarRenderInput, innerW int, st sidebarStyles) []str
 // "      " so they align regardless of the marker width.
 //
 // stateStyle wraps the entire row (prefix + title + continuations) in the
-// state's colour. marker is the state prefix. title is the item text.
+// state's color. marker is the state prefix. title is the item text.
 func sidebarChecklistLines(lines *[]string, stateStyle lipgloss.Style, marker, title string, innerW int) {
 	// "  [x] " is 6 cells; "  ▶ " is 5. Use the wider one (6) for continuation
 	// so both align under the content column.

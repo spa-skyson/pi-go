@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -113,8 +114,8 @@ func TestStripJSONC_SyntaxErrorKeepsLineNumbers(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a syntax error from the malformed config")
 	}
-	syn, ok := err.(*json.SyntaxError)
-	if !ok {
+	var syn *json.SyntaxError
+	if !errors.As(err, &syn) {
 		t.Fatalf("expected *json.SyntaxError, got %T: %v", err, err)
 	}
 	line := strings.Count(src[:syn.Offset], "\n") + 1

@@ -861,7 +861,7 @@ func (m *model) cancelAgent() tea.Cmd {
 	if m.face != nil {
 		m.face.SetMood(MoodIdle)
 	}
-	// Notice about cancelled subagents. Only from SubagentStatuses; nil means
+	// Notice about canceled subagents. Only from SubagentStatuses; nil means
 	// the feature is not wired and we do not guess.
 	if m.cfg.SubagentStatuses != nil {
 		var n int
@@ -877,7 +877,7 @@ func (m *model) cancelAgent() tea.Cmd {
 				label = "subagent"
 			}
 			m.chatModel.AppendNotice(fmt.Sprintf(
-				"turn cancelled; stopped %d running %s — their sessions are saved and may hold partial reports (see /subagents)", n, label))
+				"turn canceled; stopped %d running %s — their sessions are saved and may hold partial reports (see /subagents)", n, label))
 		}
 	}
 	if m.agentCh != nil {

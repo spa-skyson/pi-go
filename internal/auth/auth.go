@@ -10,7 +10,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	config "github.com/spa-skyson/pi-rate/internal/config"
 	"io"
 	"net"
 	"net/http"
@@ -21,6 +20,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 // DebugLog is an optional callback invoked with low-level auth diagnostics

@@ -5,12 +5,13 @@ package logger
 import (
 	"encoding/json"
 	"fmt"
-	config "github.com/spa-skyson/pi-rate/internal/config"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 // Logger writes structured session log entries to a file.

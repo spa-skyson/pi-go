@@ -159,7 +159,7 @@ func TestSidebarTodoSectionKeepsMCP(t *testing.T) {
 
 // TestSidebarTodoSectionWidth pins that wrapped plan rows stay inside the
 // sidebar column — a long item must never push the panel wider or clip a
-// neighbour.
+// neighbor.
 func TestSidebarTodoSectionWidth(t *testing.T) {
 	t.Parallel()
 	const w = 30
