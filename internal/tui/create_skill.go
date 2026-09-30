@@ -135,6 +135,7 @@ func (m *model) handleSkillCreateCommand(args []string) (tea.Model, tea.Cmd) {
 			desc: desc,
 			path: skillPath,
 		}
+		m.openOverlay(overlaySkillCreate)
 		m.chatModel.Messages = append(m.chatModel.Messages, message{
 			role:    "assistant",
 			content: fmt.Sprintf("Skill already exists: `%s`\n\nPress **Enter** to overwrite, **Esc** to cancel.", skillPath),
@@ -148,13 +149,13 @@ func (m *model) handleSkillCreateCommand(args []string) (tea.Model, tea.Cmd) {
 // handleSkillCreateConfirm handles Enter during skill-create overwrite confirmation.
 func (m *model) handleSkillCreateConfirm() (tea.Model, tea.Cmd) {
 	p := m.pendingSkillCreate
-	m.pendingSkillCreate = nil
+	m.popOverlay(overlaySkillCreate)
 	return m.writeSkillFile(p.name, p.desc, p.path)
 }
 
 // handleSkillCreateCancel cancels skill-create overwrite.
 func (m *model) handleSkillCreateCancel() (tea.Model, tea.Cmd) {
-	m.pendingSkillCreate = nil
+	m.popOverlay(overlaySkillCreate)
 	m.chatModel.Messages = append(m.chatModel.Messages, message{
 		role:    "assistant",
 		content: "Skill creation canceled.",

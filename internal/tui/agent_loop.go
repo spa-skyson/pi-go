@@ -2014,7 +2014,7 @@ func (m *model) handleAgentDone(msg agentDoneMsg) (tea.Model, tea.Cmd) {
 		// with the loop (cancelation reaches the bridge, which answers deny
 		// on ctx). Drop the dialog: an answer typed now would land in the
 		// buffered Reply of a call nobody is waiting on.
-		m.approval = nil
+		m.popOverlay(overlayApproval)
 		m.chatModel.AppendNotice("approval canceled: turn ended before an answer")
 	}
 	if msg.err == nil && m.mode == "plan" && m.planWorktree != nil {
