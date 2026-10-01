@@ -115,9 +115,16 @@ func liveStdout(t *testing.T) (snapshot func() string, stop func()) {
 }
 
 // waitFor polls cond until it holds or the deadline passes.
+//
+// The 30s budget is deliberately oversized: every condition here is an
+// asynchronous event that arrives in milliseconds, and the test asserts its
+// ordering, not speed. CI runs this package alongside a dozen others
+// (116s vs ~10s locally), so scheduler delays alone can stall a goroutine for
+// seconds — a timeout should mean the event never arrived, not that the
+// runner was busy.
 func waitFor(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		if cond() {
 			return
@@ -135,6 +142,10 @@ func TestRunJSONSteer_RunsQueuedSteerInSameSession(t *testing.T) {
 	ag, sessionID := newTestAgent(t, llm)
 
 	pipeR, pipeW := io.Pipe()
+	// The steer scanner blocks in Scan until the write end closes — ctx
+	// cancellation cannot stop it mid-read — so close pipeW when the test
+	// ends instead of leaking the goroutine and the pipe fds.
+	t.Cleanup(func() { _ = pipeW.Close() })
 	snapshot, stop := liveStdout(t)
 
 	runErr := make(chan error, 1)
@@ -222,6 +233,7 @@ func TestRunJSONSteer_CancelDuringSteerTurn(t *testing.T) {
 	releaseOnce := new(sync.Once)
 
 	pipeR, pipeW := io.Pipe()
+	t.Cleanup(func() { _ = pipeW.Close() }) // unblock the steer scanner goroutine
 	snapshot, stop := liveStdout(t)
 
 	runErr := make(chan error, 1)
