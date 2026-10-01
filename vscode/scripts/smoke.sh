@@ -1,8 +1,8 @@
 #!/bin/bash
-# Smoke-test the pi-go VS Code extension in a real editor.
+# Smoke-test the Pi-rate VS Code extension in a real editor.
 #
 # Launches VS Code (Insiders preferred, stable fallback) with the extension
-# loaded and PI_GO_SMOKE=1, waits for the extension's [smoke] self-check in the
+# loaded and PIRATE_SMOKE=1, waits for the extension's [smoke] self-check in the
 # extension-host log (activation → acp-server up → prompt roundtrip → SMOKE-OK),
 # then kills the editor and prints a verdict table.
 #
@@ -50,7 +50,7 @@ case "$MODE" in
     ;;
 esac
 
-WORKDIR="$(mktemp -d /tmp/pi-go-vscode-smoke.XXXXXX)"
+WORKDIR="$(mktemp -d /tmp/pirate-vscode-smoke.XXXXXX)"
 LOGDIR="$WORKDIR/profile/logs"
 SMOKEFILE="$WORKDIR/smoke-result.log"
 mkdir -p "$WORKDIR/profile/User" "$LOGDIR"
@@ -61,8 +61,8 @@ mkdir -p "$WORKDIR/profile/User" "$LOGDIR"
 # is installed into the profile's extensions dir first.
 EXDIR="$WORKDIR/extensions"
 if [ "$MODE" = "installed" ]; then
-  VSIX="$HOME/.vscode-ext/pi-go-vscode.vsix"
-  [ -f "$VSIX" ] || VSIX="$VSC/pi-go-vscode-$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$VSC/package.json" | head -1).vsix"
+  VSIX="$HOME/.vscode-ext/pirate-vscode.vsix"
+  [ -f "$VSIX" ] || VSIX="$VSC/pirate-vscode-$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$VSC/package.json" | head -1).vsix"
   [ -f "$VSIX" ] || { echo "FATAL: no VSIX found (run make package first)"; exit 2; }
   "$CODE_BIN" --install-extension "$VSIX" --force \
     --extensions-user-dir "$EXDIR" >/dev/null 2>&1 || { echo "FATAL: VSIX install failed"; exit 2; }
@@ -70,14 +70,14 @@ fi
 
 # Point the extension at the agent under test.
 cat > "$WORKDIR/profile/User/settings.json" <<EOF
-{ "pi-go.command": "$AGENT_CMD", "pi-go.args": ["acp-server"] }
+{ "pirate.command": "$AGENT_CMD", "pirate.args": ["acp-server"] }
 EOF
 
 EDITOR_PID=""
 kill_editor() {
   [ -n "$EDITOR_PID" ] && kill "$EDITOR_PID" 2>/dev/null
   sleep 0.5
-  pkill -f "pi-go-vscode-smoke" 2>/dev/null
+  pkill -f "pirate-vscode-smoke" 2>/dev/null
   true
 }
 trap 'kill_editor' EXIT
@@ -99,13 +99,13 @@ FLAGS=(
   --skip-release-notes
   --skip-welcome
   --disable-updates
-  --enable-proposed-api pi-go.pi-go-vscode
+  --enable-proposed-api pirate.pirate-vscode
 )
 if [ "$MODE" != "installed" ]; then
   FLAGS+=(--extensionDevelopmentPath="$VSC")
 fi
 
-PI_GO_SMOKE=1 PI_GO_SMOKE_FILE="$SMOKEFILE" "$CODE_BIN" "${FLAGS[@]}" "$WORKDIR" >/dev/null 2>&1 &
+PIRATE_SMOKE=1 PIRATE_SMOKE_FILE="$SMOKEFILE" "$CODE_BIN" "${FLAGS[@]}" "$WORKDIR" >/dev/null 2>&1 &
 EDITOR_PID=$!
 
 # --- wait for the verdict ---------------------------------------------------
@@ -143,7 +143,7 @@ else
     echo "== smoke self-check =="
     sed 's/^\[smoke\] /  /' "$SMOKEFILE"
   fi
-  [ -n "$EXTHOST_LOG" ] && { echo "== exthost.log (pi-go/error lines) =="; grep -i "pi-go\|error" "$EXTHOST_LOG" | grep -v Deprecation | tail -15; }
+  [ -n "$EXTHOST_LOG" ] && { echo "== exthost.log (pirate/error lines) =="; grep -iE "pirate|pi-rate|error" "$EXTHOST_LOG" | grep -v Deprecation | tail -15; }
   [ -z "$EXTHOST_LOG" ] && echo "no exthost.log found — editor may have failed to start (check $LOGDIR)"
   echo "SMOKE FAIL ($MODE)"
   exit 1

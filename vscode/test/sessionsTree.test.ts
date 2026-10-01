@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import vscode from "vscode";
-import { PiGoSessionsProvider, registerSessionsTree, SessionNode } from "../src/sessionsTree";
+import { PirateSessionsProvider, registerSessionsTree, SessionNode } from "../src/sessionsTree";
 import { TranscriptStore } from "../src/transcript";
 import type { SessionEntry } from "../src/acp";
 
-// Fake ACP client surface used by the provider (enough of PiGoAcpClient).
+// Fake ACP client surface used by the provider (enough of PirateAcpClient).
 function fakeClient(list: () => Promise<SessionEntry[]>) {
   return { listSessions: vi.fn(list) } as unknown as {
     listSessions: () => Promise<SessionEntry[]>;
@@ -20,12 +20,12 @@ beforeEach(() => {
   vscode.__workspaceFolders.push({ uri: vscode.Uri.file("/tmp/ws"), name: "ws", index: 0 });
 });
 
-describe("PiGoSessionsProvider.getChildren", () => {
+describe("PirateSessionsProvider.getChildren", () => {
   it("sorts newest first with undated entries last and builds labels", async () => {
     const store = new TranscriptStore();
     const refresh = new vscode.EventEmitter<void>();
     const active = new Set<string>();
-    const provider = new PiGoSessionsProvider(
+    const provider = new PirateSessionsProvider(
       fakeClient(async () => [
         entry({ sessionId: "old", cwd: "/home/user/proj", updatedAt: Date.now() - 3 * 60_000 }),
         entry({ sessionId: "new", cwd: "/home/user/proj", updatedAt: Date.now() - 30_000 }),
@@ -49,7 +49,7 @@ describe("PiGoSessionsProvider.getChildren", () => {
   });
 
   it("shows a single-node unavailable message when listSessions fails", async () => {
-    const provider = new PiGoSessionsProvider(
+    const provider = new PirateSessionsProvider(
       fakeClient(async () => {
         throw new Error("spawn failed");
       }),
@@ -59,40 +59,40 @@ describe("PiGoSessionsProvider.getChildren", () => {
     );
     const children = await provider.getChildren();
     expect(children).toHaveLength(1);
-    expect(children[0].label).toBe("pi-go unavailable");
-    expect(children[0].description).toBe("check pi-go.command");
+    expect(children[0].label).toBe("Pi-rate unavailable");
+    expect(children[0].description).toBe("check pirate.command");
     provider.dispose();
   });
 });
 
-describe("PiGoSessionsProvider.getTreeItem", () => {
+describe("PirateSessionsProvider.getTreeItem", () => {
   it("picks the icon by active/replied state", () => {
     const store = new TranscriptStore();
     const refresh = new vscode.EventEmitter<void>();
     const active = new Set<string>(["running"]);
-    const provider = new PiGoSessionsProvider(fakeClient(async () => []), store, refresh, active);
+    const provider = new PirateSessionsProvider(fakeClient(async () => []), store, refresh, active);
 
     store.appendUserTurn("replied", "q");
     store.appendMessageChunk("replied", "agent", "a", "m1");
 
     const running = provider.getTreeItem(new SessionNode("r", entry({ sessionId: "running" })));
     expect((running.iconPath as { id: string }).id).toBe("sync~spin");
-    expect(running.contextValue).toBe("piGoSessionActive");
+    expect(running.contextValue).toBe("pirateSessionActive");
 
     const replied = provider.getTreeItem(new SessionNode("p", entry({ sessionId: "replied" })));
     expect((replied.iconPath as { id: string }).id).toBe("circle-filled");
-    expect(replied.contextValue).toBe("piGoSession");
+    expect(replied.contextValue).toBe("pirateSession");
 
     const idle = provider.getTreeItem(new SessionNode("i", entry({ sessionId: "idle" })));
     expect((idle.iconPath as { id: string }).id).toBe("circle-outline");
 
-    expect(replied.command?.command).toBe("pi-go.openSession");
+    expect(replied.command?.command).toBe("pirate.openSession");
     expect(replied.tooltip).toBeInstanceOf(vscode.MarkdownString);
     provider.dispose();
   });
 
   it("fires didChange on refreshTree", () => {
-    const provider = new PiGoSessionsProvider(
+    const provider = new PirateSessionsProvider(
       fakeClient(async () => []),
       new TranscriptStore(),
       new vscode.EventEmitter<void>(),
@@ -108,7 +108,7 @@ describe("PiGoSessionsProvider.getTreeItem", () => {
 
 describe("relativeTime", () => {
   it("formats via descriptions", async () => {
-    const provider = new PiGoSessionsProvider(
+    const provider = new PirateSessionsProvider(
       fakeClient(async () => [
         entry({ sessionId: "a", cwd: "/w", updatedAt: Date.now() - 10_000 }),
         entry({ sessionId: "b", cwd: "/w", updatedAt: Date.now() - 5 * 60_000 }),
@@ -151,7 +151,7 @@ describe("registerSessionsTree", () => {
     );
     expect(
       (vscode.window.createTreeView as unknown as { calls: unknown[][] }).calls[0],
-    ).toEqual(["pi-go.sessions", { treeDataProvider: provider }]);
+    ).toEqual(["pirate.sessions", { treeDataProvider: provider }]);
 
     // Badge follows the active count.
     refresh.fire();
@@ -166,12 +166,12 @@ describe("registerSessionsTree", () => {
 
     // Commands are registered and wired.
     const node = new SessionNode("n", entry({ sessionId: "s1" }));
-    vscode.__commands.get("pi-go.openSession")?.(node);
+    vscode.__commands.get("pirate.openSession")?.(node);
     expect(chatPanel.openSession).toHaveBeenCalledWith(node.entry);
-    vscode.__commands.get("pi-go.openSession")?.(undefined); // guard: no node
-    vscode.__commands.get("pi-go.openSession")?.({ entry: { sessionId: "" } }); // guard: empty id
+    vscode.__commands.get("pirate.openSession")?.(undefined); // guard: no node
+    vscode.__commands.get("pirate.openSession")?.({ entry: { sessionId: "" } }); // guard: empty id
     expect(chatPanel.openSession).toHaveBeenCalledTimes(1);
-    vscode.__commands.get("pi-go.newSession")?.();
+    vscode.__commands.get("pirate.newSession")?.();
     expect(chatPanel.startNewSession).toHaveBeenCalled();
 
     provider.dispose();

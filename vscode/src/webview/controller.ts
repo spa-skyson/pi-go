@@ -64,7 +64,7 @@ export class ChatController {
     this.headerTitle = document.createElement("span");
     this.headerTitle.className = "session-title";
     const historyButton = iconButton("history", "Session history", () => this.host.post({ type: "showHistory" }));
-    const pingButton = iconButton("ping", "Run pi ping", () => this.host.post({ type: "ping" }));
+    const pingButton = iconButton("ping", "Run pirate ping", () => this.host.post({ type: "ping" }));
     const newButton = iconButton("newChat", "New session", () => this.host.post({ type: "newSession" }));
     this.headerTitle.textContent = "Untitled";
     this.header.append(this.headerTitle, historyButton, pingButton, newButton);
@@ -82,7 +82,7 @@ export class ChatController {
     brand.className = "welcome-brand";
     const wordmark = document.createElement("h1");
     wordmark.className = "wordmark";
-    wordmark.textContent = "pi-go";
+    wordmark.textContent = "Pi-rate";
     const tagline = document.createElement("p");
     tagline.className = "tagline";
     tagline.textContent = "Your AI coding agent, in the editor";
@@ -105,7 +105,7 @@ export class ChatController {
     const lessons = document.createElement("div");
     lessons.className = "learn-lessons";
     for (const [label, prompt] of [
-      ["Ask Pi-Go to write code", "Help me build a new feature in this project. "],
+      ["Ask Pi-rate to write code", "Help me build a new feature in this project. "],
       ["Explore your codebase", "Explain the architecture of this repository."],
       ["Find and fix a bug", "Help me investigate a bug in this project. "],
       ["Plan a change before editing", "Help me plan a change. Explore the code and propose an approach before editing. "],
@@ -683,13 +683,13 @@ export class ChatController {
     const settings = document.createElement("button");
     settings.className = "error-action";
     settings.type = "button";
-    settings.textContent = "Open Pi-Go settings";
-    settings.addEventListener("click", () => this.host.post({ type: "openPiGoSettings" }));
+    settings.textContent = "Open Pi-rate settings";
+    settings.addEventListener("click", () => this.host.post({ type: "openPirateSettings" }));
     const logs = document.createElement("button");
     logs.className = "error-action secondary";
     logs.type = "button";
     logs.textContent = "Open output log";
-    logs.addEventListener("click", () => this.host.post({ type: "openPiGoLogs" }));
+    logs.addEventListener("click", () => this.host.post({ type: "openPirateLogs" }));
     actions.append(settings, logs);
     el.append(actions);
 

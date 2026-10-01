@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import type * as acp from "@agentclientprotocol/sdk";
 import { SESSION_SCHEME } from "./acp";
 
-// Output cap for tool cards; raw output can be huge (pi-go sends raw result
+// Output cap for tool cards; raw output can be huge (pirate sends raw result
 // payloads), so clamp what reaches the UI.
 export const MAX_TOOL_OUTPUT = 16 * 1024;
 
@@ -89,7 +89,7 @@ export class TranscriptStore {
   title(acpId: string): string {
     const first = this.turnList(acpId).find((t) => t.role === "user");
     const line = first?.prompt.trim().split("\n")[0] ?? "";
-    if (!line) return "pi-go session";
+    if (!line) return "Pi-rate session";
     return line.length > 60 ? `${line.slice(0, 60)}…` : line;
   }
 
@@ -255,7 +255,7 @@ export function toolStateOf(
   return state;
 }
 
-/** Raw tool output as display text. pi-go sends results as rawOutput JSON:
+/** Raw tool output as display text. pirate sends results as rawOutput JSON:
  *  string results pass through, anything else renders as pretty JSON, clamped
  *  so a huge result cannot flood the card. */
 export function formatRawOutput(rawOutput: unknown): string | undefined {
@@ -294,13 +294,13 @@ export function formatContent(content: acp.ToolCallContent[] | null | undefined)
   for (const c of content) {
     if (c.type === "content") {
       if (c.content?.type === "text") out.push(c.content.text);
-      // image/audio blocks: skipped — pi-go does not send them as tool output
+      // image/audio blocks: skipped — pirate does not send them as tool output
     } else if (c.type === "diff") {
       const body = diffBody(c.oldText, c.newText);
       out.push(`\`\`\`diff\n--- ${c.path}\n+++ ${c.path}\n${body}\n\`\`\``);
     } else if (c.type === "terminal") {
       // Terminal blocks reference a terminal by id; there is no inline output
-      // to show (pi-go never sends them).
+      // to show (pirate never sends them).
       out.push("_(terminal output)_");
     }
   }

@@ -41,7 +41,7 @@ function scopeColor(theme: Theme, scope: string): string {
   return rule.settings.foreground.slice(0, 7);
 }
 
-describe("Pi-Go color themes", () => {
+describe("Pi-rate color themes", () => {
   it("contributes every generated theme from package.json", () => {
     const contributed = pkg.contributes.themes.map((t: { label: string; path: string }) => [t.label, t.path]);
     expect(contributed).toEqual(specs.map((s) => [s.label, `./themes/${s.file}`]));
@@ -69,7 +69,7 @@ describe("Pi-Go color themes", () => {
     expect(contrast(c["sideBar.foreground"] ?? c["foreground"], c["sideBar.background"])).toBeGreaterThanOrEqual(7);
   });
 
-  it.each(specs)("$label uses the Pi-Go palette, not Catppuccin's", (spec) => {
+  it.each(specs)("$label uses the Pi-rate palette, not Catppuccin's", (spec) => {
     const c = (buildTheme(spec) as Theme).colors;
     const brand = spec.id === "neon" ? { cyan: "#00f0ff", magenta: "#ff00aa", bg: "#0a0a12" } : { cyan: "#00758f", magenta: "#c2007f", bg: "#f7f8fc" };
     expect(c["editor.background"]).toBe(brand.bg);

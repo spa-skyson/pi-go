@@ -3,13 +3,13 @@ import { ChildProcess, spawn } from "node:child_process";
 import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
 
-export const SESSION_SCHEME = "pi-go-session";
-export const SESSION_TYPE = "pi-go";
+export const SESSION_SCHEME = "pirate-session";
+export const SESSION_TYPE = "pirate";
 
-const log = vscode.window.createOutputChannel("pi-go", { log: true });
+const log = vscode.window.createOutputChannel("Pi-rate", { log: true });
 
 // ---------------------------------------------------------------------------
-// ACP client — drives `pi acp-server` over stdio.
+// ACP client — drives `pirate acp-server` over stdio.
 // ---------------------------------------------------------------------------
 
 export interface SessionEntry {
@@ -19,7 +19,7 @@ export interface SessionEntry {
   cwd: string;
 }
 
-/** Capabilities pi-go advertises in its initialize response. */
+/** Capabilities pirate advertises in its initialize response. */
 export interface AgentCaps {
   protocolVersion: acp.ProtocolVersion;
   supportsList: boolean;
@@ -28,8 +28,8 @@ export interface AgentCaps {
 
 export type UpdateListener = (update: acp.SessionNotification) => void;
 
-/** Drives `pi acp-server` over stdio and funnels session updates to listeners. */
-export class PiGoAcpClient implements vscode.Disposable {
+/** Drives `pirate acp-server` over stdio and funnels session updates to listeners. */
+export class PirateAcpClient implements vscode.Disposable {
   private process?: ChildProcess;
   private connection?: acp.ClientConnection;
   private initialized = false;
@@ -60,8 +60,8 @@ export class PiGoAcpClient implements vscode.Disposable {
   private async ensureConnected(): Promise<acp.ClientConnection> {
     if (this.connection && this.process && !this.process.killed) return this.connection;
 
-    const config = vscode.workspace.getConfiguration("pi-go");
-    const command = config.get<string>("command", "pi");
+    const config = vscode.workspace.getConfiguration("pirate");
+    const command = config.get<string>("command", "pirate");
     const args = config.get<string[]>("args", ["acp-server"]);
     const cwd = workspaceCwd();
 
@@ -95,7 +95,7 @@ export class PiGoAcpClient implements vscode.Disposable {
       Writable.toWeb(this.process.stdin!) as WritableStream<Uint8Array>,
       Readable.toWeb(this.process.stdout!) as ReadableStream<Uint8Array>,
     );
-    const client = acp.client({ name: "pi-go-vscode" })
+    const client = acp.client({ name: "pirate-vscode" })
       .onNotification(acp.methods.client.session.update, ({ params }) => {
         if (params.update?.sessionUpdate === "available_commands_update") {
           this.commands.set(params.sessionId, [...params.update.availableCommands]);
@@ -122,7 +122,7 @@ export class PiGoAcpClient implements vscode.Disposable {
     const init = await this.connection.agent.request(acp.methods.agent.initialize, {
       protocolVersion: acp.PROTOCOL_VERSION,
       clientCapabilities: {},
-      clientInfo: { name: "pi-go-vscode", version: "0.1.0" },
+      clientInfo: { name: "pirate-vscode", version: "0.1.0" },
     });
     if (init.protocolVersion !== acp.PROTOCOL_VERSION) {
       log.error(`unsupported ACP protocol version ${String(init.protocolVersion)}`);

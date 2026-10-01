@@ -1,15 +1,15 @@
 import * as vscode from "vscode";
 import type * as acp from "@agentclientprotocol/sdk";
 import {
-  PiGoAcpClient,
+  PirateAcpClient,
   chunkText,
   thoughtText,
   type SessionEntry,
 } from "./acp";
 import { TranscriptStore, toolStateOf } from "./transcript";
 import { pathsToBlocks, skippedMentionsMarkdown } from "./mentions";
-import { explainPiGoError, type PiGoLaunchConfig } from "./errorInfo";
-import { runPiPing } from "./ping";
+import { explainPirateError, type PirateLaunchConfig } from "./errorInfo";
+import { runPiratePing } from "./ping";
 import type {
   CommandInfo,
   HostToWebview,
@@ -24,7 +24,7 @@ interface TabSession {
   title?: string;
 }
 
-const log = vscode.window.createOutputChannel("pi-go", { log: true });
+const log = vscode.window.createOutputChannel("Pi-rate", { log: true });
 
 function errString(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -59,7 +59,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider, vscode.Dis
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    private readonly client: PiGoAcpClient,
+    private readonly client: PirateAcpClient,
     private readonly store: TranscriptStore,
     private readonly refresh: vscode.EventEmitter<void>,
     private readonly active: Set<string>,
@@ -134,7 +134,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider, vscode.Dis
       this.refresh.fire();
       return entry;
     } catch (err) {
-      const info = explainPiGoError(err, this.launchConfig());
+      const info = explainPirateError(err, this.launchConfig());
       this.postAll({ type: "error", message: info.title, detail: info.detail, steps: info.steps });
       return undefined;
     }
@@ -250,10 +250,10 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider, vscode.Dis
       case "requestFilePicker":
         void this.pickFiles();
         break;
-      case "openPiGoSettings":
-        void vscode.commands.executeCommand("workbench.action.openSettings", "pi-go.command");
+      case "openPirateSettings":
+        void vscode.commands.executeCommand("workbench.action.openSettings", "pirate.command");
         break;
-      case "openPiGoLogs":
+      case "openPirateLogs":
         log.show(true);
         break;
       case "ping":
@@ -262,7 +262,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider, vscode.Dis
       case "showHistory":
         // VS Code's auto-generated focus command for the view; not
         // workbench.action.openView, which only opens the "Open View…" picker.
-        void vscode.commands.executeCommand("pi-go.sessions.focus");
+        void vscode.commands.executeCommand("pirate.sessions.focus");
         break;
       case "draft":
         break;
@@ -275,7 +275,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider, vscode.Dis
     try {
       await vscode.window.showTextDocument(vscode.Uri.file(path), { preview: true });
     } catch (err) {
-      void vscode.window.showErrorMessage(`pi-go: cannot open ${path} — ${errString(err)}`);
+      void vscode.window.showErrorMessage(`Pi-rate: cannot open ${path} — ${errString(err)}`);
     }
   }
 
@@ -343,7 +343,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider, vscode.Dis
       if (text.startsWith("/")) {
         this.postAll({
           type: "notice",
-          text: "Slash commands are forwarded to pi-go as plain text in VS Code.",
+          text: "Slash commands are forwarded to Pi-rate as plain text in VS Code.",
           sessionId,
         });
       }
@@ -371,7 +371,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider, vscode.Dis
     } catch (err) {
       const msg = errString(err);
       log.error(`prompt failed: ${msg}`);
-      const info = explainPiGoError(err, this.launchConfig());
+      const info = explainPirateError(err, this.launchConfig());
       this.postAll({
         type: "turnEnd",
         sessionId,
@@ -395,7 +395,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider, vscode.Dis
       return "_This agent has not advertised any slash commands._";
     }
     const lines = commands.map((c) => `- **/${c.name}** — ${c.description ?? ""}`);
-    return `Available commands:\n\n${lines.join("\n")}\n\n_Slash commands are dispatched only in pi-go's TUI today; in VS Code they are forwarded to the model as text (with \`/clear\` and \`/help\` handled by the extension)._`;
+    return `Available commands:\n\n${lines.join("\n")}\n\n_Slash commands are dispatched only in Pi-rate's TUI today; in VS Code they are forwarded to the model as text (with \`/clear\` and \`/help\` handled by the extension)._`;
   }
 
   // -- live updates ----------------------------------------------------------
@@ -479,10 +479,10 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider, vscode.Dis
     }
   }
 
-  private launchConfig(): PiGoLaunchConfig {
-    const config = vscode.workspace.getConfiguration("pi-go");
+  private launchConfig(): PirateLaunchConfig {
+    const config = vscode.workspace.getConfiguration("pirate");
     return {
-      command: config.get<string>("command", "pi"),
+      command: config.get<string>("command", "pirate"),
       args: config.get<string[]>("args", ["acp-server"]),
       cwd: workspaceCwd(),
     };
@@ -490,7 +490,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider, vscode.Dis
 
   private async runPing(): Promise<void> {
     const config = this.launchConfig();
-    const result = await runPiPing({ command: config.command, args: config.args, cwd: config.cwd });
+    const result = await runPiratePing({ command: config.command, args: config.args, cwd: config.cwd });
     this.postAll({ type: "pingResult", ...result });
   }
 
@@ -498,7 +498,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider, vscode.Dis
     const extUri = this.context.extensionUri;
     const styles = webview.asWebviewUri(vscode.Uri.joinPath(extUri, "media", "chat.css"));
     const script = webview.asWebviewUri(vscode.Uri.joinPath(extUri, "dist", "webview.js"));
-    const mascot = webview.asWebviewUri(vscode.Uri.joinPath(extUri, "media", "pi-go-mascot.png"));
+    const mascot = webview.asWebviewUri(vscode.Uri.joinPath(extUri, "media", "pirate-mascot.png"));
     const nonce = getNonce();
     const csp = [
       "default-src 'none'",
@@ -515,7 +515,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider, vscode.Dis
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="${styles}">
-<title>pi-go</title>
+<title>Pi-rate</title>
 </head>
 <body data-mascot="${mascot}">
 <script nonce="${nonce}" src="${script}"></script>

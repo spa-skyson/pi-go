@@ -1,4 +1,4 @@
-<!-- pi-go activity-bar mark: a speech bubble with the π glyph cut out as
+<!-- Pi-rate activity-bar mark: a speech bubble with the π glyph cut out as
      negative space. Monochrome (fill: currentColor) because VS Code renders
      view-container icons as CSS masks. -->
 <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

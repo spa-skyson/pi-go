@@ -22,7 +22,7 @@ describe("TranscriptStore registry", () => {
     const t = store();
     const uri = t.register("s1");
     expect(t.register("s1")).toBe(uri); // idempotent
-    expect(uri.scheme).toBe("pi-go-session");
+    expect(uri.scheme).toBe("pirate-session");
     expect(t.acpIdFor(uri)).toBe("s1");
     expect(t.uriFor("s1")).toBe(uri);
     expect(t.uriFor("nope")).toBeUndefined();
@@ -51,9 +51,9 @@ describe("TranscriptStore registry", () => {
 
   it("title truncates long first lines and defaults", () => {
     const t = store();
-    expect(t.title("none")).toBe("pi-go session");
+    expect(t.title("none")).toBe("Pi-rate session");
     t.appendUserTurn("s1", "\n  \n");
-    expect(t.title("s1")).toBe("pi-go session");
+    expect(t.title("s1")).toBe("Pi-rate session");
     t.appendUserTurn("s2", "short prompt");
     expect(t.title("s2")).toBe("short prompt");
     t.appendUserTurn("s3", "x".repeat(70));
@@ -370,6 +370,6 @@ describe("toolStateOf / formatting helpers", () => {
     vi.spyOn(vscode.Uri, "parse");
     const t = store();
     t.register("s9");
-    expect(vi.mocked(vscode.Uri.parse).mock.calls[0]?.[0]).toContain("pi-go-session:local/");
+    expect(vi.mocked(vscode.Uri.parse).mock.calls[0]?.[0]).toContain("pirate-session:local/");
   });
 });
