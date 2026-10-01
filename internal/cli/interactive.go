@@ -95,7 +95,10 @@ func (r *initResources) cleanup() {
 				summarizer: r.memSummarizer,
 				sessionID:  r.memSessionID,
 				project:    r.memProject,
-				log:        slog.Default(),
+				// Interactive keeps the full budget: exit latency is not
+				// billed to anyone here, and the session tail is the product.
+				drainBudget: memoryDrainTimeout,
+				log:         slog.Default(),
 			}, drainErr, true)
 		}
 	}
@@ -1054,6 +1057,14 @@ func (s *lazyMemoryStore) SessionObservations(ctx context.Context, sessionID str
 		return nil, err
 	}
 	return store.SessionObservations(ctx, sessionID)
+}
+
+func (s *lazyMemoryStore) HasObservations(ctx context.Context, sessionID string) (bool, error) {
+	store, err := s.wait(ctx)
+	if err != nil {
+		return false, err
+	}
+	return store.HasObservations(ctx, sessionID)
 }
 
 func (s *lazyMemoryStore) UpsertSummary(ctx context.Context, sum *memory.SessionSummary) error {

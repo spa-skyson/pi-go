@@ -923,6 +923,29 @@ func TestBuildTransport(t *testing.T) {
 		}
 	})
 
+	t.Run("clone raises MaxIdleConnsPerHost to 8", func(t *testing.T) {
+		tr := mustBuild(t, &LLMOptions{InsecureSkipTLS: true})
+		ht, ok := tr.(*http.Transport)
+		if !ok {
+			t.Fatalf("expected *http.Transport, got %T", tr)
+		}
+		if ht.MaxIdleConnsPerHost != 8 {
+			t.Errorf("cloned transport MaxIdleConnsPerHost = %d, want 8", ht.MaxIdleConnsPerHost)
+		}
+	})
+
+	t.Run("clone never mutates the global DefaultTransport", func(t *testing.T) {
+		def, ok := http.DefaultTransport.(*http.Transport)
+		if !ok {
+			t.Skipf("DefaultTransport is %T, not *http.Transport", http.DefaultTransport)
+		}
+		before := def.MaxIdleConnsPerHost
+		mustBuild(t, &LLMOptions{ConnectTimeout: time.Second})
+		if def.MaxIdleConnsPerHost != before {
+			t.Errorf("http.DefaultTransport.MaxIdleConnsPerHost changed to %d", def.MaxIdleConnsPerHost)
+		}
+	})
+
 	t.Run("missing CA file reports the path", func(t *testing.T) {
 		_, err := BuildTransport(&LLMOptions{CACertPath: filepath.Join(t.TempDir(), "absent.pem")})
 		if err == nil {

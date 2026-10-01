@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -16,6 +17,7 @@ type Store interface {
 	GetObservations(ctx context.Context, ids []int64) ([]*Observation, error)
 	RecentObservations(ctx context.Context, project string, limit int) ([]*Observation, error)
 	SessionObservations(ctx context.Context, sessionID string) ([]*Observation, error)
+	HasObservations(ctx context.Context, sessionID string) (bool, error)
 	UpsertSummary(ctx context.Context, sum *SessionSummary) error
 	RecentSummaries(ctx context.Context, project string, limit int) ([]*SessionSummary, error)
 	Search(ctx context.Context, q SearchQuery) (*SearchResult, error)
@@ -180,6 +182,26 @@ func (s *SQLiteStore) SessionObservations(ctx context.Context, sessionID string)
 	defer rows.Close()
 
 	return scanObservations(rows)
+}
+
+// HasObservations reports whether any observation is recorded for sessionID.
+//
+// It is a one-row indexed lookup, so callers can gate expensive follow-up work
+// — loading full rows, asking a model to summarize — on it without paying for
+// either when the answer is "nothing recorded".
+func (s *SQLiteStore) HasObservations(ctx context.Context, sessionID string) (bool, error) {
+	var one int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT 1 FROM observations WHERE session_id = ? LIMIT 1`,
+		sessionID,
+	).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("memory: has observations: %w", err)
+	}
+	return true, nil
 }
 
 // UpsertSummary inserts or replaces a session summary.

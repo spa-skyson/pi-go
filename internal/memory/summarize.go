@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -78,16 +79,22 @@ func (s *LLMSummarizer) SummarizeSession(ctx context.Context, sessionID, project
 	return sum, nil
 }
 
+// ErrNoObservations is returned by [SessionSummarizer.SummarizeSession] when
+// the session recorded nothing. It lets callers tell "nothing to summarize" —
+// the normal shape for a short run — apart from a real failure, and guarantees
+// the model is never called over an empty session.
+var ErrNoObservations = errors.New("memory: session has no observations to summarize")
+
 // SessionSummarizer summarizes one session's observations and stores the result.
 //
 // It is the whole end-of-session step — read the session's observations, ask
 // the model once, write the summary — so the CLI and the piagent façade reach
 // the store through one path and cannot disagree about what a summary is.
 //
-// A session with no observations is reported as an error rather than silently
-// writing nothing: callers distinguish "nothing to summarize" from "summarized"
-// by their own bookkeeping, but a silent success would hide a store that never
-// recorded anything.
+// A session with no observations is reported as [ErrNoObservations] rather than
+// silently writing nothing: callers distinguish "nothing to summarize" from
+// "summarized" by their own bookkeeping, but a silent success would hide a store
+// that never recorded anything.
 type SessionSummarizer struct {
 	store Store
 	llm   llmmodel.LLM
@@ -114,7 +121,7 @@ func (s *SessionSummarizer) SummarizeSession(ctx context.Context, sessionID, pro
 		return fmt.Errorf("memory: reading session observations: %w", err)
 	}
 	if len(observations) == 0 {
-		return fmt.Errorf("memory: session %q has no observations to summarize", sessionID)
+		return ErrNoObservations
 	}
 
 	sum, err := NewLLMSummarizer(s.llm).SummarizeSession(ctx, sessionID, project, observations)

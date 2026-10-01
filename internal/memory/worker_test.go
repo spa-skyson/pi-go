@@ -97,6 +97,9 @@ func (s *mockStore) RecentObservations(context.Context, string, int) ([]*Observa
 func (s *mockStore) SessionObservations(context.Context, string) ([]*Observation, error) {
 	return s.getObservations(), nil
 }
+func (s *mockStore) HasObservations(context.Context, string) (bool, error) {
+	return len(s.getObservations()) > 0, nil
+}
 func (s *mockStore) UpsertSummary(context.Context, *SessionSummary) error { return nil }
 func (s *mockStore) RecentSummaries(context.Context, string, int) ([]*SessionSummary, error) {
 	return nil, nil
