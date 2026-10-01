@@ -1,15 +1,5 @@
 # Pi-rate
 
-> Yo-ho-ho — a terminal coding agent. A pirate fork: Pi + rate = Pi-rate — forked from pi-go, inspired by opencode.
-
-> **Inspired by & built upon.** Pi-rate is a fork of [dimetron/pi-go](https://github.com/dimetron/pi-go),
-> inspired by [Pi (badlogic)](https://github.com/badlogic/pi-mono) and [opencode](https://opencode.ai);
-> the name is a piracy pun on Pi. Upstream commits are cherry-picked as needed. On top of
-> upstream it adds declared providers in `config.json`, per-agent model/tools/sampling
-> frontmatter, the permission subsystem, primary-agent switching, todo plans, and
-> subagent monitor/steer/background modes — see
-> [docs/OPENCODE-PARITY.md](docs/OPENCODE-PARITY.md) for details.
-
 [![CI](https://github.com/spa-skyson/pi-rate/actions/workflows/ci.yml/badge.svg)](https://github.com/spa-skyson/pi-rate/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/spa-skyson/pi-rate)](go.mod)
 [![License](https://img.shields.io/github/license/spa-skyson/pi-rate)](LICENSE)
@@ -17,27 +7,113 @@
 [![GitHub stars](https://img.shields.io/github/stars/spa-skyson/pi-rate?style=social)](https://github.com/spa-skyson/pi-rate)
 [![GitHub issues](https://img.shields.io/github/issues/spa-skyson/pi-rate)](https://github.com/spa-skyson/pi-rate/issues)
 
-A terminal-based coding agent built on [Google ADK Go](https://adk.dev/). It connects to multiple LLM providers, runs
-sandboxed tools, integrates LSP, and ships with a process-based subagent system.
+Pi-rate is a terminal AI coding agent. You run it in your project directory, it
+reads and edits code, runs shell commands and git, and turns a plain-English
+task ("add tests for the parser", "fix the failing CI job") into a reviewed
+change — all from the terminal, no IDE required. It works across many LLM
+providers (Anthropic, OpenAI, Google, Mistral, xAI, OpenRouter, Azure, Ollama,
+and any OpenAI-compatible or Anthropic endpoint you point it at), keeps
+sessions resumable, and gates every destructive action behind permission
+rules you control.
 
-![Pi-rate TUI](docs/screen/pi-go.gif)
+The name: a fork of [pi-go](https://github.com/dimetron/pi-go) named as a
+piracy pun on Pi — Pi + rate = Pi-rate.
+
+## Quick start
+
+```bash
+# Install (macOS / Linux)
+curl -fsSL https://raw.githubusercontent.com/spa-skyson/pi-rate/main/scripts/install.sh | bash
+
+# Point it at a provider
+export ANTHROPIC_API_KEY="sk-ant-..."       # or OPENAI_API_KEY, GEMINI_API_KEY, …
+# …or run the wizard: pirate setup
+
+# Run it in your project
+cd my-project
+pirate
+```
+
+First steps inside the TUI: type a task and press Enter; `/help` lists every
+command and hotkey; `/model` switches models; `@` mentions a file by path;
+Shift+Tab switches the session agent; Ctrl+C twice quits. Other install
+methods (Nix, `go install`, build from source, pre-built binaries) and release
+verification: [docs/installation.md](docs/installation.md).
+
+## Why this fork
+
+Pi-rate is a fork of [dimetron/pi-go](https://github.com/dimetron/pi-go)
+(inspired by [Pi (badlogic)](https://github.com/badlogic/pi-mono) and
+[opencode](https://opencode.ai)); upstream commits are cherry-picked as
+needed. On top of upstream it adds, in rough order of arrival:
+
+- **Renamed identity** — the project, binary, VS Code extension and TUI became
+  Pi-rate, with a pirate-flavoured mascot and animated sea.
+- **Declared providers** — any OpenAI-compatible or Anthropic endpoint named in
+  `config.json` (`providers` section) becomes a `name/model` prefix.
+- **Per-agent frontmatter** — `model`/`role`, `tools`, sampling knobs
+  (`temperature`, `reasoningEffort`, `steps`), `timeout`, `worktree`, `lsp`,
+  and agent-scoped `permission` blocks.
+- **Primary-agent switching** — `mode: primary`/`all` agents can run the main
+  session; switch with Shift+Tab or `/agent` mid-conversation.
+- **Permission subsystem** — `allow`/`deny`/`ask` rules on tool globs and bash
+  patterns, with an interactive approval dialog in the TUI.
+- **Todo plans** — a plan checklist the agent maintains with
+  `todo_write`/`todo_read`, shown live in the sidebar.
+- **Subagent monitor, steering, background runs** — Ctrl+T monitor with
+  per-run cards, `s` to steer a running agent, detached runs collected via
+  `agent_result`.
+- **Prompt editor** — multiline input (Shift+Enter), paste summaries (Alt+V),
+  `@`-file picker, queued prompts instead of dropped input.
+- **Fullscreen `/diff`**, a fuzzy search popup, custom themes, Ctrl+Z suspend,
+  terminal attention (bell + OSC 777).
+- **JSONC config with `$schema`** autocompletion, and automatic migration from
+  `~/.pi-go` to `~/.pirate`.
+- **The question tool** — the model asks the user a multiple-choice question
+  and waits, instead of guessing.
+- **Windows CI fixes and performance work** — fork-only test stabilisation and
+  hot-path optimisations.
+
+The working plan behind most of these is
+[docs/OPENCODE-PARITY.md](docs/OPENCODE-PARITY.md) (in Russian); details of
+each feature are in the [documentation](#documentation).
 
 ## Features
 
-- **Multi-provider LLM** — Claude (Anthropic), GPT/O-series (OpenAI), Gemini, Mistral, Grok (xAI), Azure OpenAI, OpenRouter, OpenCode, agentgateway, and Ollama (local or cloud) — plus **named providers** you declare in `config.json` (`providers` section: any OpenAI-compatible or Anthropic endpoint becomes a `name/model` prefix)
-- **Model roles** — named configurations (default, smol, slow, plan, commit) selectable via CLI flags
-- **Agents as markdown** — agent files with frontmatter: `model`/`role`, `tools`, `temperature`, `reasoningEffort`, `steps`, `timeout`, `worktree`, `lsp`, `permission`; bundled agents included
-- **Primary agents** — `mode: primary` / `all` agents can run the main session: switch with **Shift+Tab** or `/agent` mid-conversation, pick the startup one with `defaultAgent`
-- **Permission subsystem** — `allow`/`deny`/`ask` rules on tool-name globs and bash command patterns, globally in config and per-agent in frontmatter, with an interactive approval dialog in the TUI
-- **Subagents with monitor** — process-based subagents; live monitor (**Ctrl+T**) with per-run cards, steering (`s`), background runs collected via the `agent_result` tool, and a prompt queue instead of dropped input
-- **Todo plans** — plan-driven checklists with a live sidebar and `/todos`
-- **Interactive TUI** — Bubble Tea v2 with Markdown rendering (Glamour), multiline prompt editor (**Shift+Enter**), paste collapsing (**Alt+V**), `@`-file mentions, fullscreen `/diff`, `/help` dialog, custom themes, terminal attention (bell + OSC 777 notify), **Ctrl+Z** suspend — with pirate flair: a moody mascot and an animated sea
-- **Sandboxed tools** — read, write, edit, shell, grep, find, tree, and git operations. All tools are restricted to the project directory via `os.Root`.
-- **LSP** — JSON-RPC client for Go, TypeScript/JS, Python, Rust, and Java, with auto-format and diagnostics hooks
-- **Session persistence** — JSONL append-only event logs with branching, compaction, and resume
-- **AI Git tools** — repository overview, file diffs, hunk parsing, LLM-generated conventional commits (`/commit`), and PR autofix (`/pr-autofix`)
-- **Memory Palace** — 4-layer contextual memory with SQLite storage, semantic embeddings (all-MiniLM-L6-v2), temporal knowledge graph, and project/conversation miners
-- **Extensions & integration** — hooks (shell callbacks), skills, MCP servers, plugin marketplaces (`pirate plugin`), a skills security audit (`pirate audit`), and a Unix-socket JSON-RPC 2.0 server for IDE/editor integration
+- Multi-provider LLM: Anthropic, OpenAI, Google Gemini, Mistral, xAI (Grok), Azure OpenAI, OpenRouter, OpenCode, agentgateway, Ollama (local or cloud), plus user-declared providers.
+- Model roles (`default`/`smol`/`slow`/`plan`/…) selected by flag or `/model`.
+- Agents as markdown files with YAML frontmatter; a set of agents ships bundled.
+- Primary agents switchable mid-session (Shift+Tab, `/agent`).
+- Permissions: `allow`/`deny`/`ask` per tool and per bash command pattern, with a TUI approval dialog.
+- Subagents with a live monitor (Ctrl+T), steering, background runs and a prompt queue.
+- Todo plans with a live sidebar.
+- Interactive TUI: Markdown rendering, multiline prompt editor, paste summaries, `@`-mentions, fullscreen `/diff`, fuzzy search popup, custom themes.
+- Sandboxed tools — read, write, edit, shell, grep, find, tree, git — restricted to the project directory.
+- LSP integration (Go, TypeScript/JS, Python, Rust, Java) with diagnostics and auto-format.
+- Session persistence: JSONL event logs with branching, compaction and resume.
+- AI git tools: repository overview, diffs, hunk parsing, `/commit`, `/pr-autofix`.
+- Memory Palace — 4-layer persistent memory with semantic search and a knowledge graph.
+- Extensions: hooks, skills, MCP servers, plugin marketplaces (`pirate plugin`), skills security audit (`pirate audit`).
+- Editor integration over ACP: Zed, JetBrains, VS Code; Unix-socket JSON-RPC and kagent.
+
+## Documentation
+
+Detailed documentation lives in [docs/](docs/README.md):
+
+| Page | Covers |
+|---|---|
+| [Installation](docs/installation.md) | Quick install, Nix/NixOS, `go install`, build from source, pre-built binaries, release verification (attestations, SBOM) |
+| [Usage](docs/usage.md) | Interactive & non-interactive modes, CLI flags, roles, API keys, agents, prompt editor, subagents, permissions, todo plans, JSON mode, slash commands, hotkeys, plugin marketplaces, Memory Palace, security audit |
+| [Configuration](docs/configuration.md) | Config files, JSONC comments, `$schema`, model roles, declared providers, base URLs, permissions, attention, themes, Ollama tuning, web search, MCP servers |
+| [Editor integration](docs/editor-integration.md) | Zed, JetBrains, VS Code extension, Unix-socket JSON-RPC, kagent |
+
+Also in the repository:
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) — the codebase, package by package.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute.
+- [MODELS.md](MODELS.md) — supported models per provider.
+- [docs/AGENTS-HOWTO.md](docs/AGENTS-HOWTO.md) — skills, hooks and agent instructions, explained against Claude Code's `.claude/` setup.
+- [docs/README.md](docs/README.md) — the full documentation index.
 
 ## Architecture
 
@@ -61,965 +137,14 @@ internal/
 └── tui/            Bubble Tea v2 UI, slash commands, commit workflow
 ```
 
-### Request flow
-
-```
-User input → CLI → Agent → LLM provider → Tool calls → Sandbox → Response → TUI
-                     ↕           ↕            ↕
-              Session store   Palace       LSP servers
-              (JSONL events)  (memory,   (format, diagnostics)
-                              KG, search)
-```
-
+Request flow: `User input → CLI → Agent → LLM provider → Tool calls → Sandbox → Response → TUI`,
+with the session store, Memory Palace and LSP servers attached alongside.
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation.
-
-## Installation
-
-### Quick install (recommended)
-
-**macOS / Linux**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/spa-skyson/pi-rate/main/scripts/install.sh | bash
-```
-
-This script detects your OS/arch, downloads the latest release binary, and installs it to `/usr/local/bin` (or `~/.local/bin` if needed).
-
-**Windows**
-
-```powershell
-powershell -NoProfile -Command "iwr https://raw.githubusercontent.com/spa-skyson/pi-rate/main/scripts/install.ps1 -UseBasicParsing | iex"
-```
-
-Or, from a checkout:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install.ps1
-```
-
-Installs `pirate.exe` to `%LOCALAPPDATA%\Programs` and adds that directory to your
-user `PATH`. Restart the terminal afterwards so the new `PATH` is picked up.
-Runs on Windows PowerShell 5.1 (built into Windows 10/11) and PowerShell 7+;
-`windows/amd64` only. Set `GITHUB_TOKEN` if you hit the GitHub API rate limit
-while it resolves the latest release.
-
-The installer checks the download against the release's `checksums.txt` and
-refuses to install on a mismatch. That catches a corrupted or swapped archive,
-but not a substituted release — `checksums.txt` travels the same path as the
-archive. Run `pirate verify` afterwards for the provenance check that does answer
-that question — see [Verifying a release](#verifying-a-release).
-
-Windows machines without `bash.exe` on `PATH` — a stock Windows install has
-none — run agent commands through `powershell.exe` instead, so write PowerShell
-syntax in prompts: `;` or a newline rather than `&&`. Installing
-[Git for Windows](https://git-scm.com/download/win) puts a `bash` on `PATH` and
-restores the bash behaviour.
-
-### NixOS / Nix
-
-The repository includes a flake that builds Pi-rate reproducibly and exposes a
-NixOS module. To install it in a NixOS configuration, add the repository as an
-input:
-
-```nix
-# flake.nix
-{
-  inputs.pi-go.url = "github:spa-skyson/pi-rate";
-
-  outputs = { self, nixpkgs, pi-go, ... }: {
-    nixosConfigurations.my-host = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
-      modules = [
-        ./configuration.nix
-        pi-go.nixosModules.default
-      ];
-    };
-  };
-}
-```
-
-Enable it in `configuration.nix`:
-
-```nix
-{ programs.pi-go.enable = true; }
-```
-
-Then rebuild with `sudo nixos-rebuild switch --flake .`. For a one-off use,
-run `nix run github:spa-skyson/pi-rate` or install it into a profile with
-`nix profile install github:spa-skyson/pi-rate`.
-
-### go install
-
-```bash
-go install github.com/spa-skyson/pi-rate/cmd/pirate@latest
-```
-
-Or build from source:
-
-```bash
-git clone https://github.com/spa-skyson/pi-rate.git
-cd pi-rate
-make build
-make install
-```
-
-Make sure your `GOPATH/bin` is in your `PATH`. The binary is installed as `pirate`.
-
-### Build from source
-
-```bash
-git clone https://github.com/spa-skyson/pi-rate.git
-cd pi-rate
-go install ./cmd/pirate
-```
-
-### Pre-built binaries
-
-Download the latest release for your platform from the [Releases page](https://github.com/spa-skyson/pi-rate/releases).
-
-### Verifying a release
-
-`pirate verify` checks the running binary against the attestations published for
-it, with no other tooling required:
-
-```bash
-pirate verify                                     # the running binary
-pirate verify ./pirate                        # a specific file
-pirate verify pi-rate_1.2.3_linux_amd64.tar.gz      # a downloaded archive, before extracting
-pirate verify --json                              # machine-readable
-pirate verify --sbom > sbom.spdx.json             # print the attested SBOM document
-```
-
-```
-/usr/local/bin/pirate
-  sha256:abd70659b49183320320426af4abf34555b031e432aff27afbdbf1be39e1ecff
-
-  ✓ build provenance
-      repository  github.com/spa-skyson/pi-rate
-      workflow    .github/workflows/release.yml@refs/tags/v1.2.3
-      commit      4086645aa1f2c3d4e5f60718293a4b5c6d7e8f90
-      run         https://github.com/spa-skyson/pi-rate/actions/runs/1234/attempts/1
-      signer      https://github.com/spa-skyson/pi-rate/.github/workflows/release.yml@refs/tags/v1.2.3
-      signed      2026-08-21T12:00:00Z
-
-  ✓ SBOM
-      format      SPDX 2.3
-      packages    192
-      ecosystems  golang 180, github 12
-      signer      https://github.com/spa-skyson/pi-rate/.github/workflows/release.yml@refs/tags/v1.2.3
-      signed      2026-08-21T12:00:00Z
-```
-
-The check starts from the file's SHA-256 and nothing else — the version
-compiled into the binary, the name it was installed under and the URL it came
-from are all attacker-controlled. That digest is looked up in GitHub's
-attestations API and the returned [Sigstore](https://www.sigstore.dev/) bundles
-are verified against the public-good Sigstore trust root: certificate chain,
-Rekor transparency-log inclusion, signed certificate timestamp, and a
-certificate identity that must name **this repository's release workflow,
-running on a tag**. A signature from any other workflow, branch or repository
-is rejected.
-
-A binary you built yourself has no attestation and reports as unverified. That
-is the expected answer, not a failure.
-
-Verification needs network access. The Sigstore trust root is cached in
-`~/.pirate/sigstore` after the first run.
-
-#### Verifying with the GitHub CLI
-
-The same attestations are readable by `gh`, if you would rather not trust the
-binary to vouch for itself:
-
-```bash
-gh attestation verify ./pirate --repo spa-skyson/pi-rate
-
-# SBOM attestation. The predicate type carries the SPDX version syft emitted.
-gh attestation verify ./pirate --repo spa-skyson/pi-rate \
-  --predicate-type https://spdx.dev/Document/v2.3
-```
-
-#### What is attested, and what is published
-
-Both the release archives **and the raw binaries inside them** are attestation
-subjects. `scripts/install.sh` extracts the binary and puts it on your PATH, so
-the archive digest is not the digest you end up running; attesting only the
-archive would leave the installed binary unverifiable. The binaries themselves
-are not published as release assets — the digest is all verification needs.
-
-Each release publishes SBOMs as assets, in SPDX JSON:
-
-- `pi-rate_<version>_<os>_<arch>.tar.gz.sbom.json` — cataloged by syft from the
-  contents of that specific archive.
-- `pi-rate_<version>_sbom.spdx.json` — the aggregate SBOM cataloged from the
-  source tree, and the one the SBOM attestation binds to. It covers the Go
-  module graph, which is the same across every platform in the build matrix,
-  plus the pinned GitHub Actions the release itself was built with.
-
-Regenerate the aggregate SBOM locally with `make sbom` (requires
-[syft](https://github.com/anchore/syft)).
 
 ## Requirements
 
-- Go 1.27+
-- At least one LLM provider API key or a running Ollama instance
-
-## API keys
-
-Set the API key for your provider as an environment variable. The provider is inferred from the model name, so `--model` is usually the only routing you need.
-
-| Provider | Model prefix | API key env var | Base URL env var |
-|---|---|---|---|
-| Anthropic | `claude-*` | `ANTHROPIC_API_KEY` (or `ANTHROPIC_AUTH_TOKEN`) | `ANTHROPIC_BASE_URL` |
-| OpenAI | `gpt-*` | `OPENAI_API_KEY` | `OPENAI_BASE_URL` |
-| Google Gemini | `gemini-*` | `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) | `GEMINI_BASE_URL` |
-| Mistral | `mistral-*`, `magistral-*` | `MISTRAL_API_KEY` | `MISTRAL_BASE_URL` |
-| xAI (Grok) | `grok-*` | `XAI_API_KEY` | `XAI_BASE_URL` |
-| OpenRouter | `openrouter/<model>` | `OPENROUTER_API_KEY` | `OPENROUTER_BASE_URL` |
-| agentgateway | `agentgateway/<model>` | none (optional `AGENTGATEWAY_API_KEY`) | `AGENTGATEWAY_BASE_URL` (default `http://localhost:4000`) |
-| Azure OpenAI | `azure/<deployment>` | `AZUREOPENAI_API_KEY` | — |
-| OpenCode | `opencode/<model>` | `OPENCODE_API_KEY` | `OPENCODE_BASE_URL` |
-| Ollama (local) | `ollama/<model>` | none | `OLLAMA_HOST` (default `http://localhost:11434`) |
-| Ollama Cloud | `<model>:cloud` | `OLLAMA_API_KEY` | `https://api.ollama.com`, or the local daemon when no key is set |
-
-```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-export OPENAI_API_KEY="sk-..."
-export GEMINI_API_KEY="..."
-export MISTRAL_API_KEY="..."     # optional — only if you use Mistral models
-export XAI_API_KEY="..."         # optional — only if you use Grok models
-export OPENROUTER_API_KEY="..."  # optional — only if you use OpenRouter models
-export OPENCODE_API_KEY="..."
-export OLLAMA_API_KEY="..."   # optional — only to reach Ollama Cloud directly
-```
-
-A name with no recognized prefix is rejected rather than guessed at — reach for the `ollama/` prefix or the `:cloud` suffix to name an Ollama model explicitly.
-
-To configure a provider interactively instead of exporting the variable yourself:
-
-```bash
-pirate setup
-```
-
-The wizard asks which provider to use, for its API key, and which model should
-be the default. It writes the key to `~/.pirate/.env` and the provider and model
-to the `default` role in `~/.pirate/config.json` — the same places a hand-exported
-variable and a hand-edited config land. Providers that need no credential
-(Ollama, agentgateway) skip the key step; providers Pi-rate has no offline catalog
-for (Ollama, agentgateway, Azure, OpenCode) have their model typed in, since only
-you know what your daemon or deployment serves.
-
-A `:cloud` tag names a model, not a destination. With `OLLAMA_API_KEY` set the
-request goes straight to `api.ollama.com`; without one it goes to the local
-daemon, which has served cloud models on your `ollama signin` identity since
-Ollama 0.12 — so `pirate --model deepseek-v3.1:671b-cloud` works with no key at all.
-The `ollama/` prefix always means the local daemon, tag notwithstanding, and an
-explicit `OLLAMA_HOST` overrides both.
-
-## Build
-
-```bash
-make build      # build the pirate binary
-make test       # run unit tests
-make lint       # golangci-lint (vet, staticcheck, errcheck, …)
-make e2e        # run E2E integration tests
-make clean      # remove binary
-```
-
-## Usage
-
-```bash
-# Default interactive mode
-pirate
-
-# Select a model by prefix
-pirate --model claude:sonnet
-pirate --model openai:gpt-4o
-pirate --model gemini:gemini-2.5-pro
-pirate --model mistral-large-latest
-pirate --model grok-4.6
-pirate --model azure/my-gpt5-deployment
-pirate --model openrouter/google/gemini-3.7-flash
-pirate --model ollama/gemma4:12b-mlx
-pirate --model opencode/kimi-k3
-pirate --model corp-claude/claude-opus-5   # a provider declared in config.json
-pirate --model agentgateway/deepseek-v4-flash:0731-cloud
-pirate --model minimax-m3:cloud # automatically detect ollama if :cloud
-
-# Use model roles
-pirate --smol          # fast, cheap model
-pirate --slow          # most capable model
-pirate --plan          # planning-oriented model
-
-# Additional options
-pirate --continue      # continue last session
-pirate --session <id>  # resume specific session
-pirate --system "..." # custom system instructions
-pirate --url "..."    # custom API endpoint URL
-
-# Non-interactive modes
-pirate --mode print "explain this codebase"
-pirate --mode json "list all TODO comments"
-pirate --mode json --json-deltas full "..."      # one event per model chunk, not per sentence
-pirate --mode socket --socket /tmp/pi-go.sock  # JSON-RPC 2.0 over a Unix socket
-pirate --mode rpc                              # pi-compatible NDJSON over stdio (for pi-acp)
-```
-
-### Agents
-
-Agents are markdown files with YAML frontmatter, discovered from
-`~/.pirate/agents/` (global) and `.pirate/agents/` (project). Same-named
-files resolve project > user > bundled; a set of agents ships bundled
-(explore, plan, task, code-reviewer, designer, claude, codex, gemini, …).
-
-```markdown
----
-name: reviewer
-description: Reviews diffs for correctness and style
-mode: all                      # primary | subagent | all (default: subagent)
-model: corp-codex/gpt-5.6-sol  # overrides role; may carry a provider prefix
-role: smol                     # config role used when model: is absent
-tools: read, grep, find        # comma-separated; empty = all tools
-temperature: 0.2
-reasoningEffort: high          # none | minimal | low | medium | high | max
-steps: 150                     # tool-call iterations cap; 0 = unlimited
-timeout: 600000                # ms; accepts 1h/30m/90s/500ms suffixes
-worktree: true                 # run in an isolated git worktree
-lsp: full                      # off | min | full
-permission:                    # agent-scoped rules, layered over the global ones
-  edit: deny
-  bash:
-    "git *": allow
----
-System prompt body in markdown.
-```
-
-`mode:` decides where an agent may run: `subagent` (default — spawned as a
-subagent only), `primary` (reserved for the main session), `all` (both).
-Primary-capable agents are switchable with **Shift+Tab** or `/agent`
-mid-conversation; `defaultAgent` in `config.json` names the one an
-interactive session starts in (an explicit `--model` keeps the flag's model
-and takes only the agent's prompt). Unknown or subagent-only `defaultAgent`
-names fall back to the built-in agent with a notice.
-
-### Prompt editor
-
-- **Shift+Enter** inserts a newline; **Enter** submits. The area grows to a
-  visual-row cap.
-- **Paste collapsing** — a large paste (more than 2 KiB or 30 lines) folds
-  into a summary placeholder (`[вставка: N строк / N КБ]`) in the input; the
-  full text is restored on submit. **Alt+V** opens the paste nearest the
-  cursor fullscreen to read it before sending.
-- **`@`-mentions** — typing `@` opens a fuzzy file picker; each mentioned
-  path is appended to the submitted prompt as a `[Referenced file: …]`
-  annotation, across lines too.
-
-### Subagents
-
-The `subagent` tool spawns subagents as child processes. While they run:
-
-- **Monitor** — **Ctrl+T** (or `/subagents`) opens a live view with one card
-  per run: agent, model, elapsed timer.
-- **Steer** — press `s` on a running agent in the monitor to send it a
-  follow-up instruction mid-run.
-- **Background** — long runs detach; the model collects their output later
-  with the `agent_result` tool, optionally waiting for completion.
-- **Prompt queue** — input typed while a response is active is queued, not
-  cancelled; queued prompts run in order when the turn ends.
-
-### Permissions
-
-The `permission` block in `config.json` gates tool calls before execution —
-the opencode-compatible format: directives on tool-name globs plus bash
-command patterns.
-
-```json
-{
-  "permission": {
-    "edit": "deny",
-    "serena*": "ask",
-    "bash": {
-      "*": "ask",
-      "git *": "allow"
-    }
-  }
-}
-```
-
-- **Directives**: `allow` passes through; `deny` blocks with an error the
-  model sees; `ask` opens the approval dialog in the TUI — and denies in
-  headless and subagent runs, where no one can answer.
-- **Matching**: `*` matches any run of characters; the most specific pattern
-  wins (`edit` beats `ed*`). For bash the command line is matched first, so
-  `"git *": allow` allows `git status` even when the bash tool itself is
-  `ask`.
-- **Layering**: agent frontmatter `permission:` blocks (see
-  [Agents](#agents)) replace same-named tool keys and append bash patterns
-  over the global rules, and are forwarded to spawned subagents
-  automatically.
-- **Approval dialog**: answer once, or "always" — the latter records an
-  allow override on that rule for the rest of the session, in memory only.
-  Persistence is always a manual edit of `config.json`.
-
-### JSON mode
-
-`--mode json` writes one JSON object per line to stdout. Streamed assistant text
-is grouped by sentence, so one `text_delta` carries a whole sentence rather than
-a single SSE chunk — a three-sentence reply is 5 lines instead of 76, and the
-`delta` fields still concatenate to exactly the reply. Concatenate `delta` to
-reconstruct the text; that is how every consumer uses it.
-
-```
-{"type":"message_start","agent":"pi","role":"model","session_id":"..."}
-{"type":"thinking_delta","agent":"pi","delta":"..."}
-{"type":"text_delta","agent":"pi","delta":"Go is a compiled language. "}
-{"type":"tool_call","agent":"pi","tool_name":"bash","tool_input":{...}}
-{"type":"tool_result","agent":"pi","tool_name":"bash","content":"{...}"}
-{"type":"message_end"}
-```
-
-### Slash commands
-
-The TUI autocomplete and the `/help` dialog (a searchable popup grouping every
-command and hotkey by category) are generated from one registry, so what is
-listed here is what ships.
-
-| Command                | Description                                                     |
-|------------------------|-----------------------------------------------------------------|
-| `/help`                | Show help (searchable dialog of commands and keys)              |
-| `/clear`               | Clear conversation                                              |
-| `/copy`                | Copy conversation to clipboard                                  |
-| `/model`               | Show or switch model (no args opens the picker)                 |
-| `/agent`               | Show or switch the session agent (no args opens the picker)     |
-| `/session`             | Show session info                                               |
-| `/context`             | Show context usage                                              |
-| `/branch`              | Manage branches                                                 |
-| `/compact`             | Compact context                                                 |
-| `/subagents`           | Monitor subagents (no args opens the monitor popup)             |
-| `/history`             | Command history                                                 |
-| `/login`               | Configure API keys (codex, openai, anthropic, gemini)           |
-| `/commit`              | Create commit from staged changes                               |
-| `/diff`                | Fullscreen diff viewer (working tree / last commit)             |
-| `/plan`                | Start PDD planning session                                      |
-| `/run`                 | Execute a spec with task agent                                  |
-| `/pr-autofix`          | Watch a GitHub PR's checks and fix them until it is green       |
-| `/retry`               | Re-send the prompt of a turn that failed                        |
-| `/skills`              | List skills (create, load)                                      |
-| `/theme`               | Switch theme or list themes                                     |
-| `/todos`               | Show todo/plan list                                             |
-| `/ping`                | Test LLM connectivity                                           |
-| `/model-price-refresh` | Refresh model prices from models.dev                            |
-| `/rtk`                 | Output compaction stats                                         |
-| `/mcp`                 | List MCP servers and tool status                                |
-| `/exit`, `/quit`       | Exit                                                            |
-
-`/skill-list`, `/skill-load` and `/skill-create` also work (via `/skills`)
-but stay out of autocomplete to keep it concise.
-
-### Hotkeys
-
-| Key         | Action                                                        |
-|-------------|---------------------------------------------------------------|
-| `Ctrl+T`    | Toggle the subagent monitor                                   |
-| `Shift+Tab` | Cycle the session agent                                       |
-| `Ctrl+R`    | Re-send the prompt of a turn that failed                      |
-| `Ctrl+O`    | Toggle compact tool output                                    |
-| `Ctrl+B`    | Toggle the branch popup                                       |
-| `Ctrl+H`    | Open history search                                           |
-| `Ctrl+Z`    | Suspend the process                                           |
-| `Ctrl+C`    | Cancel the running turn; press twice to quit                  |
-| `Esc`       | Dismiss an overlay or cancel the running turn                 |
-| `Up` / `Down` | Prompt history window / scroll chat; at the bottom `Down` opens the subagent monitor |
-| `PgUp` / `PgDn` | Scroll the chat by a page                                 |
-| `s`         | Steer the selected running subagent (inside the monitor)      |
-| `Alt+V`     | View the collapsed paste nearest the cursor fullscreen        |
-
-### Plugin marketplaces
-
-Install skill bundles from a **plugin marketplace**. Pi-rate reads the same
-`.claude-plugin/marketplace.json` manifest other coding agents use, so existing
-marketplaces work unchanged:
-
-```bash
-# Register the Superpowers marketplace
-pirate plugin marketplace add obra/superpowers-marketplace
-
-# Install a plugin from it
-pirate plugin install superpowers@superpowers-marketplace
-
-# See what is installed
-pirate plugin list
-```
-
-| Command                                          | Description                                             |
-|--------------------------------------------------|---------------------------------------------------------|
-| `pirate plugin marketplace add <source>`         | Register a marketplace (GitHub `owner/repo`, git URL, or local directory) |
-| `pirate plugin marketplace list`                 | List registered marketplaces                            |
-| `pirate plugin install <plugin[@marketplace]>`   | Install a plugin and make its skills available          |
-| `pirate plugin list`                             | List installed plugins, versions, and commits           |
-| `pirate plugin update [plugin]`                  | Update one plugin, or all of them                       |
-| `pirate plugin uninstall <plugin>`               | Remove a plugin and its files                           |
-
-Installed plugins live in `~/.pirate/plugins/`, and their skills are discovered
-automatically. **Plugin skills have lower precedence than your own**: a skill in
-`~/.pirate/skills` or `.pirate/skills` with the same name always wins, so
-installing a plugin can never silently replace a skill you wrote or customized.
-
-Sources may be a GitHub shorthand (`owner/repo`), a full git URL, or a local
-directory. Plugin names come from the marketplace manifest, which is untrusted
-input, so they are validated before being used as directory names.
-
-### Memory Palace
-
-A 4-layer contextual memory system that gives the agent persistent awareness across sessions.
-
-**Layers:**
-
-| Layer | Name | Description |
-|-------|------|-------------|
-| L0 | Identity | Static identity file |
-| L1 | Essential Story | Top-15 drawers by importance, injected into system prompt |
-| L2 | On-Demand Recall | Context-filtered drawer chunks |
-| L3 | Search | Semantic (embedding) or keyword (FTS5) search |
-
-**CLI commands:**
-
-```bash
-# Setup
-pirate memory model download         # download all-MiniLM-L6-v2 embedding model
-pirate memory model status           # check model path and status
-pirate memory init [dir]             # create palace.db + generate mempalace.yaml
-
-# Ingest
-pirate memory mine <dir>             # mine source files into drawers
-pirate memory mine --convos <dir>    # mine conversation files (JSONL/text)
-
-# Query
-pirate memory status                 # palace overview (drawers, wings, rooms, KG)
-pirate memory search <query>         # semantic or keyword search
-pirate memory wake-up                # print L0+L1 context for system prompt
-pirate memory recent [project]       # recent memory observations
-
-# Knowledge Graph
-pirate memory kg query <entity>      # query triples involving an entity
-pirate memory kg add <s> <p> <o>     # add a fact triple
-pirate memory kg timeline <entity>   # chronological timeline of facts
-```
-
-**Configuration** via `mempalace.yaml` in the project root:
-
-```yaml
-wing: my-project
-rooms:
-  - name: auth
-    patterns: ["internal/auth/**"]
-    keywords: [jwt, token, session]
-  - name: api
-    patterns: ["internal/api/**"]
-    keywords: [handler, endpoint, route]
-```
-
-When the Palace is enabled, the agent also gains tool access: `palace-search`, `palace-add-drawer`, `palace-kg-query`, `palace-kg-add`, `palace-diary-write`, `palace-traverse`, and more.
-
-### Security audit
-
-```bash
-# Scan all skill files for hidden Unicode characters
-pirate audit
-
-# Scan with verbose output (include info-level findings)
-pirate audit -v
-
-# Output as JSON for CI pipelines
-pirate audit --format json --output report.json
-
-# Auto-remove dangerous characters (creates .bak backups)
-pirate audit --strip
-
-# Preview what would be removed
-pirate audit --strip --dry-run
-
-# Scan a specific file
-pirate audit --file path/to/SKILL.md
-```
-
-Skills are automatically scanned on load — skills with critical findings (Unicode tags, BiDi overrides, variation selector attacks) are blocked from loading.
-
-## Configuration
-
-Pi-rate reads configuration from `~/.pirate/config.json` (global) and `.pirate/config.json` (project-local).
-An existing `~/.pi-go` directory is migrated to `~/.pirate` automatically on
-first run; the old directory is left untouched.
-
-Configuration covers:
-
-- **Model roles** — Map role names to specific model strings
-- **Default agent** — `defaultAgent` names the primary agent the interactive session starts in (see [Agents](#agents))
-- **Providers** — Declared providers: custom OpenAI-compatible or Anthropic endpoints keyed by name (see below)
-- **Permission** — Tool-call gating rules (see [Permissions](#permissions))
-- **Attention** — Terminal bell and desktop notification on approvals and long-turn completion (see below)
-- **Hooks** — Shell commands triggered on tool events (e.g., post-write formatting)
-- **MCP servers** — External tool servers via Model Context Protocol
-- **Themes** — Terminal color schemes via `theme` config field
-- **Base URLs** — Per-provider endpoints via the `baseURLs` field
-
-Config files accept `//` line comments — anything from `//` to the end of a line
-is ignored, except inside string values (so `"https://…"` is safe). Note that Pi-rate
-itself rewrites config files as plain JSON when saving, so comments in sections it
-edits (e.g. `roles`, via `/model`) do not survive a save. A commented,
-copy-paste-ready example lives in [`config.example.jsonc`](config.example.jsonc).
-For editor autocompletion and validation, add:
-
-```json
-{
-  "$schema": "https://raw.githubusercontent.com/spa-skyson/pi-rate/main/schemas/config.schema.json"
-}
-```
-
-### Custom themes
-
-Custom themes are JSON files dropped into `~/.pirate/themes/` (global) or
-`.pirate/themes/` (project — the nearest one up the directory tree wins). The
-file name, lowercased and without the `.json` extension, becomes the theme
-name; pick it with `/theme <name>` like any built-in — custom entries are
-tagged `(custom)` in the `/theme` list, and the choice persists in the config.
-A theme that shares a name with a built-in overrides it; a project file
-overrides a global file of the same name. Partial files are fine: missing
-color roles are filled in from the built-in theme of the same name, or from
-the default theme. [`themes/example.json`](themes/example.json) shows the full
-format. The 13 color roles under `colors`: `text`, `base` and `secondary`
-paint body text, background and muted text; `primary`, `info`, `warning`,
-`error` and `success` color prompts, notices and statuses; `tool` names tool
-calls; `diffAdded`/`diffRemoved` tint added and removed diff lines and
-`diffAddedText`/`diffRemovedText` the text on them. A file that is not valid
-JSON or declares no color roles is reported and skipped; the running theme is
-never affected.
-
-### Attention
-
-When the TUI needs you back — a tool-approval dialog opening, or a long turn
-finishing — it rings the terminal bell and sends an OSC 777 desktop
-notification. Both channels are on by default; `attention` turns them off
-individually:
-
-```json
-{
-  "attention": {
-    "bell": true,
-    "notify": false
-  }
-}
-```
-
-### Provider base URLs
-
-Self-hosted or LAN endpoints can be declared in config instead of exported in every shell:
-
-```json
-{
-  "roles": {
-    "default": { "model": "ollama/gemma-4-e4b:latest", "provider": "ollama" }
-  },
-  "baseURLs": {
-    "ollama": "http://192.168.1.10:11434"
-  }
-}
-```
-
-Precedence is `--url` flag, then environment variable, then `baseURLs` config. The matching env vars are
-`ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `GEMINI_BASE_URL`, `MISTRAL_BASE_URL`, `XAI_BASE_URL`, `OPENROUTER_BASE_URL`, `OPENCODE_BASE_URL`, and `OLLAMA_HOST`. A per-shell or
-CI override still takes effect. An empty env var does not mask a configured value.
-
-### Declared providers
-
-Beyond the built-ins, any OpenAI-compatible or Anthropic endpoint can be
-declared by name in the `providers` section. The entry name becomes a
-model-name prefix — `corp-claude` serves `corp-claude/claude-opus-5`:
-
-```json
-{
-  "providers": {
-    "corp-claude": {
-      "type": "anthropic",
-      "baseURL": "https://llm.corp.example/v1",
-      "apiKey": "${CORP_LLM_KEY}",
-      "headers": {
-        "x-opencode-session": "${SESSION_ID}"
-      },
-      "models": {
-        "claude-opus-5": { "contextWindow": 200000 }
-      }
-    }
-  }
-}
-```
-
-- **`type`** — `openai-compatible` (default) or `anthropic`. For
-  openai-compatible endpoints the `baseURL` is the full endpoint:
-  `/chat/completions` and `/models` are appended to it, no `/v1` is added.
-- **Credentials** — `apiKey` expands `${VAR}` from the environment or
-  `~/.pirate/.env` at load (so the secret stays out of config.json); the
-  literal value wins over `apiKeyEnv`, which names the variable to read
-  instead.
-- **`${SESSION_ID}`** in `headers` is not an env var: it survives load
-  verbatim and is replaced with the current session's id when the client is
-  built, so session-scoped headers (like prompt-cache routing) stay stable
-  per conversation.
-- **`models`** — optional per-model metadata; `contextWindow` enables
-  auto-compaction for models absent from the embedded catalog.
-- Names must not collide with a built-in provider, and every entry is
-  validated at load — a bad `baseURL` or `type` fails fast, naming the
-  entry.
-
-### Ollama generation tuning
-
-Ollama's per-request options are left at the server's own defaults, except for an
-output cap. Each knob below is opt-in: unset means the option is not sent at all,
-so Ollama's default stays in force. An unparseable value is ignored rather than
-fatal — a typo in an env var should not take down an otherwise healthy session.
-
-| Env var | Ollama option | Ollama default | Purpose |
-|---|---|---|---|
-| `PI_OLLAMA_NUM_PREDICT` | `num_predict` | unlimited | Max tokens generated per turn. Pi-rate defaults this to `16384`; `0` or less removes the cap. |
-| `PI_OLLAMA_REPEAT_PENALTY` | `repeat_penalty` | `1.1` | How strongly repeated tokens are penalised. `1.0` disables. |
-| `PI_OLLAMA_REPEAT_LAST_N` | `repeat_last_n` | `64` | How many recent tokens the penalty looks back over. `0` disables, `-1` uses the full context. |
-| `PI_OLLAMA_PRESENCE_PENALTY` | `presence_penalty` | `0.0` | Flat penalty for tokens already used. |
-| `PI_OLLAMA_FREQUENCY_PENALTY` | `frequency_penalty` | `0.0` | Penalty scaled by how often a token was used. |
-
-These matter for models prone to repetition collapse, where a turn stops making
-progress and restates the same phrase until it hits a limit. `num_predict` only
-bounds how far such a turn runs; it does not stop it degenerating. The penalty
-window is the knob that targets the cause, and the default window is narrow:
-Ollama penalises repeats across the last 64 tokens only, while observed
-degenerate turns cycle on phrases of roughly 25–55 tokens, so a full cycle can
-fall outside the window the penalty can see.
-
-```bash
-# Widen the repetition window and penalise repeats harder.
-export PI_OLLAMA_REPEAT_LAST_N=512
-export PI_OLLAMA_REPEAT_PENALTY=1.2
-```
-
-Both apply to local Ollama and Ollama Cloud — they share one request path. Raising
-these trades diversity for repetition control, and a value that helps one model can
-degrade another, so tune per model rather than setting them globally.
-
-### Web search
-
-The `web_search` tool lets the agent look up things that are not in the
-repository — a library's current release, a recent API change, an error message
-it has not seen before.
-
-**Off by default.** It needs a backend that is frequently absent, so a session
-without one would advertise a tool the model calls and then fails on:
-
-```
-web_search  error: Post "https://ollama.com:443/api/web_search": net/http: TLS handshake timeout
-```
-
-Turn it on with the flag, or with the environment variable:
-
-```bash
-pirate --web-search-enabled "what changed in the latest Ollama release?"   # flag
-PI_WEB_SEARCH=1 pirate "what changed in the latest Ollama release?"        # env
-```
-
-Prefer `PI_WEB_SEARCH` when subagents matter: a subagent runs as a child `pirate`
-process whose command line carries only model, url, headers and `--lsp`, so a
-flag does not reach it, while the `PI_` prefix is forwarded to every child.
-
-It uses one of two Ollama endpoints, tried in order:
-
-1. **A local daemon** (`OLLAMA_HOST`, default `http://localhost:11434`), on
-   `/api/experimental/web_search`. No key is needed: the daemon searches using
-   the identity from `ollama signin`. This path spends no quota, so it is tried
-   first.
-2. **`https://ollama.com/api/web_search`**, when `OLLAMA_API_KEY` is set. This is
-   the fallback for environments with no daemon — CI runners, dev containers, VS
-   Code remotes. It draws on the account's monthly search quota.
-
-With neither available, the tool returns that as an ordinary result naming what
-to set, rather than failing the turn.
-
-The two endpoints are different *paths*, not the same path on two hosts, which is
-why Pi-rate calls them directly instead of through the Ollama Go SDK: the SDK's
-`WebSearchExperimental` posts to `/api/experimental/web_search`, which 404s on
-`api.ollama.com`.
-
-Each result keeps its URL and is capped at 4000 bytes of content, so a large page
-— a GitHub repository page comes back as the whole rendered README — spends a
-bounded part of the context window, and the model can still fetch the full page
-with `bash` when a snippet is not enough.
-
-```bash
-# Local daemon (no key needed)
-pirate --web-search-enabled "what changed in the latest Ollama release?"
-
-# Headless / CI, using the cloud search API
-export OLLAMA_API_KEY="..."
-PI_WEB_SEARCH=1 pirate "what changed in the latest Ollama release?"
-```
-
-### Custom OpenAI-compatible provider
-
-For OpenAI-compatible APIs with model names that Pi-rate cannot infer from a prefix, explicitly set the role provider to
-`openai` and point `OPENAI_BASE_URL` at the custom endpoint:
-
-```bash
-export OPENAI_API_KEY="your-api-key"
-export OPENAI_BASE_URL="https://api.example.com/v1"
-```
-
-```json
-{
-  "roles": {
-    "default": {
-      "model": "Qwen3.5-397B-A17B-FP8",
-      "provider": "openai"
-    }
-  }
-}
-```
-
-Then run Pi-rate normally:
-
-```bash
-pirate
-```
-
-You can also pass the endpoint per invocation:
-
-```bash
-OPENAI_API_KEY="your-api-key" pirate --model Qwen3.5-397B-A17B-FP8 --url https://api.example.com/v1
-```
-
-When `--url` or `OPENAI_BASE_URL` is set, unknown model names are treated as custom OpenAI-compatible models. Setting
-`provider: "openai"` in config avoids relying on model-prefix detection.
-
-### MCP server integration
-
-Pi-rate supports the [Model Context Protocol](https://modelcontextprotocol.io/). Use it to extend the agent with external tools. Configure servers in
-`~/.pirate/config.json`:
-
-```json
-{
-  "mcp": {
-    "servers": [
-      {
-        "name": "tavily-search",
-        "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=${TAVILY_API_KEY}"
-      },
-      {
-        "name": "filesystem",
-        "command": "npx",
-        "args": [
-          "-y",
-          "@modelcontextprotocol/server-filesystem",
-          "/tmp"
-        ]
-      }
-    ]
-  }
-}
-```
-
-Or in standalone `~/.pirate/mcp.json` (Claude Desktop compatible format):
-
-```json
-{
-  "mcpServers": {
-    "tavily-search": {
-      "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=${TAVILY_API_KEY}"
-    },
-    "filesystem": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "/tmp"
-      ]
-    }
-  }
-}
-```
-
-**Supported transports:**
-
-- **HTTP/Streamable** — `url` field for cloud-based MCP servers
-- **Stdio** — `command` + `args` for local subprocess servers
-
-**Environment variable substitution:** Pi-rate automatically expands `${ENV_VAR}` patterns in server URLs using `.pirate/.env`
-
-## Editor integration
-
-Pi-rate can run as an Agent Client Protocol (ACP) server. Use it from any IDE that supports ACP.
-
-### Zed
-
-Add pirate to Zed's `agent_servers` in your settings:
-
-```json
-{
-  "agent_servers": {
-    "pirate": {
-      "type": "custom",
-      "command": "pirate",
-      "args": ["acp-server", "--model", "glm-5.2:cloud"],
-      "env": {}
-    }
-  }
-}
-```
-
-Then invoke via Zed's agent panel (`⌘⇧A` / `Ctrl+Shift+A`) and select "pirate". The agent runs in the current Zed project
-directory with full access to pirate's tools and memory.
-
-### JetBrains IDEs
-
-JetBrains IDEs (IntelliJ IDEA, GoLand, PyCharm, WebStorm, …) discover ACP agents
-from `~/.jetbrains/acp.json`. Add pirate under `agent_servers`:
-
-```json
-{
-  "agent_servers": {
-    "Pi-rate": {
-      "command": "pirate",
-      "args": ["acp-server", "--model", "agentgateway/ollama/glm-5.3-flash:cloud"]
-    }
-  }
-}
-```
-
-Restart the IDE so it picks up the file, then open the AI Assistant / agent panel and select "Pi-rate". The agent runs in
-the current project directory. `pirate acp-server` accepts `--model` plus `--url`, `--header key=value` (repeatable) and
-`--insecure`; with no `--model` it falls back to `glm-5.2:cloud`.
-
-### VS Code
-
-The `vscode/` directory contains a VS Code extension that drives Pi-rate over
-ACP, surfacing it as a native agent in VS Code's Chat/Agent Sessions UI. See
-[vscode/README.md](vscode/README.md) for installation and usage.
-
-### Sessions survive the server
-
-Every ACP session's transcript is written to the same store the terminal uses
-(`~/.pirate/sessions/<session-id>/`, or `$PI_SESSIONS_DIR`), keyed by the ACP
-session id. The server implements the protocol's session lifecycle on top of it:
-
-| Method | What pirate does |
-|---|---|
-| `session/load` | Replays the stored transcript to the client, then continues it |
-| `session/resume` | Continues the transcript without replaying it |
-| `session/list` | Lists stored sessions, newest first, optionally filtered by `cwd` |
-
-So an editor can restart pirate — or the machine — and pick a thread up where it
-left off, and `pirate --session <id>` reopens the same conversation from the terminal.
-
-## kagent
-
-Run Pi-rate as a custom agent inside [kagent](https://kagent.dev) on Agent Substrate via the A2A
-adapter image. See [docs/kagent-harness.md](docs/kagent-harness.md) for the deployment guide and
-`specs/kagent/` for the Dockerfile, manifests, and step-by-step deploy notes.
+- At least one LLM provider API key, or a running [Ollama](https://ollama.com) instance.
+- Go 1.27+ when building from source.
 
 ## License
 
