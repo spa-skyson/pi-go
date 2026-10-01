@@ -16,6 +16,7 @@ const (
 	overlaySubagentViewer
 	overlaySearchPopup
 	overlaySteerInput
+	overlayDiffViewer
 
 	// overlayCustom marks a synthetic entry pushed by hand (tests today,
 	// dynamic overlays later) that has no backing model field.
@@ -34,6 +35,7 @@ var overlayKinds = []OverlayKind{
 	overlaySubagentViewer,
 	overlaySearchPopup,
 	overlaySteerInput,
+	overlayDiffViewer,
 }
 
 // overlayEntry is one open layer of the modal stack.
@@ -250,6 +252,13 @@ func (m *model) overlayEntryFor(kind OverlayKind) overlayEntry {
 			keyHandler: m.handleSteerOverlayKey,
 			alive:      func(*model) bool { return m.steerInput != nil },
 			onClose:    func(*model) { m.steerInput = nil },
+		}
+	case overlayDiffViewer:
+		return overlayEntry{
+			kind:       kind,
+			keyHandler: m.handleDiffViewerKey,
+			alive:      func(*model) bool { return m.diffViewer != nil },
+			onClose:    func(*model) { m.diffViewer = nil },
 		}
 	default:
 		return overlayEntry{kind: kind}

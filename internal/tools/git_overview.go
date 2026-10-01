@@ -1,10 +1,8 @@
 package tools
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -182,23 +180,12 @@ func parsePorcelain(output string) (staged, unstaged, untracked []string) {
 }
 
 // runGit executes a git command in the given directory and returns stdout.
+// The ADK context (nil tolerated) feeds cancellation into the shared exec
+// core in gitdiff.go.
 func runGit(ctx agent.Context, dir string, args ...string) (string, error) {
 	var parentCtx = context.Background()
 	if ctx != nil {
 		parentCtx = ctx
 	}
-	cmdCtx, cancel := context.WithTimeout(parentCtx, defaultGitTimeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(cmdCtx, "git", args...)
-	cmd.Dir = dir
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git %s: %s: %w", strings.Join(args, " "), strings.TrimSpace(stderr.String()), err)
-	}
-	return stdout.String(), nil
+	return gitRunWith(parentCtx, dir, args...)
 }

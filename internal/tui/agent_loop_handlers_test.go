@@ -3,6 +3,9 @@ package tui
 import (
 	"testing"
 	"time"
+
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/subagent"
 )
 
 // newHandlerModel builds a minimal model suitable for exercising the
@@ -148,6 +151,59 @@ func TestHandleAgentSubEvent_SpawnNoCard(t *testing.T) {
 
 	if m.chatModel.Messages[0].agentID != "" {
 		t.Fatal("non-agent message should not be bound")
+	}
+}
+
+// The spawn event stamps the model the agent runs on onto the bound card —
+// the orchestrator's own spawn resolution, looked up by the agent name the
+// event carries.
+func TestHandleAgentSubEvent_SpawnStampsModel(t *testing.T) {
+	orch := subagent.NewOrchestrator(&config.Config{}, "", []subagent.AgentConfig{
+		{Name: "golang-pro", Model: "glm-5.3-flash"},
+	})
+	m := newHandlerModel()
+	m.cfg.Orchestrator = orch
+	m.chatModel.Messages = []message{{role: "tool", tool: "agent", agentType: "golang-pro"}}
+
+	m.handleAgentSubEvent(agentSubEventMsg{
+		agentID: "golang-pro-1", kind: "spawn", content: "golang-pro",
+		pipelineID: "p1", pipelineMode: "single", pipelineStep: 1, pipelineTotal: 1,
+	})
+
+	if got := m.chatModel.Messages[0].agentModel; got != "glm-5.3-flash" {
+		t.Fatalf("expected model stamped on the card, got %q", got)
+	}
+}
+
+// Background spawns take the same spawn branch, so they carry the model too.
+func TestHandleAgentSubEvent_BackgroundSpawnStampsModel(t *testing.T) {
+	orch := subagent.NewOrchestrator(&config.Config{}, "", []subagent.AgentConfig{
+		{Name: "golang-pro", Model: "glm-5.3-flash"},
+	})
+	m := newHandlerModel()
+	m.cfg.Orchestrator = orch
+	m.chatModel.Messages = []message{{role: "tool", tool: "agent", agentType: "golang-pro"}}
+
+	m.handleAgentSubEvent(agentSubEventMsg{
+		agentID: "golang-pro-2", kind: "spawn", content: "golang-pro", background: true,
+	})
+
+	if got := m.chatModel.Messages[0].agentModel; got != "glm-5.3-flash" {
+		t.Fatalf("background spawn: expected model stamped on the card, got %q", got)
+	}
+}
+
+// An unknown agent name resolves to no model — the card stays empty and the
+// header renders exactly as before.
+func TestHandleAgentSubEvent_SpawnUnknownAgentNoModel(t *testing.T) {
+	m := newHandlerModel()
+	m.cfg.Orchestrator = subagent.NewOrchestrator(&config.Config{}, "", nil)
+	m.chatModel.Messages = []message{{role: "tool", tool: "agent", agentType: "mystery"}}
+
+	m.handleAgentSubEvent(agentSubEventMsg{agentID: "mystery-1", kind: "spawn", content: "mystery"})
+
+	if got := m.chatModel.Messages[0].agentModel; got != "" {
+		t.Fatalf("expected no model for an unknown agent, got %q", got)
 	}
 }
 

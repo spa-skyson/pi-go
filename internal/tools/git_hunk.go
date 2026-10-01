@@ -76,51 +76,28 @@ func gitHunkHandler(sb *Sandbox, ctx agent.Context, input GitHunkInput) (GitHunk
 	}, nil
 }
 
-// parseHunks splits a unified diff into individual Hunk structs.
+// parseHunks splits a unified diff into individual Hunk structs. A thin
+// adapter over ParseUnifiedDiff (gitdiff.go) — the one parser both the tool
+// handlers and the TUI viewer read — so the Content stays the raw hunk body
+// the tool has always returned.
 func parseHunks(diff string) []Hunk {
-	if diff == "" {
+	parsed := ParseUnifiedDiff(diff)
+	if len(parsed) == 0 {
 		return nil
 	}
 
-	lines := strings.Split(diff, "\n")
-	var hunks []Hunk
-	var current *Hunk
-	var contentLines []string
-
-	for _, line := range lines {
-		if strings.HasPrefix(line, "@@") {
-			// Save previous hunk
-			if current != nil {
-				current.Content = strings.Join(contentLines, "\n")
-				hunks = append(hunks, *current)
-			}
-			// Start new hunk
-			current = &Hunk{Header: line}
-			contentLines = nil
-			continue
+	hunks := make([]Hunk, 0, len(parsed))
+	for _, h := range parsed {
+		contentLines := make([]string, 0, len(h.Lines))
+		for _, l := range h.Lines {
+			contentLines = append(contentLines, l.Text)
 		}
-
-		if current == nil {
-			// Skip file header lines before first hunk
-			continue
-		}
-
-		contentLines = append(contentLines, line)
-		if len(line) > 0 {
-			switch line[0] {
-			case '+':
-				current.Added++
-			case '-':
-				current.Removed++
-			}
-		}
+		hunks = append(hunks, Hunk{
+			Header:  h.Header,
+			Content: strings.Join(contentLines, "\n"),
+			Added:   h.Added,
+			Removed: h.Removed,
+		})
 	}
-
-	// Save last hunk
-	if current != nil {
-		current.Content = strings.Join(contentLines, "\n")
-		hunks = append(hunks, *current)
-	}
-
 	return hunks
 }

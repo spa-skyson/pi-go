@@ -153,3 +153,30 @@ func TestAgentSpawnBaseURL(t *testing.T) {
 		})
 	}
 }
+
+// TestOrchestratorAgentModel pins the exported model lookup the TUI uses to
+// label agent cards: the same raw string Spawn resolves — frontmatter model
+// wins, otherwise the role — and empty for anything it cannot resolve.
+func TestOrchestratorAgentModel(t *testing.T) {
+	orch := NewOrchestrator(corpConfig(), "", []AgentConfig{
+		{Name: "fronted", Model: "corp-codex/gpt-5.6-sol", Role: "no-such-role"},
+		{Name: "roled", Role: "smol"},
+	})
+	tests := []struct {
+		name string
+		// agent is the registry name looked up; want is the expected model.
+		agent string
+		want  string
+	}{
+		{"frontmatter model wins without touching the role", "fronted", "corp-codex/gpt-5.6-sol"},
+		{"role resolves to the provider-prefixed model", "roled", "corp/gpt-5.6-sol"},
+		{"unknown agent yields empty", "nobody", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := orch.AgentModel(tt.agent); got != tt.want {
+				t.Fatalf("AgentModel(%q) = %q, want %q", tt.agent, got, tt.want)
+			}
+		})
+	}
+}
