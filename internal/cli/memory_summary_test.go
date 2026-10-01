@@ -27,12 +27,14 @@ type discardWriter struct{}
 func (discardWriter) Write(p []byte) (int, error) { return len(p), nil }
 
 // summaryRecordingStore records what the summary step asked of it, so a test asserts a
-// summary was written rather than merely attempted.
+// summary was written rather than merely attempted. sessionObsReads counts full
+// row loads, so a test can prove the empty-session probe short-circuited them.
 type summaryRecordingStore struct {
 	observations []*memory.Observation
 	summaries    []*memory.SessionSummary
 
 	observationsErr error
+	sessionObsReads int
 }
 
 func (s *summaryRecordingStore) CreateSession(context.Context, *memory.Session) error { return nil }
@@ -47,10 +49,20 @@ func (s *summaryRecordingStore) RecentObservations(context.Context, string, int)
 	return nil, nil
 }
 func (s *summaryRecordingStore) SessionObservations(context.Context, string) ([]*memory.Observation, error) {
+	s.sessionObsReads++
 	if s.observationsErr != nil {
 		return nil, s.observationsErr
 	}
 	return s.observations, nil
+}
+
+func (s *summaryRecordingStore) HasObservations(_ context.Context, sessionID string) (bool, error) {
+	for _, o := range s.observations {
+		if o.SessionID == sessionID {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 func (s *summaryRecordingStore) UpsertSummary(_ context.Context, sum *memory.SessionSummary) error {
 	s.summaries = append(s.summaries, sum)
@@ -118,17 +130,19 @@ func observationsFor(sessionID string) []*memory.Observation {
 	}
 }
 
-// A clean drain must produce exactly one stored summary, for one model call.
+// A clean drain must produce exactly one stored summary, for one model call —
+// and exactly one full row load, since the probe finds observations.
 func TestSummarizeSessionAfterDrain_WritesSummary(t *testing.T) {
 	store := &summaryRecordingStore{observations: observationsFor("sess-1")}
 	llm := &summaryLLM{reply: validSummaryJSON}
 
 	summarizeSessionAfterDrain(summarizeParams{
-		store:      store,
-		summarizer: memory.NewSessionSummarizer(store, llm),
-		sessionID:  "sess-1",
-		project:    "/proj",
-		log:        quietLogger(),
+		store:       store,
+		summarizer:  memory.NewSessionSummarizer(store, llm),
+		sessionID:   "sess-1",
+		project:     "/proj",
+		drainBudget: memoryDrainTimeout,
+		log:         quietLogger(),
 	}, nil, true)
 
 	if len(store.summaries) != 1 {
@@ -143,6 +157,9 @@ func TestSummarizeSessionAfterDrain_WritesSummary(t *testing.T) {
 	}
 	if got := llm.callCount(); got != 1 {
 		t.Errorf("expected exactly one model call for the whole session, got %d", got)
+	}
+	if store.sessionObsReads != 1 {
+		t.Errorf("expected exactly one full observation load, got %d", store.sessionObsReads)
 	}
 }
 
@@ -192,17 +209,20 @@ func TestSummarizeSessionAfterDrain_NoModelIsANoop(t *testing.T) {
 }
 
 // A session that recorded nothing has nothing to summarize: no model call, and
-// no summary invented for it.
+// no summary invented for it. The cheap index probe must also short-circuit the
+// full row load — the common shape for short one-shot runs, which is exactly
+// the shutdown the print mode wants to keep fast.
 func TestSummarizeSessionAfterDrain_NoObservationsMakesNoCall(t *testing.T) {
 	store := &summaryRecordingStore{}
 	llm := &summaryLLM{reply: validSummaryJSON}
 
 	summarizeSessionAfterDrain(summarizeParams{
-		store:      store,
-		summarizer: memory.NewSessionSummarizer(store, llm),
-		sessionID:  "sess-empty",
-		project:    "/proj",
-		log:        quietLogger(),
+		store:       store,
+		summarizer:  memory.NewSessionSummarizer(store, llm),
+		sessionID:   "sess-empty",
+		project:     "/proj",
+		drainBudget: oneShotMemoryDrainTimeout,
+		log:         quietLogger(),
 	}, nil, true)
 
 	if got := llm.callCount(); got != 0 {
@@ -210,6 +230,9 @@ func TestSummarizeSessionAfterDrain_NoObservationsMakesNoCall(t *testing.T) {
 	}
 	if len(store.summaries) != 0 {
 		t.Errorf("expected no summary for an empty session, got %d", len(store.summaries))
+	}
+	if store.sessionObsReads != 0 {
+		t.Errorf("expected the empty-session probe to skip the full row load, got %d loads", store.sessionObsReads)
 	}
 }
 
@@ -323,6 +346,43 @@ func TestMemoryTimeoutsAreSane(t *testing.T) {
 	budget := sessionSummaryBudget()
 	if budget != 30*time.Second {
 		t.Errorf("sessionSummaryBudget() = %v; want 30s (default)", budget)
+	}
+}
+
+// One-shot modes (print/json) must drain under a tighter ceiling than
+// interactive: their process must not linger once the answer is delivered.
+// Interactive keeps the full budget — exit latency there is not billed to
+// anyone.
+func TestMemoryDrainBudget(t *testing.T) {
+	for _, mode := range []string{"print", "json"} {
+		if got := memoryDrainBudget(mode); got != oneShotMemoryDrainTimeout {
+			t.Errorf("memoryDrainBudget(%q) = %v; want the one-shot ceiling %v", mode, got, oneShotMemoryDrainTimeout)
+		}
+	}
+	for _, mode := range []string{"interactive", "rpc", "socket", ""} {
+		if got := memoryDrainBudget(mode); got != memoryDrainTimeout {
+			t.Errorf("memoryDrainBudget(%q) = %v; want the full ceiling %v", mode, got, memoryDrainTimeout)
+		}
+	}
+	if oneShotMemoryDrainTimeout >= memoryDrainTimeout {
+		t.Errorf("one-shot drain ceiling %v must be tighter than the interactive %v",
+			oneShotMemoryDrainTimeout, memoryDrainTimeout)
+	}
+}
+
+// The summarizer itself must refuse to call the model over an empty session,
+// with the sentinel callers can match on — the CLI probe is the first
+// guarantee, this the second.
+func TestSessionSummarizerEmptySessionReturnsSentinel(t *testing.T) {
+	store := &summaryRecordingStore{}
+	llm := &summaryLLM{reply: validSummaryJSON}
+
+	err := memory.NewSessionSummarizer(store, llm).SummarizeSession(context.Background(), "sess-empty", "/proj")
+	if !errors.Is(err, memory.ErrNoObservations) {
+		t.Fatalf("SummarizeSession on an empty session = %v; want ErrNoObservations", err)
+	}
+	if got := llm.callCount(); got != 0 {
+		t.Errorf("expected no model call for an empty session, got %d", got)
 	}
 }
 

@@ -140,6 +140,54 @@ func TestInsertObservation(t *testing.T) {
 	}
 }
 
+// HasObservations is the shutdown path's cheap probe: false for a session with
+// nothing recorded, true once one lands, and scoped to the session — another
+// session's rows must not make it true.
+func TestHasObservations(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	insertTestSession(t, store, "sess-has", "/project")
+	insertTestSession(t, store, "sess-other", "/project")
+
+	has, err := store.HasObservations(ctx, "sess-has")
+	if err != nil {
+		t.Fatalf("HasObservations: %v", err)
+	}
+	if has {
+		t.Error("expected false before any observation is recorded")
+	}
+
+	// Another session's observation must not satisfy sess-has.
+	if err := store.InsertObservation(ctx, &Observation{
+		SessionID: "sess-other",
+		Project:   "/project",
+		Type:      TypeDiscovery,
+		Text:      "belongs elsewhere",
+		ToolName:  "read",
+		CreatedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("InsertObservation: %v", err)
+	}
+	if has, _ := store.HasObservations(ctx, "sess-has"); has {
+		t.Error("another session's observation must not satisfy the probe")
+	}
+
+	if err := store.InsertObservation(ctx, &Observation{
+		SessionID: "sess-has",
+		Project:   "/project",
+		Type:      TypeDiscovery,
+		Text:      "first observation",
+		ToolName:  "read",
+		CreatedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("InsertObservation: %v", err)
+	}
+	if has, err := store.HasObservations(ctx, "sess-has"); err != nil || !has {
+		t.Errorf("HasObservations = %v, %v; want true, nil", has, err)
+	}
+}
+
 func TestGetObservations(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()

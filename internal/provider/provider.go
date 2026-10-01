@@ -46,6 +46,15 @@ func BuildTransport(opts *LLMOptions) (http.RoundTripper, error) {
 	base := http.DefaultTransport
 	if def, ok := http.DefaultTransport.(*http.Transport); ok && (needsTLS || opts.ConnectTimeout > 0) {
 		cloned := def.Clone()
+		// The Go default MaxIdleConnsPerHost=2 is tuned for fan-out across
+		// many hosts, not for an LLM process whose traffic concentrates on a
+		// single API host. There, parallelism comes from the advisor, the
+		// main session and mirrored subagent requests in one process; with a
+		// pool of 2 the extra connections are closed as soon as they go
+		// idle, so every burst pays a fresh TLS handshake. 8 covers that
+		// fan-in with headroom; 100 would be cloud-CLI territory and just
+		// holds idle sockets open against server-side connection limits.
+		cloned.MaxIdleConnsPerHost = 8
 		if needsTLS {
 			tlsConfig, err := buildTLSConfig(opts)
 			if err != nil {
@@ -62,6 +71,14 @@ func BuildTransport(opts *LLMOptions) (http.RoundTripper, error) {
 		}
 		base = cloned
 	}
+	// Fallback above: headers or pacing alone keep the shared
+	// http.DefaultTransport uncloned, and its MaxIdleConnsPerHost stays at the
+	// default 2 there on purpose — that base is the process-global transport,
+	// and writing a pool setting on it would mutate connection behavior for
+	// every other user of the default in the process, not just this client.
+	// Raising it safely would mean cloning, which that path deliberately
+	// avoids; see the clone branch above for where 8 is set.
+	//
 	// Innermost, beneath headerTransport: the trace has to record the request
 	// as it actually goes on the wire. Wrapping the other way round would run
 	// the trace first and log a request missing every ExtraHeader the server

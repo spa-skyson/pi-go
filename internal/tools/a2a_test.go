@@ -543,6 +543,12 @@ func TestBuildA2ADescription_WithAgents(t *testing.T) {
 	if !strings.Contains(result, "agent2") {
 		t.Errorf("should list agent2, got %q", result)
 	}
+	// The description is rebuilt from a map on every request, so without
+	// sorting the agent order would drift between turns and invalidate the
+	// provider's prompt-prefix cache. Pin the byte-identical property.
+	if again := buildA2ADescription(cache); again != result {
+		t.Errorf("description is not stable between calls:\nfirst:  %q\nsecond: %q", result, again)
+	}
 }
 
 // --- ClientCache availableAgents tests ---

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"iter"
@@ -920,7 +921,7 @@ func runNonInteractive(
 	// so recording starts from that point rather than from wiring.
 	var memSessionID string
 
-	memStore, memWorker, closeMemory := setupMemory(parentCtx, cfg, orch, llm, &memSessionID, cwd)
+	memStore, memWorker, closeMemory := setupMemory(parentCtx, cfg, orch, llm, &memSessionID, cwd, mode)
 	defer closeMemory()
 
 	coreTools = appendNonInteractiveMemoryTools(coreTools, memStore)
@@ -1424,8 +1425,10 @@ func coreToolOptions(sup *tools.BashSupervisor, sessionID string, todoNotifier f
 // summary is filed under, matching the one observations were recorded with.
 //
 // sessionID is read through a pointer because the session is created after this
-// call — the closer runs at exit, by which point it is set.
-func setupMemory(ctx context.Context, cfg config.Config, orch *subagent.Orchestrator, llm adkmodel.LLM, sessionID *string, project string) (memory.Store, *memory.Worker, func()) {
+// call — the closer runs at exit, by which point it is set. mode picks the
+// drain ceiling: one-shot modes (print/json) get the reduced budget, everything
+// else the full one — see memoryDrainBudget.
+func setupMemory(ctx context.Context, cfg config.Config, orch *subagent.Orchestrator, llm adkmodel.LLM, sessionID *string, project, mode string) (memory.Store, *memory.Worker, func()) {
 	noop := func() {}
 	if !memoryEnabled(cfg) {
 		return nil, nil, noop
@@ -1456,16 +1459,18 @@ func setupMemory(ctx context.Context, cfg config.Config, orch *subagent.Orchestr
 	summarizer := memory.NewSessionSummarizer(store, llm)
 
 	return store, worker, func() {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), memoryDrainTimeout)
+		drainBudget := memoryDrainBudget(mode)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), drainBudget)
 		drainErr := worker.Shutdown(shutdownCtx)
 		cancel()
 
 		summarizeSessionAfterDrain(summarizeParams{
-			store:      store,
-			summarizer: summarizer,
-			sessionID:  derefString(sessionID),
-			project:    project,
-			log:        slog.Default(),
+			store:       store,
+			summarizer:  summarizer,
+			sessionID:   derefString(sessionID),
+			project:     project,
+			drainBudget: drainBudget,
+			log:         slog.Default(),
 		}, drainErr, llm != nil)
 
 		_ = store.Close()
@@ -1478,7 +1483,11 @@ type summarizeParams struct {
 	summarizer *memory.SessionSummarizer
 	sessionID  string
 	project    string
-	log        *slog.Logger
+	// drainBudget is the budget the drain actually ran with, reported when a
+	// drain timeout skips the summary — the full and one-shot ceilings differ,
+	// so the log names the one that applied.
+	drainBudget time.Duration
+	log         *slog.Logger
 }
 
 // derefString reads a string through a pointer, treating nil as empty. The
@@ -1497,21 +1506,45 @@ func derefString(p *string) string {
 // A drain timeout means the worker may still be storing, so a summary taken now
 // would describe a prefix of the session and read as complete. That is reported
 // and skipped.
+//
+// A session that recorded nothing is the common shape for short one-shot runs:
+// it is probed on the index before any summarizer machinery runs, and reported
+// at Debug rather than as a failure. The model is never called over an empty
+// session — the probe is the first guarantee, the summarizer's
+// [memory.ErrNoObservations] the second.
 func summarizeSessionAfterDrain(p summarizeParams, drainErr error, modelAvailable bool) {
 	if drainErr != nil {
 		p.log.Warn("memory: drain timed out; skipping session summary",
-			"error", drainErr, "budget", memoryDrainTimeout)
+			"error", drainErr, "budget", p.drainBudget)
 		return
 	}
 	if !modelAvailable || p.sessionID == "" {
 		return
 	}
 
+	if p.store != nil {
+		probeCtx, cancel := context.WithTimeout(context.Background(), hasObservationsProbeTimeout)
+		has, err := p.store.HasObservations(probeCtx, p.sessionID)
+		cancel()
+		if err == nil && !has {
+			p.log.Debug("memory: skipping session summary, no observations",
+				"session", p.sessionID)
+			return
+		}
+		// A probe error falls through to the summarizer, which reports its own
+		// read failure — silently dropping the summary would be worse.
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), sessionSummaryBudget())
 	defer cancel()
 	if err := p.summarizer.SummarizeSession(ctx, p.sessionID, p.project); err != nil {
-		// Best-effort: a session with no observations, or a provider that did
-		// not answer inside the budget, must not fail the shutdown that follows.
+		if errors.Is(err, memory.ErrNoObservations) {
+			p.log.Debug("memory: skipping session summary, no observations",
+				"session", p.sessionID)
+			return
+		}
+		// Best-effort: a provider that did not answer inside the budget must
+		// not fail the shutdown that follows.
 		p.log.Warn("memory: session summary failed",
 			"session", p.sessionID, "error", err)
 		return
@@ -2483,6 +2516,35 @@ const gitCmdTimeout = 5 * time.Second
 // the point at which the session stops being described rather than just
 // recorded.
 const memoryDrainTimeout = 60 * time.Second
+
+// oneShotMemoryDrainTimeout bounds the memory worker's drain in one-shot runs
+// (print/json): the process must not linger once its answer is delivered.
+//
+// Derived as half the summary budget. The default model-free compressor drains
+// queued observations in milliseconds — local inserts, measured sub-ms — so the
+// cap only bites a host configured for subagent compression, which pays a child
+// process per observation (~5.6s each, see internal/memory/summarize.go). A
+// one-shot run accepts losing the tail of its own memory rather than holding
+// the caller for it. Interactive keeps the full [memoryDrainTimeout]: there the
+// session tail is the product, and exit latency is not billed to anyone.
+const oneShotMemoryDrainTimeout = defaultSessionSummaryTimeout / 2
+
+// hasObservationsProbeTimeout bounds the empty-session probe on the shutdown
+// path. A one-row indexed lookup, so a small fixed ceiling: the probe must
+// never become the thing the exit waits on.
+const hasObservationsProbeTimeout = 2 * time.Second
+
+// memoryDrainBudget returns the memory worker's drain budget for a run mode.
+// One-shot modes get the reduced ceiling; long-running modes (rpc/socket
+// servers) and interactive keep the full [memoryDrainTimeout].
+func memoryDrainBudget(mode string) time.Duration {
+	switch mode {
+	case "print", "json":
+		return oneShotMemoryDrainTimeout
+	default:
+		return memoryDrainTimeout
+	}
+}
 
 // defaultSessionSummaryTimeout bounds the end-of-session summary: one model call.
 //

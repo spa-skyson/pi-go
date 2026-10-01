@@ -47,6 +47,15 @@ const (
 )
 
 // SystemInstruction is the default system prompt for the coding agent.
+//
+// Point compressions (2026-10, prompt-size audit): sections below were
+// reworded without dropping rules — Environment management (dropped the
+// "Example:" enumeration that repeated the same uv/bun commands), JSON String
+// Escaping (the three bullets folded into one line; both examples kept
+// verbatim, they carry the Windows-path rule), Subagents research bullet and
+// Diagram style intro (same rules, shorter phrasing). Behavioral blocks —
+// anti-hallucination, git safety, ccr mitigation, todo workflow, clarifying
+// questions — are intentionally verbatim.
 const SystemInstruction = `You are Pi-rate, a terminal coding agent that helps users with software engineering tasks.
 
 You have access to tools for reading, writing, and editing files, running shell commands,
@@ -72,8 +81,8 @@ Rules for efficient exploration:
 
 Prefer modern, fast package managers:
 
-- **Python**: Use uv instead of pip. Run scripts with "uv run", manage dependencies with "uv add". Example: "uv run pytest", "uv run python script.py", "uv add requests".
-- **Node.js**: Use bun instead of npm/yarn/pnpm. Faster installs, built-in TypeScript, works as package manager and runtime. Example: "bun install", "bun run dev", "bun test".
+- **Python**: use uv instead of pip — "uv run" for scripts and tests, "uv add" for dependencies.
+- **Node.js**: use bun instead of npm/yarn/pnpm — faster installs, built-in TypeScript, works as package manager and runtime ("bun install", "bun run dev", "bun test").
 
 # Coding tasks
 
@@ -251,10 +260,7 @@ Example shape:
 
 # JSON String Escaping
 
-When sending tool parameters that contain file paths or strings with special characters:
-- Always escape backslashes in JSON: use ` + "`" + `\\` + "`" + ` not ` + "`" + `\` + "`" + `
-- For Windows paths like C:\Users\test, send as "C:\\Users\\test" in JSON
-- Verify paths are properly escaped before calling tools that require file_path
+When sending tool parameters with file paths or strings containing special characters, always escape backslashes in JSON (` + "`" + `\\` + "`" + `, not ` + "`" + `\` + "`" + `) — verify paths before calling tools that take file_path.
 
 Example INCORRECT (will cause tool errors):
 {"file_path": "C:\Users\test\file.go"}
@@ -270,7 +276,7 @@ You can spawn subagents using the subagent tool to parallelize work. The sidebar
 
 Use agents for any task that benefits from parallel or independent work:
 
-- **Research & exploration**: spawn explore agents to search multiple code areas simultaneously. For example, to understand a feature, spawn parallel explores for "find all callers of FooService" and "find the config and initialization for FooService".
+- **Research & exploration**: spawn explore agents to search multiple code areas simultaneously — e.g. parallel explores for "find all callers of FooService" and "find the config and initialization for FooService".
 - **Repository analysis**: for broad questions ("how does auth work?", "what changed recently?"), spawn 2-3 explore agents targeting different aspects in parallel rather than searching sequentially yourself.
 - **Implementation**: use task/designer agents for isolated coding in worktrees, or worker/quick-task agents for edits in the main tree.
 - **Review**: use code-reviewer for diff review, spec-reviewer for design document review.
@@ -293,9 +299,8 @@ Use agents for any task that benefits from parallel or independent work:
 
 # Diagram style
 
-For diagrams of packages, modules, or folders, use an ASCII tree with
-category-grouped emojis — not Mermaid. Mermaid is still fine for flowcharts and
-process; ASCII + emoji is for structure.
+For package/module/folder structure, use an ASCII tree with category-grouped
+emojis — not Mermaid (Mermaid stays for flowcharts and process).
 
 Rules:
 - Print the root directory with a leading emoji and a bucket label (e.g. internal/).
@@ -1062,14 +1067,49 @@ func loadInstructionPartsFrom(baseInstruction, cwd, home string) InstructionPart
 	return parts
 }
 
+// maxSkillMenuDesc caps the description rendered per skill in the
+// "# Available Skills" menu, in runes.
+const maxSkillMenuDesc = 80
+
+// skillMenuDescription reduces a skill description to its identifying first
+// sentence (first line, then text up to the first period), capped at
+// maxSkillMenuDesc runes with an ellipsis. The full description stays
+// available where decisions are made — the /skills listing and the Active
+// Skill body injected on activation — so the menu only needs enough text to
+// tell one skill from another. A verbose multi-sentence SKILL.md frontmatter
+// used to add hundreds of prompt tokens per skill with no discovery benefit.
+// Truncating at the first period can stop early on abbreviations (e.g.); that
+// is acceptable for a discovery menu and bounded by the cap.
+func skillMenuDescription(desc string) string {
+	if i := strings.IndexByte(desc, '\n'); i >= 0 {
+		desc = desc[:i]
+	}
+	if i := strings.IndexByte(desc, '.'); i >= 0 {
+		desc = desc[:i+1]
+	}
+	desc = strings.TrimSpace(desc)
+	if runes := []rune(desc); len(runes) > maxSkillMenuDesc {
+		desc = string(runes[:maxSkillMenuDesc-1])
+		if i := strings.LastIndex(desc, " "); i > 0 {
+			desc = desc[:i] // cut back to a word boundary, not mid-word
+		}
+		desc += "…"
+	}
+	return desc
+}
+
 // appendSkillsMenu formats the "# Available Skills" block for a pre-loaded
 // skill slice. Exposed so callers that already have skills in hand (e.g. the
 // TUI) don't trigger a second LoadSkills.
+//
+// Each skill renders as exactly one bounded line: name plus first sentence of
+// the description (see skillMenuDescription). The menu's job is discovery —
+// picking which skill to load — not documenting it.
 func appendSkillsMenu(skills []extension.Skill) string {
 	var b strings.Builder
 	b.WriteString("\n\n# Available Skills\n\n")
 	for _, s := range skills {
-		fmt.Fprintf(&b, "- /%s: %s\n", s.Name, s.Description)
+		fmt.Fprintf(&b, "- /%s: %s\n", s.Name, skillMenuDescription(s.Description))
 	}
 	return b.String()
 }

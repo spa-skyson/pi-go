@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 
@@ -401,6 +402,12 @@ func buildA2ADescription(cache *ClientCache) string {
 	for name := range cache.agents {
 		names = append(names, name)
 	}
+	// The toolset rebuilds this description on every request (Tools is called
+	// per invocation), and cache.agents is a map: unsorted, the agent order in
+	// the tool declaration would change from turn to turn and invalidate the
+	// provider's prompt-prefix cache on each turn. Sorted, the declaration is
+	// byte-identical between turns.
+	slices.Sort(names)
 	sb.WriteString(strings.Join(names, ", "))
 	sb.WriteString(".")
 
