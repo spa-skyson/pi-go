@@ -70,14 +70,25 @@ func TestModelCandidatesEmpty(t *testing.T) {
 }
 
 // withTempCacheDir points the user cache dir at a temp dir for the duration
-// of the test (os.UserCacheDir reads a different variable per platform).
+// of the test and returns the pi-go models cache path.
+//
+// os.UserCacheDir reads a different variable on each platform and consults no
+// other, so all three must be set for this to isolate anywhere: $HOME on macOS
+// (which appends Library/Caches), $XDG_CACHE_HOME on Linux, and %LocalAppData%
+// on Windows. Missing the Windows one is not a no-op: the test writes its
+// catalog into the runner's real cache, and the next test that reads it gets
+// stale data.
 func withTempCacheDir(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
 	t.Setenv("LocalAppData", filepath.Join(home, "AppData", "Local"))
-	dir := filepath.Join(home, ".cache", "pi-go", "models")
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		t.Fatalf("os.UserCacheDir: %v", err)
+	}
+	dir = filepath.Join(dir, "pi-go", "models")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("cache dir: %v", err)
 	}

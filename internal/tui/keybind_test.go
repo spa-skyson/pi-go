@@ -171,6 +171,8 @@ func TestHotkeyFor_ResolvesRegistryKeys(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 // nonTestSources returns the package's non-test .go files, name → contents.
+// Line endings are normalised to LF so that funcBody and other consumers do not
+// need to handle CRLF (which git's autocrlf produces on Windows checkouts).
 func nonTestSources(t *testing.T) map[string]string {
 	t.Helper()
 	entries, err := os.ReadDir(".")
@@ -187,15 +189,18 @@ func nonTestSources(t *testing.T) map[string]string {
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
 		}
-		sources[name] = string(data)
+		sources[name] = strings.ReplaceAll(string(data), "\r\n", "\n")
 	}
 	return sources
 }
 
 // funcBody extracts a method body by cutting at the first closing brace in
 // column 0 — the bodies under test have no top-level braces inside.
+// Line endings are normalised to LF so that CRLF checkouts (Windows with
+// core.autocrlf=true) do not prevent the "\n}\n" search from matching.
 func funcBody(t *testing.T, src, name string) string {
 	t.Helper()
+	src = strings.ReplaceAll(src, "\r\n", "\n")
 	start := strings.Index(src, "func (m *model) "+name)
 	if start < 0 {
 		t.Fatalf("%s not found", name)
@@ -235,6 +240,20 @@ func TestKeyRegistry_SourceGuards(t *testing.T) {
 		for _, hit := range chord.FindAllString(body, -1) {
 			t.Errorf("%s compares chords inline (%s...) — add the binding to keyRegistry and switch on its ID", fn, hit)
 		}
+	}
+}
+
+func TestFuncBody_CRLF(t *testing.T) {
+	// Regression: on Windows with core.autocrlf=true the source files arrive
+	// with \r\n line endings. funcBody searches for "\n}\n" and must not fail
+	// when the closing brace is preceded by \r.
+	src := "package tui\r\n\r\nfunc (m *model) handleInterruptKey() tea.Cmd {\r\n\treturn func() tea.Msg {\r\n\t\treturn nil\r\n\t}\r\n}\r\n"
+	body := funcBody(t, src, "handleInterruptKey")
+	if body == "" {
+		t.Fatal("funcBody returned empty on CRLF input")
+	}
+	if !strings.Contains(body, "return nil") {
+		t.Errorf("funcBody = %q, want it to contain the method body", body)
 	}
 }
 
