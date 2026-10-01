@@ -9,6 +9,7 @@ type OverlayKind int
 
 const (
 	overlayApproval OverlayKind = iota
+	overlayQuestion
 	overlayCommit
 	overlayLogin
 	overlaySkillCreate
@@ -28,6 +29,7 @@ const (
 // drift; nothing else may dispatch from it.
 var overlayKinds = []OverlayKind{
 	overlayApproval,
+	overlayQuestion,
 	overlayCommit,
 	overlayLogin,
 	overlaySkillCreate,
@@ -198,6 +200,13 @@ func (m *model) overlayEntryFor(kind OverlayKind) overlayEntry {
 			keyHandler: m.handleApprovalKey,
 			alive:      func(*model) bool { return m.approval != nil },
 			onClose:    func(*model) { m.approval = nil },
+		}
+	case overlayQuestion:
+		return overlayEntry{
+			kind:       kind,
+			keyHandler: m.handleQuestionKey,
+			alive:      func(*model) bool { return m.question != nil },
+			onClose:    func(*model) { m.question = nil },
 		}
 	case overlayCommit:
 		return overlayEntry{

@@ -189,10 +189,16 @@ func runInteractive(
 	// config rules actually contain ask directives.
 	approvalCh := make(chan permission.ApprovalRequest)
 
+	// Question bridge, same shape: the question tool sends its request here
+	// and the TUI dialog answers it. Buffer 1 plus the TUI's parked reader
+	// keeps the tool's send non-blocking; a question arriving while one is
+	// already up displaces it (the TUI answers the stale one canceled).
+	questionCh := make(chan tools.QuestionRequest, 1)
+
 	go func() {
 		defer close(initDone)
 		defer close(initCh)
-		deferredInit(initCtx, cfg, llm, info.Provider, info.Model, info.BaseURL, tokenTracker, cwd, sandboxRoot, worktreeDir, headerSessionID, initCh, noticeCh, approvalCh, todoCh, &res)
+		deferredInit(initCtx, cfg, llm, info.Provider, info.Model, info.BaseURL, tokenTracker, cwd, sandboxRoot, worktreeDir, headerSessionID, initCh, noticeCh, approvalCh, questionCh, todoCh, &res)
 	}()
 
 	// The TUI owns the terminal from here until tui.Run returns: it renders on
@@ -223,6 +229,7 @@ func runInteractive(
 		DeferredInit:   initCh,
 		SystemNoticeCh: noticeCh,
 		ApprovalCh:     approvalCh,
+		QuestionCh:     questionCh,
 		TodoCh:         todoCh,
 		ModelSwitcher: func(switchCtx context.Context, modelName string) (adkmodel.LLM, string, string, error) {
 			return buildSwitchedLLM(switchCtx, cfg, tokenTracker, modelName, headerSessionID)
@@ -292,8 +299,9 @@ func printSessionEpilogue(w io.Writer, sessionID string) {
 
 // deferredInit performs all heavy initialization, sending progress via ch.
 // Resources that need cleanup are stored in res. approvalCh is the bridge the
-// permission gate sends ask requests over; nil keeps the non-interactive
-// denial.
+// permission gate sends ask requests over; questionCh is the bridge the
+// question tool sends its requests over; nil keeps each non-interactive
+// fallback.
 func deferredInit(
 	ctx context.Context,
 	cfg config.Config,
@@ -307,6 +315,7 @@ func deferredInit(
 	ch chan<- tui.InitEvent,
 	noticeCh chan string,
 	approvalCh chan permission.ApprovalRequest,
+	questionCh chan tools.QuestionRequest,
 	todoCh chan tools.TodoState,
 	res *initResources,
 ) {
@@ -321,7 +330,7 @@ func deferredInit(
 	// --- Phase 1: Core tools (fast, needed by everything) ---
 	send("tools", false)
 
-	coreTools, err := deferredInitCoreTools(sandboxRoot, worktreeDir, headerSessionID, todoCh, res)
+	coreTools, err := deferredInitCoreTools(sandboxRoot, worktreeDir, headerSessionID, todoCh, questionCh, res)
 	if err != nil {
 		fail(err)
 		return
@@ -596,7 +605,10 @@ func deferredInit(
 // /todos popup stay live. The send is non-blocking — a state update dropped
 // while the TUI is busy is self-correcting, because the next todo_write
 // carries the full list again.
-func deferredInitCoreTools(sandboxRoot, worktreeDir, headerSessionID string, todoCh chan tools.TodoState, res *initResources) ([]adktool.Tool, error) {
+//
+// questionCh wires the question tool to the TUI dialog; nil keeps the tool's
+// headless mode (immediate canceled).
+func deferredInitCoreTools(sandboxRoot, worktreeDir, headerSessionID string, todoCh chan tools.TodoState, questionCh chan tools.QuestionRequest, res *initResources) ([]adktool.Tool, error) {
 	sandbox, err := tools.NewSandbox(sandboxRoot, worktreeDir)
 	if err != nil {
 		return nil, fmt.Errorf("creating sandbox: %w", err)
@@ -621,7 +633,15 @@ func deferredInitCoreTools(sandboxRoot, worktreeDir, headerSessionID string, tod
 			}
 		}
 	}
-	coreTools, err := tools.CoreTools(sandbox, coreToolOptions(bashSup, headerSessionID, todoNotifier)...)
+	// The question notifier's send must not drop (the tool would wait on a
+	// Reply nobody owns), and it does not need to: the channel is buffered
+	// to one and the TUI keeps exactly one reader parked on it. A blocking
+	// send is safe here — the tool call is an interactive wait anyway.
+	var questionNotifier func(tools.QuestionRequest)
+	if questionCh != nil {
+		questionNotifier = func(req tools.QuestionRequest) { questionCh <- req }
+	}
+	coreTools, err := tools.CoreTools(sandbox, coreToolOptions(bashSup, headerSessionID, todoNotifier, questionNotifier)...)
 	if err != nil {
 		return nil, fmt.Errorf("creating core tools: %w", err)
 	}

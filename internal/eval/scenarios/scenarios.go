@@ -35,6 +35,7 @@ var Exclusions = []eval.Exclusion{
 	{Tool: "agent_result", Reason: "needs a live subagent goroutine (spawned by subagent with background=true) — network dependency; behavior covered by unit tests in internal/tools: registry/agent_result/background"},
 	{Tool: "todo_write", Reason: "writes the session plan file under ~/.pirate/sessions/<id>/; no scenario — behavior covered by unit tests in internal/tools: todo (round-trip, validation, notifier, atomic save)"},
 	{Tool: "todo_read", Reason: "reads the session plan file back; no scenario — behavior covered by unit tests in internal/tools: todo (round-trip)"},
+	{Tool: "question", Reason: "needs a live TUI bridge to a human; a headless eval has no one to answer (the tool returns canceled immediately there) — behavior covered by unit tests in internal/tools: question (validation, headless canceled, notifier round-trip) and internal/tui: question (dialog keys, free text, facts)"},
 }
 
 // Suite returns the scenarios in run order.

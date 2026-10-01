@@ -58,6 +58,11 @@ type Config struct {
 	// dialog answers it via request.Reply. Nil disables the dialog: sessions
 	// without it fall back to the non-interactive denial of ask.
 	ApprovalCh <-chan permission.ApprovalRequest
+	// QuestionCh receives question requests from the question tool. Each
+	// request blocks the tool call until the dialog answers it via
+	// request.Reply. Nil keeps the tool in its headless mode: it returns
+	// canceled immediately instead of blocking.
+	QuestionCh <-chan tools.QuestionRequest
 	// Attention gates the terminal attention signals (bell, OSC 777
 	// notification) sent when an approval dialog opens or a long turn
 	// completes. Nil turns attention off entirely — no sequences, and focus

@@ -2037,6 +2037,14 @@ func (m *model) handleAgentDone(msg agentDoneMsg) (tea.Model, tea.Cmd) {
 		m.popOverlay(overlayApproval)
 		m.chatModel.AppendNotice("approval canceled: turn ended before an answer")
 	}
+	if m.question != nil {
+		// Same contract as the approval dismissal: the question tool's wait
+		// died with the loop (its ctx select returns canceled). Drop the
+		// dialog and say so — an answer typed now would land in a buffered
+		// Reply nobody reads.
+		m.popOverlay(overlayQuestion)
+		m.chatModel.AppendNotice("question canceled: turn ended before an answer")
+	}
 	if msg.err == nil && m.mode == "plan" && m.planWorktree != nil {
 		if err := m.finishPlanWorktree(); err != nil {
 			msg.err = fmt.Errorf("finalize PDD worktree: %w", err)

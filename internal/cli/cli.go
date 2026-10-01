@@ -817,7 +817,7 @@ func initNonInteractiveRuntime(ctx context.Context, cfg *config.Config, cwd, san
 	}
 
 	bashSup := tools.NewBashSupervisor()
-	coreTools, err := tools.CoreTools(sandbox, coreToolOptions(bashSup, headerSessionID, nil)...)
+	coreTools, err := tools.CoreTools(sandbox, coreToolOptions(bashSup, headerSessionID, nil, nil)...)
 	if err != nil {
 		_ = sandbox.Close()
 		return nil, fmt.Errorf("creating core tools: %w", err)
@@ -1388,8 +1388,10 @@ func palaceIsEnabled(cfg config.Config) bool {
 // tool its session asked for.
 //
 // sessionID, when non-empty, registers todo_write/todo_read tools. todoNotifier
-// is called after each successful todo_write. Pass nil when not needed.
-func coreToolOptions(sup *tools.BashSupervisor, sessionID string, todoNotifier func(tools.TodoState)) []tools.CoreOption {
+// is called after each successful todo_write. questionNotifier bridges the
+// question tool to the interactive TUI dialog. Pass nil when not needed — a
+// nil questionNotifier keeps the tool headless (immediate canceled).
+func coreToolOptions(sup *tools.BashSupervisor, sessionID string, todoNotifier func(tools.TodoState), questionNotifier func(tools.QuestionRequest)) []tools.CoreOption {
 	opts := []tools.CoreOption{tools.WithBashSupervisor(sup)}
 	if flagWebSearch {
 		opts = append(opts, tools.WithWebSearch())
@@ -1399,6 +1401,9 @@ func coreToolOptions(sup *tools.BashSupervisor, sessionID string, todoNotifier f
 		if todoNotifier != nil {
 			opts = append(opts, tools.WithTodoNotifier(todoNotifier))
 		}
+	}
+	if questionNotifier != nil {
+		opts = append(opts, tools.WithQuestionNotifier(questionNotifier))
 	}
 	return opts
 }

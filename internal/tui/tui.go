@@ -181,6 +181,11 @@ type model struct {
 	// see approval.go.
 	approval *permission.ApprovalRequest
 
+	// Question-dialog state: the pending question request plus its cursor
+	// and free-text editor, or nil. Set by the QuestionCh listener, answered
+	// and cleared by the key handler; see question.go.
+	question *questionDialog
+
 	// Login flow state.
 	login *loginState
 
@@ -993,6 +998,9 @@ func (m *model) Init() tea.Cmd {
 		if m.cfg.ApprovalCh != nil {
 			cmds = append(cmds, waitForApproval(m.cfg.ApprovalCh))
 		}
+		if m.cfg.QuestionCh != nil {
+			cmds = append(cmds, waitForQuestion(m.cfg.QuestionCh))
+		}
 		if m.cfg.TodoCh != nil {
 			cmds = append(cmds, waitForTodoUpdate(m.cfg.TodoCh))
 		}
@@ -1010,6 +1018,9 @@ func (m *model) Init() tea.Cmd {
 	}
 	if m.cfg.ApprovalCh != nil {
 		cmds = append(cmds, waitForApproval(m.cfg.ApprovalCh))
+	}
+	if m.cfg.QuestionCh != nil {
+		cmds = append(cmds, waitForQuestion(m.cfg.QuestionCh))
 	}
 	if m.cfg.TodoCh != nil {
 		cmds = append(cmds, waitForTodoUpdate(m.cfg.TodoCh))
@@ -2203,6 +2214,13 @@ func (m *model) View() tea.View {
 	// above the closing rule, where the user's eye already is.
 	if m.approval != nil {
 		b.WriteString(m.renderApprovalDialog(bodyWidth))
+		b.WriteString("\n")
+	}
+
+	// Render the question dialog while a request is pending — same slot,
+	// below the approval line when both are somehow up.
+	if m.question != nil {
+		b.WriteString(m.renderQuestionDialog(bodyWidth))
 		b.WriteString("\n")
 	}
 
