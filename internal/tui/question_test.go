@@ -79,6 +79,30 @@ func TestQuestionRequest_NoFreeTextRowWhenOff(t *testing.T) {
 	}
 }
 
+// TestUpdateRoutesQuestionRequest is the #32 red-guard: the parked reader
+// delivers questionRequestMsg through model.Update — the exact path a
+// production message takes. Before the routing fix the msg fell through every
+// update* handler unhandled: the dialog never opened, the reader never
+// re-armed, and the question tool parked on its Reply for as long as the
+// session lived.
+func TestUpdateRoutesQuestionRequest(t *testing.T) {
+	m, req := newQuestionModel(t)
+
+	model, cmd := m.Update(questionRequestMsg{req: *req})
+	if model != m {
+		t.Fatal("Update must return the same model")
+	}
+	if m.question == nil || m.question.req.Question != req.Question {
+		t.Fatalf("Update did not open the question dialog: %+v", m.question)
+	}
+	if !m.hasOverlay(overlayQuestion) {
+		t.Error("dialog must be on the overlay stack after Update")
+	}
+	if cmd == nil {
+		t.Fatal("Update must re-arm the question reader")
+	}
+}
+
 func TestQuestionKey_NavigationAndDigits(t *testing.T) {
 	m, req := newQuestionModel(t)
 	m.handleQuestionRequest(questionRequestMsg{req: *req})

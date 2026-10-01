@@ -3,7 +3,10 @@ package tools
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
@@ -26,6 +29,20 @@ const maxQuestionOptions = 8
 // session to answer: it tells the model the question was not refused — there
 // was simply no one to ask.
 const questionHeadlessNote = "non-interactive session: no one to answer — decide yourself from the context you have and proceed"
+
+// questionTimeoutDefault caps the wait for an answer when
+// PI_QUESTION_TIMEOUT_MS is unset: a dialog no one answers must not park the
+// turn forever (production hang #32).
+const questionTimeoutDefault = 10 * time.Minute
+
+// questionReplyTimeout reads PI_QUESTION_TIMEOUT_MS (milliseconds). Unset,
+// unparsable or non-positive values fall back to the 10-minute default.
+func questionReplyTimeout() time.Duration {
+	if ms, err := strconv.Atoi(os.Getenv("PI_QUESTION_TIMEOUT_MS")); err == nil && ms > 0 {
+		return time.Duration(ms) * time.Millisecond
+	}
+	return questionTimeoutDefault
+}
 
 // QuestionOption is one selectable answer.
 type QuestionOption struct {
@@ -118,7 +135,8 @@ func newQuestionTool(notifier func(QuestionRequest)) (tool.Tool, error) {
 			`Do NOT use it for anything you can verify yourself with the other tools (read, grep, bash) — check first, ask only what remains. `+
 			`Do NOT use it to ask permission to act: tool approval is the permission system's job, not a question. `+
 			`In a non-interactive session the tool does not block: it returns selected="canceled" with a note — `+
-			`treat that as "no one to ask": decide from context and proceed.`,
+			`treat that as "no one to ask": decide from context and proceed. `+
+			`If the user does not answer within the timeout the tool also returns selected="canceled" — proceed on your own.`,
 		func(ac agent.Context, in QuestionInput) (QuestionOutput, error) {
 			if err := validateQuestionInput(in); err != nil {
 				return QuestionOutput{}, err
@@ -139,6 +157,8 @@ func newQuestionTool(notifier func(QuestionRequest)) (tool.Tool, error) {
 			if ac != nil {
 				ctx = ac
 			}
+			timeout := time.NewTimer(questionReplyTimeout())
+			defer timeout.Stop()
 			select {
 			case ans := <-req.Reply:
 				return QuestionOutput{Selected: ans.Selected, Label: ans.Label, Index: ans.Index}, nil
@@ -147,6 +167,14 @@ func newQuestionTool(notifier func(QuestionRequest)) (tool.Tool, error) {
 				// Reply is buffered, so a user answer landing now is
 				// silently dropped.
 				return QuestionOutput{Selected: "canceled"}, nil
+			case <-timeout.C:
+				// No one answered in time (dialog never shown, user walked
+				// away). The turn must not hang: report canceled with the
+				// reason so the model can decide and proceed.
+				return QuestionOutput{
+					Selected: "canceled",
+					Note:     fmt.Sprintf("timed out waiting for an answer after %s — decide from the context you have and proceed", questionReplyTimeout()),
+				}, nil
 			}
 		})
 }

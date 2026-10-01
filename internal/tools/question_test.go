@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
@@ -199,6 +200,50 @@ func TestCoreTools_QuestionRegistered(t *testing.T) {
 	}
 	if !found {
 		t.Error("question tool not registered by CoreTools")
+	}
+}
+
+// TestQuestionTool_TimeoutCancels is the #32 red-guard on the tool side: the
+// bridge is up but nobody answers (the dialog was never shown), so the tool
+// must stop waiting after PI_QUESTION_TIMEOUT_MS and return canceled with the
+// reason — the turn proceeds instead of hanging forever.
+func TestQuestionTool_TimeoutCancels(t *testing.T) {
+	t.Setenv("PI_QUESTION_TIMEOUT_MS", "50")
+	q, err := newQuestionTool(func(QuestionRequest) {})
+	if err != nil {
+		t.Fatalf("newQuestionTool: %v", err)
+	}
+	out := runTool(t, q, questionArgs())
+	if out["selected"] != "canceled" {
+		t.Errorf("selected = %v, want canceled after the timeout", out["selected"])
+	}
+	note, _ := out["note"].(string)
+	if !strings.Contains(note, "timed out") {
+		t.Errorf("note = %q, want the timed-out reason", note)
+	}
+}
+
+// TestQuestionReplyTimeout_EnvParsing pins the knob: unset, garbage and
+// non-positive values fall back to the 10-minute default; a valid value wins.
+func TestQuestionReplyTimeout_EnvParsing(t *testing.T) {
+	const wantDefault = 10 * time.Minute
+	for _, tt := range []struct {
+		name string
+		val  string
+		want time.Duration
+	}{
+		{"unset falls back to the default", "", wantDefault},
+		{"garbage falls back to the default", "soon", wantDefault},
+		{"zero falls back to the default", "0", wantDefault},
+		{"negative falls back to the default", "-5", wantDefault},
+		{"valid value wins", "250", 250 * time.Millisecond},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("PI_QUESTION_TIMEOUT_MS", tt.val)
+			if got := questionReplyTimeout(); got != tt.want {
+				t.Errorf("questionReplyTimeout() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

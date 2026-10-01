@@ -8,8 +8,59 @@ import (
 	"google.golang.org/adk/v2/agent"
 	adktool "google.golang.org/adk/v2/tool"
 
+	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 	"github.com/spa-skyson/pi-rate/internal/tools"
 )
+
+// TestNonInteractiveRuntime_QuestionHeadless is the #32 guard for the
+// subagent path: a spawned `pi --mode json` child builds its tools through
+// initNonInteractiveRuntime, which must keep the question tool headless (nil
+// notifier) — the call answers canceled immediately and never blocks, so a
+// background agent asking a question can never park its run.
+func TestNonInteractiveRuntime_QuestionHeadless(t *testing.T) {
+	resetGlobalFlags(t)
+	testenv.SetHome(t, t.TempDir())
+
+	nrt, err := initNonInteractiveRuntime(context.Background(), &config.Config{}, t.TempDir(), t.TempDir(), "", "sess-subagent-q")
+	if err != nil {
+		t.Fatalf("initNonInteractiveRuntime: %v", err)
+	}
+	nrt.close() // releases the sandbox: an open root breaks t.TempDir cleanup on Windows
+
+	var qt adktool.Tool
+	for _, x := range nrt.coreTools {
+		if x.Name() == "question" {
+			qt = x
+		}
+	}
+	if qt == nil {
+		t.Fatal("question tool not registered in the non-interactive runtime")
+	}
+
+	done := make(chan map[string]any, 1)
+	go func() {
+		r := qt.(interface {
+			Run(agent.Context, any) (map[string]any, error)
+		})
+		out, err := r.Run(&cliToolCtx{Context: context.Background()}, map[string]any{
+			"question": "Anyone there?",
+			"options":  []any{map[string]any{"label": "no"}},
+		})
+		if err != nil {
+			t.Errorf("Run error: %v", err)
+		}
+		done <- out
+	}()
+	select {
+	case out := <-done:
+		if out["selected"] != "canceled" {
+			t.Errorf("output = %#v, want immediate canceled in the subagent runtime", out)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("question call blocked in the non-interactive runtime — the subagent would hang")
+	}
+}
 
 // TestDeferredInitCoreTools_QuestionWiring pins the interactive wiring: a
 // question channel registers the question tool with a live notifier (the
@@ -64,6 +115,74 @@ func TestDeferredInitCoreTools_QuestionWiring(t *testing.T) {
 		out := <-done
 		if out["selected"] != "option" || out["label"] != "yes" {
 			t.Errorf("output = %#v, want selected=option label=yes", out)
+		}
+	})
+
+	t.Run("full slot displaces the stale request", func(t *testing.T) {
+		// #32 guard: the notifier must never block on its send. A stale
+		// request sitting unread in the buffer is displaced — answered
+		// canceled — and the new request takes the slot.
+		root := t.TempDir()
+		res := &initResources{}
+		t.Cleanup(res.cleanup)
+
+		questionCh := make(chan tools.QuestionRequest, 1)
+		stale := tools.QuestionRequest{Reply: make(chan tools.QuestionAnswer, 1)}
+		questionCh <- stale
+
+		core, err := deferredInitCoreTools(root, root, "sess-q", nil, questionCh, res)
+		if err != nil {
+			t.Fatalf("deferredInitCoreTools: %v", err)
+		}
+		var qt adktool.Tool
+		for _, x := range core {
+			if x.Name() == "question" {
+				qt = x
+			}
+		}
+		if qt == nil {
+			t.Fatal("question tool not registered")
+		}
+
+		done := make(chan map[string]any, 1)
+		go func() {
+			r := qt.(interface {
+				Run(agent.Context, any) (map[string]any, error)
+			})
+			out, err := r.Run(&cliToolCtx{Context: context.Background()}, map[string]any{
+				"question": "The fresh one",
+				"options":  []any{map[string]any{"label": "yes"}},
+			})
+			if err != nil {
+				t.Errorf("Run error: %v", err)
+			}
+			done <- out
+		}()
+
+		// The stale request is answered canceled so its tool call stops
+		// waiting on a Reply nobody owns.
+		select {
+		case ans := <-stale.Reply:
+			if ans.Selected != "canceled" {
+				t.Errorf("stale answer = %q, want canceled", ans.Selected)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("stale request was not displaced")
+		}
+
+		// The fresh request took the slot; the dialog's answer completes it.
+		select {
+		case req := <-questionCh:
+			if req.Question != "The fresh one" {
+				t.Errorf("channel request = %q, want the fresh one", req.Question)
+			}
+			req.Reply <- tools.QuestionAnswer{Selected: "option", Label: "yes", Index: 0}
+		case <-time.After(2 * time.Second):
+			t.Fatal("fresh request did not reach the channel")
+		}
+		out := <-done
+		if out["selected"] != "option" {
+			t.Errorf("output = %#v, want selected=option", out)
 		}
 	})
 
