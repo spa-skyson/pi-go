@@ -1,9 +1,9 @@
 {
-  "name": "pi-go-vscode",
-  "displayName": "pi-go",
-  "description": "Use pi-go as a native ACP coding agent in VS Code.",
-  "version": "0.3.0",
-  "publisher": "pi-go",
+  "name": "pirate-vscode",
+  "displayName": "Pi-rate",
+  "description": "Use Pi-rate as a native ACP coding agent in VS Code.",
+  "version": "0.4.0",
+  "publisher": "spa-skyson",
   "license": "MIT",
   "engines": {
     "vscode": "^1.137.0"
@@ -16,10 +16,10 @@
   "main": "./dist/extension.js",
   "activationEvents": [
     "onStartupFinished",
-    "onChatSession:pi-go",
-    "onLanguageModelChatProvider:pi-go",
-    "onView:pi-go.sessions",
-    "onView:pi-go.chat"
+    "onChatSession:pirate",
+    "onLanguageModelChatProvider:pirate",
+    "onView:pirate.sessions",
+    "onView:pirate.chat"
   ],
   "enabledApiProposals": [
     "chatSessionsProvider",
@@ -29,206 +29,206 @@
   "contributes": {
     "themes": [
       {
-        "label": "Pi-Go Neon",
+        "label": "Pi-rate Neon",
         "uiTheme": "vs-dark",
-        "path": "./themes/pi-go-neon-color-theme.json"
+        "path": "./themes/pirate-neon-color-theme.json"
       },
       {
-        "label": "Pi-Go Daylight",
+        "label": "Pi-rate Daylight",
         "uiTheme": "vs",
-        "path": "./themes/pi-go-daylight-color-theme.json"
+        "path": "./themes/pirate-daylight-color-theme.json"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "pi-go",
-          "title": "pi-go",
-          "icon": "media/pi-go.svg"
+          "id": "pirate",
+          "title": "Pi-rate",
+          "icon": "media/pirate.svg"
         }
       ],
       "secondarySidebar": [
         {
-          "id": "pi-go-secondary",
-          "title": "pi-go",
-          "icon": "media/pi-go.svg"
+          "id": "pirate-secondary",
+          "title": "Pi-rate",
+          "icon": "media/pirate.svg"
         }
       ]
     },
     "views": {
-      "pi-go": [
+      "pirate": [
         {
           "type": "tree",
-          "id": "pi-go.sessions",
+          "id": "pirate.sessions",
           "name": "Sessions",
           "icon": "$(history)",
-          "contextualTitle": "pi-go"
+          "contextualTitle": "Pi-rate"
         }
       ],
-      "pi-go-secondary": [
+      "pirate-secondary": [
         {
           "type": "webview",
-          "id": "pi-go.chat",
-          "name": "Pi-Go",
+          "id": "pirate.chat",
+          "name": "Pi-rate",
           "icon": "$(comment-discussion)",
-          "contextualTitle": "pi-go"
+          "contextualTitle": "Pi-rate"
         }
       ]
     },
     "commands": [
       {
-        "command": "pi-go.openWalkthrough",
-        "title": "pi-go: Open Getting Started",
+        "command": "pirate.openWalkthrough",
+        "title": "Pi-rate: Open Getting Started",
         "icon": "$(mortar-board)"
       },
       {
-        "command": "pi-go.chat.focus",
-        "title": "pi-go: Focus Chat",
+        "command": "pirate.chat.focus",
+        "title": "Pi-rate: Focus Chat",
         "icon": "$(comment-discussion)"
       },
       {
-        "command": "pi-go.refreshSessions",
-        "title": "pi-go: Refresh Sessions",
+        "command": "pirate.refreshSessions",
+        "title": "Pi-rate: Refresh Sessions",
         "icon": "$(refresh)"
       },
       {
-        "command": "pi-go.newSession",
-        "title": "pi-go: New Session",
+        "command": "pirate.newSession",
+        "title": "Pi-rate: New Session",
         "icon": "$(plus)",
-        "category": "pi-go"
+        "category": "Pi-rate"
       },
       {
-        "command": "pi-go.openSession",
-        "title": "pi-go: Open Session",
+        "command": "pirate.openSession",
+        "title": "Pi-rate: Open Session",
         "icon": "$(comment-discussion)",
-        "category": "pi-go"
+        "category": "Pi-rate"
       },
       {
-        "command": "pi-go.attachFile",
-        "title": "pi-go: Attach File to Prompt",
+        "command": "pirate.attachFile",
+        "title": "Pi-rate: Attach File to Prompt",
         "icon": "$(file-add)",
-        "category": "pi-go"
+        "category": "Pi-rate"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "pi-go.newSession",
+          "command": "pirate.newSession",
           "group": "navigation@1",
-          "when": "view == pi-go.sessions"
+          "when": "view == pirate.sessions"
         },
         {
-          "command": "pi-go.refreshSessions",
+          "command": "pirate.refreshSessions",
           "group": "navigation@2",
-          "when": "view == pi-go.sessions"
+          "when": "view == pirate.sessions"
         }
       ],
       "view/item/context": [
         {
-          "command": "pi-go.openSession",
+          "command": "pirate.openSession",
           "group": "inline@1",
-          "when": "view == pi-go.sessions && viewItem == piGoSession"
+          "when": "view == pirate.sessions && viewItem == pirateSession"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "pi-go.chat.focus",
+        "command": "pirate.chat.focus",
         "key": "ctrl+alt+u",
         "mac": "cmd+alt+u"
       }
     ],
     "chatParticipants": [
       {
-        "id": "pi-go.pi-go-vscode.agent",
-        "name": "pi-go",
-        "fullName": "pi-go",
-        "description": "The pi-go coding agent.",
+        "id": "pirate.pirate-vscode.agent",
+        "name": "pirate",
+        "fullName": "Pi-rate",
+        "description": "The Pi-rate coding agent.",
         "isSticky": true,
         "sampleRequest": "Explain the architecture of this repository."
       }
     ],
     "chatSessions": [
       {
-        "type": "pi-go",
-        "name": "pi-go",
-        "displayName": "pi-go",
-        "description": "Sessions powered by the pi-go coding agent over ACP.",
+        "type": "pirate",
+        "name": "pirate",
+        "displayName": "Pi-rate",
+        "description": "Sessions powered by the Pi-rate coding agent over ACP.",
         "when": "true"
       }
     ],
     "languageModelChatProviders": [
       {
-        "vendor": "pi-go",
-        "displayName": "pi-go"
+        "vendor": "pirate",
+        "displayName": "Pi-rate"
       }
     ],
     "walkthroughs": [
       {
-        "id": "pi-go.getstarted",
-        "title": "Get Started with Pi-Go",
-        "description": "Set up Pi-Go, open your chat, and learn the core coding workflows.",
+        "id": "pirate.getstarted",
+        "title": "Get Started with Pi-rate",
+        "description": "Set up Pi-rate, open your chat, and learn the core coding workflows.",
         "steps": [
           {
-            "id": "pi-go.getstarted.configure",
-            "title": "Point pi-go at your pi binary",
-            "description": "pi-go needs the path to the __`pi` executable__ it should run in ACP mode. Set `pi-go.command` if `pi` is not already on your PATH. Only change this if the default does not find your binary.\n[Open Settings](command:workbench.action.openSettings?%22pi-go.command%22)",
+            "id": "pirate.getstarted.configure",
+            "title": "Point Pi-rate at your pirate binary",
+            "description": "Pi-rate needs the path to the __`pirate` executable__ it should run in ACP mode. Set `pirate.command` if `pirate` is not already on your PATH. Only change this if the default does not find your binary.\n[Open Settings](command:workbench.action.openSettings?%22pirate.command%22)",
             "media": {
               "image": "media/walkthrough/configure.svg",
-              "altText": "The pi-go.command setting pointing at the pi binary"
+              "altText": "The pirate.command setting pointing at the pirate binary"
             },
             "completionEvents": [
-              "onSettingChanged:pi-go.command"
+              "onSettingChanged:pirate.command"
             ]
           },
           {
-            "id": "pi-go.getstarted.chat",
-            "title": "Open the pi-go chat",
-            "description": "Chat with the pi-go agent in a dedicated sidebar tab. Use the `cmd+alt+u` keybinding to focus it from anywhere.\n[Open the pi-go Chat](command:pi-go.chat.focus)",
+            "id": "pirate.getstarted.chat",
+            "title": "Open the Pi-rate chat",
+            "description": "Chat with the Pi-rate agent in a dedicated sidebar tab. Use the `cmd+alt+u` keybinding to focus it from anywhere.\n[Open the Pi-rate Chat](command:pirate.chat.focus)",
             "media": {
               "image": "media/walkthrough/chat.svg",
-              "altText": "The pi-go chat tab with its prompt input"
+              "altText": "The Pi-rate chat tab with its prompt input"
             },
             "completionEvents": [
-              "onView:pi-go.chat"
+              "onView:pirate.chat"
             ]
           },
           {
-            "id": "pi-go.getstarted.session",
+            "id": "pirate.getstarted.session",
             "title": "Start a new session",
-            "description": "Each conversation is a session, saved to your pi-go history so you can pick it up again later from the Sessions view in the pi-go activity bar.\n[Start a New Session](command:pi-go.newSession)",
+            "description": "Each conversation is a session, saved to your Pi-rate history so you can pick it up again later from the Sessions view in the Pi-rate activity bar.\n[Start a New Session](command:pirate.newSession)",
             "media": {
               "image": "media/walkthrough/session.svg",
               "altText": "A new session being added to the session list"
             },
             "completionEvents": [
-              "onCommand:pi-go.newSession"
+              "onCommand:pirate.newSession"
             ]
           },
           {
-            "id": "pi-go.getstarted.attach",
+            "id": "pirate.getstarted.attach",
             "title": "Attach a file to your prompt",
-            "description": "Give the agent context without pasting code: attach files from your workspace to the prompt before sending it.\n[Attach a File](command:pi-go.attachFile)",
+            "description": "Give the agent context without pasting code: attach files from your workspace to the prompt before sending it.\n[Attach a File](command:pirate.attachFile)",
             "media": {
               "image": "media/walkthrough/attach.svg",
               "altText": "A file being attached to the chat prompt"
             },
             "completionEvents": [
-              "onCommand:pi-go.attachFile"
+              "onCommand:pirate.attachFile"
             ]
           }
         ]
       }
     ],
     "configuration": {
-      "title": "pi-go",
+      "title": "Pi-rate",
       "properties": {
-        "pi-go.command": {
+        "pirate.command": {
           "type": "string",
-          "default": "pi",
-          "description": "Path to the pi-go executable."
+          "default": "pirate",
+          "description": "Path to the Pi-rate executable."
         },
-        "pi-go.args": {
+        "pirate.args": {
           "type": "array",
           "items": {
             "type": "string"
@@ -236,7 +236,7 @@
           "default": [
             "acp-server"
           ],
-          "description": "Arguments passed to pi-go."
+          "description": "Arguments passed to Pi-rate."
         }
       }
     }

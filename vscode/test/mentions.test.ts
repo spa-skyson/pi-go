@@ -106,7 +106,7 @@ describe("skippedMentionsMarkdown", () => {
 
   it("lists skipped names", () => {
     expect(skippedMentionsMarkdown(["a.bin", "b.png"])).toBe(
-      "Skipped large or non-text attachment(s): `a.bin`, `b.png` (pi-go accepts text files only).",
+      "Skipped large or non-text attachment(s): `a.bin`, `b.png` (Pi-rate accepts text files only).",
     );
   });
 });

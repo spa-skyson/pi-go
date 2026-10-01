@@ -244,7 +244,7 @@ jobs:
             echo "release ${GITHUB_REF_NAME} is already published; skipping"
             exit 0
           fi
-          gh release upload "${GITHUB_REF_NAME}" vscode/pi-go-vscode-*.vsix --clobber
+          gh release upload "${GITHUB_REF_NAME}" vscode/pirate-vscode-*.vsix --clobber
 
   # Immutable releases are sealed when published, so this is the last step: the
   # release stays a draft while the kagent manifest and the VSIX attach, and is

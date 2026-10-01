@@ -41,7 +41,7 @@ export function iconButton(name: keyof typeof paths, label: string, action: () =
 }
 
 /**
- * The pi-go panda mascot (media/pi-go-mascot.png, from the Pi-Go design
+ * The pirate panda mascot (media/pirate-mascot.png, from the Pi-rate design
  * system). The host passes its webview URI on body[data-mascot]; without one
  * the frame still renders, showing the π mark instead of the image.
  */

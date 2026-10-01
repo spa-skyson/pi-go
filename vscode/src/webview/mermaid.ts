@@ -74,7 +74,7 @@ export async function renderMermaidBlocks(root: HTMLElement): Promise<void> {
     const holder = document.createElement("div");
     holder.className = "mermaid";
     try {
-      const { svg } = await mermaid.render(`pi-go-mermaid-${seq++}`, text);
+      const { svg } = await mermaid.render(`pirate-mermaid-${seq++}`, text);
       // Mermaid's SVG output includes foreignObject HTML labels — sanitize it
       // with the SVG profile rather than trusting it outright.
       holder.innerHTML = sanitizeSvg(svg);

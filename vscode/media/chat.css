@@ -1,10 +1,10 @@
-/* pi-go chat webview. Surfaces and text come from --vscode-* variables so the
+/* Pi-rate chat webview. Surfaces and text come from --vscode-* variables so the
    view follows the workbench theme (light, dark, high contrast). The --pg-*
-   brand tokens below layer the Pi-Go design system on top: neon cyan /
+   brand tokens below layer the Pi-rate design system on top: neon cyan /
    magenta / purple accents, sharp 2px/4px radii, gradient dividers and the
    signature easing. Glows only appear in dark themes; high-contrast themes
    fall back to the theme's own focus and foreground colors. The full
-   cyberpunk look ships as the "Pi-Go Neon" color theme (themes/).
+   cyberpunk look ships as the "Pi-rate Neon" color theme (themes/).
 
    The tokens live on body, not :root: derived tokens like --pg-accent
    resolve var() where they are declared, so they must sit on the same
@@ -85,7 +85,7 @@ body {
 
 button { font: inherit; }
 
-/* -- Pi-Go welcome ------------------------------------------------------ */
+/* -- Pi-rate welcome ------------------------------------------------------ */
 
 .chat-header {
   min-height: 36px;
@@ -190,7 +190,7 @@ body.vscode-high-contrast-light .wordmark {
   padding: 0 6px 0 14px;
 }
 
-/* Gradient hairline instead of a solid rule — a Pi-Go signature. */
+/* Gradient hairline instead of a solid rule — a Pi-rate signature. */
 .learn-header::after {
   content: "";
   position: absolute;
@@ -983,7 +983,7 @@ body {
   opacity: .8;
 }
 
-/* Status → color, per the Pi-Go system: yellow queued, cyan running,
+/* Status → color, per the Pi-rate system: yellow queued, cyan running,
    green done, magenta failed. The left edge repeats the same signal. */
 .status-pending {
   border-left-color: var(--pg-yellow);

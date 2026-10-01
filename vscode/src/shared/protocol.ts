@@ -1,4 +1,4 @@
-// Host ↔ webview message protocol for the pi-go chat view.
+// Host ↔ webview message protocol for the pirate chat view.
 //
 // This module is imported by BOTH esbuild targets (the node extension and the
 // browser webview bundle), so it must stay dependency-free: no "vscode", no
@@ -229,12 +229,12 @@ export interface RequestFilePickerMessage {
   type: "requestFilePicker";
 }
 
-export interface OpenPiGoSettingsMessage {
-  type: "openPiGoSettings";
+export interface OpenPirateSettingsMessage {
+  type: "openPirateSettings";
 }
 
-export interface OpenPiGoLogsMessage {
-  type: "openPiGoLogs";
+export interface OpenPirateLogsMessage {
+  type: "openPirateLogs";
 }
 
 export interface PingMessage {
@@ -253,6 +253,6 @@ export type WebviewToHost =
   | DraftMessage
   | RevealFileMessage
   | RequestFilePickerMessage
-  | OpenPiGoSettingsMessage
-  | OpenPiGoLogsMessage
+  | OpenPirateSettingsMessage
+  | OpenPirateLogsMessage
   | PingMessage;

@@ -44,7 +44,7 @@ export class Composer {
     this.textarea = document.createElement("textarea");
     this.textarea.className = "composer-input";
     this.textarea.rows = 1;
-    this.textarea.placeholder = "Ask pi-go…  (@ to attach, / for commands)";
+    this.textarea.placeholder = "Ask Pi-rate…  (@ to attach, / for commands)";
     this.textarea.addEventListener("input", () => {
       this.autosize();
       this.scheduleDraft();

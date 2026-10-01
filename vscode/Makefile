@@ -13,7 +13,7 @@ MODE ?= mock
 # Local build output lives outside the repo so branches and worktrees never see
 # stale artifacts, and VSIXes never risk being committed. Overridable.
 OUTDIR ?= $(HOME)/.vscode-ext
-VSIXFILE ?= $(OUTDIR)/pi-go-vscode.vsix
+VSIXFILE ?= $(OUTDIR)/pirate-vscode.vsix
 
 .PHONY: build package install release smoke test test-coverage clean
 
@@ -28,15 +28,15 @@ install: package
 	"$(CODE)" --install-extension "$(VSIXFILE)" --force
 
 # Launch the editor in an isolated profile and assert the extension activates
-# and the pi acp-server answers. Modes: mock (default), dev, installed.
+# and the pirate acp-server answers. Modes: mock (default), dev, installed.
 smoke: build
 	chmod +x scripts/smoke.sh && scripts/smoke.sh $(MODE)
 
-# Production-only VSIX named for the release, e.g. pi-go-vscode-0.3.0.vsix —
+# Production-only VSIX named for the release, e.g. pirate-vscode-0.4.0.vsix —
 # the artifact the CI release workflow attaches to GitHub releases. Unaffected
 # by OUTDIR: it must stay at the repo root for the workflow's upload glob.
 release: build
-	$(VSCE) package --no-dependencies -o pi-go-vscode-$(VERSION).vsix
+	$(VSCE) package --no-dependencies -o pirate-vscode-$(VERSION).vsix
 
 # Vitest unit suite (90% line / 75% branch gate, see vitest.config.mts).
 test:
@@ -46,4 +46,4 @@ test-coverage:
 	$(BUN) run test:coverage
 
 clean:
-	rm -f $(VSIXFILE) pi-go-vscode-*.vsix
+	rm -f $(VSIXFILE) pirate-vscode-*.vsix

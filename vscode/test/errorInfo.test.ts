@@ -1,22 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { explainPiGoError, renderPiGoErrorMarkdown } from "../src/errorInfo";
+import { explainPirateError, renderPirateErrorMarkdown } from "../src/errorInfo";
 
-describe("Pi-Go error explanations", () => {
+describe("Pi-rate error explanations", () => {
   it("explains provider quota failures with recovery steps", () => {
-    const info = explainPiGoError(
+    const info = explainPirateError(
       new Error("429 Too Many Requests: monthly usage limit reached"),
-      { command: "pi", args: ["acp-server"], cwd: "/tmp/project" },
+      { command: "pirate", args: ["acp-server"], cwd: "/tmp/project" },
     );
     expect(info.title).toContain("provider limit");
     expect(info.detail).toContain("429 Too Many Requests");
     expect(info.steps.join(" ")).toContain("quota");
-    expect(renderPiGoErrorMarkdown(info)).toContain("pi-go.command");
+    expect(renderPirateErrorMarkdown(info)).toContain("pirate.command");
   });
 
   it("explains a missing command as a VS Code setting problem", () => {
-    const info = explainPiGoError(
-      Object.assign(new Error("spawn pi ENOENT"), { code: "ENOENT" }),
-      { command: "pi", args: ["acp-server"], cwd: "/tmp/project" },
+    const info = explainPirateError(
+      Object.assign(new Error("spawn pirate ENOENT"), { code: "ENOENT" }),
+      { command: "pirate", args: ["acp-server"], cwd: "/tmp/project" },
     );
     expect(info.title).toContain("could not start");
     expect(info.steps.join(" ")).toContain("absolute path");
@@ -24,8 +24,8 @@ describe("Pi-Go error explanations", () => {
   });
 
   it("redacts sensitive launch arguments", () => {
-    const info = explainPiGoError(new Error("provider failed"), {
-      command: "pi",
+    const info = explainPirateError(new Error("provider failed"), {
+      command: "pirate",
       args: ["acp-server", "--header", "Authorization=Bearer secret-value"],
       cwd: "/tmp/project",
     });
@@ -34,17 +34,17 @@ describe("Pi-Go error explanations", () => {
   });
 
   it("does not treat a missing model as a missing executable", () => {
-    const info = explainPiGoError(new Error("model not found"), {
-      command: "pi",
+    const info = explainPirateError(new Error("model not found"), {
+      command: "pirate",
       args: ["acp-server"],
       cwd: "/tmp/project",
     });
-    expect(info.title).toBe("Pi-Go could not complete the request");
+    expect(info.title).toBe("Pi-rate could not complete the request");
   });
 
   it("explains ACP internal errors as a session/provider problem", () => {
-    const info = explainPiGoError(new Error("Internal error"), {
-      command: "pi",
+    const info = explainPirateError(new Error("Internal error"), {
+      command: "pirate",
       args: ["acp-server"],
       cwd: "/tmp/project",
     });

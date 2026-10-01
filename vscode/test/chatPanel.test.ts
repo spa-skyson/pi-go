@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import vscode, { spy as recordSpy } from "vscode";
 import { ChatPanelProvider } from "../src/chatPanel";
 import { TranscriptStore } from "../src/transcript";
-import { PiGoAcpClient, type SessionEntry } from "../src/acp"; // PiGoAcpClient is the fake via vi.mock
+import { PirateAcpClient, type SessionEntry } from "../src/acp"; // PirateAcpClient is the fake via vi.mock
 
-// The panel is driven against a fake PiGoAcpClient; the pure helpers
+// The panel is driven against a fake PirateAcpClient; the pure helpers
 // (chunkText, thoughtText) stay real so the live-update mapping is exercised.
 const state = vi.hoisted(() => ({
   instances: [] as {
@@ -24,7 +24,7 @@ const state = vi.hoisted(() => ({
 const pingState = vi.hoisted(() => ({
   run: vi.fn(async () => ({
     ok: true,
-    title: "Pi-Go ping succeeded",
+    title: "Pi-rate ping succeeded",
     detail: "Provider: agentgateway\nModel: ollama-deepseek",
   })),
 }));
@@ -66,12 +66,12 @@ vi.mock("../src/acp", async (importOriginal) => {
     async reconnect(): Promise<void> {}
     dispose(): void {}
   }
-  return { ...actual, PiGoAcpClient: FakeClient };
+  return { ...actual, PirateAcpClient: FakeClient };
 });
 
 vi.mock("../src/ping", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/ping")>();
-  return { ...actual, runPiPing: pingState.run };
+  return { ...actual, runPiratePing: pingState.run };
 });
 
 type FakeView = {
@@ -91,7 +91,7 @@ type FakeView = {
   __dispose: () => void;
 };
 
-function fakeView(viewType = "pi-go.chat"): FakeView {
+function fakeView(viewType = "pirate.chat"): FakeView {
   const messages: unknown[] = [];
   const receive: ((m: unknown) => void)[] = [];
   const dispose: (() => void)[] = [];
@@ -127,7 +127,7 @@ function context(): { subscriptions: { dispose(): void }[]; extensionUri: vscode
   return {
     subscriptions: [],
     extensionUri: vscode.Uri.file("/ext"),
-    extension: { id: "pi-go.pi-go-vscode", packageJSON: { version: "0.3.0" } },
+    extension: { id: "pirate.pirate-vscode", packageJSON: { version: "0.3.0" } },
   };
 }
 
@@ -139,7 +139,7 @@ function setup() {
   const store = new TranscriptStore();
   const refresh = new vscode.EventEmitter<void>();
   const active = new Set<string>();
-  const client = new PiGoAcpClient() as unknown as (typeof state.instances)[number];
+  const client = new PirateAcpClient() as unknown as (typeof state.instances)[number];
   const panel = new ChatPanelProvider(
     context() as never,
     client as never,
@@ -174,7 +174,7 @@ describe("ChatPanelProvider.resolveWebviewView", () => {
     expect(stateMsg.turns).toEqual([]);
 
     // A second view id is tracked separately; broadcasts skip disposed views.
-    const second = fakeView("pi-go.chatSecondary");
+    const second = fakeView("pirate.chatSecondary");
     panel.resolveWebviewView(second as never, {} as never, {} as never);
     const disposedCount = view.__messages.length;
     view.__dispose();
@@ -266,12 +266,12 @@ describe("ChatPanelProvider ping", () => {
     view.__post({ type: "ping" });
     await vi.waitFor(() => expect(typesOf(view.__messages)).toContain("pingResult"));
 
-    expect(pingState.run).toHaveBeenCalledWith({ command: "pi", args: ["acp-server"], cwd: "/tmp/ws" });
+    expect(pingState.run).toHaveBeenCalledWith({ command: "pirate", args: ["acp-server"], cwd: "/tmp/ws" });
     expect(client.promptCalls).toHaveLength(0);
     expect(view.__messages.at(-1)).toMatchObject({
       type: "pingResult",
       ok: true,
-      title: "Pi-Go ping succeeded",
+      title: "Pi-rate ping succeeded",
     });
   });
 });
@@ -424,7 +424,7 @@ describe("ChatPanelProvider prompts", () => {
     await vi.waitFor(() => expect(typesOf(view.__messages)).toContain("turnEnd"));
     expect(client.promptCalls).toHaveLength(1);
     const notice = view.__messages.find((m) => (m as { type: string }).type === "notice") as { text: string };
-    expect(notice.text).toContain("forwarded to pi-go as plain text");
+    expect(notice.text).toContain("forwarded to Pi-rate as plain text");
   });
 
   it("reports prompt failures as turnEnd errors", async () => {

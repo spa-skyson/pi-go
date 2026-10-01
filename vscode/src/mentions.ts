@@ -2,12 +2,12 @@ import * as vscode from "vscode";
 import type * as acp from "@agentclientprotocol/sdk";
 
 // Caps for @-mention attachment: keep prompts bounded and never send binaries
-// (pi-go advertises embeddedContext for text only, not images).
+// (pirate advertises embeddedContext for text only, not images).
 const MAX_FILE_BYTES = 256 * 1024;
 const MAX_FILES = 10;
 const MAX_TOTAL_BYTES = 1024 * 1024;
 
-// Text extensions pi-go can sensibly embed; anything else is skipped.
+// Text extensions pirate can sensibly embed; anything else is skipped.
 const TEXT_EXTENSIONS = new Set([
   "bash", "c", "cc", "conf", "cpp", "cs", "css", "csv", "cxx", "diff", "env", "example",
   "go", "gradle", "h", "hh", "hpp", "htm", "html", "ini", "java", "js", "json", "jsonc",
@@ -89,5 +89,5 @@ export async function referencesToBlocks(
 export function skippedMentionsMarkdown(skipped: string[]): string | undefined {
   if (skipped.length === 0) return undefined;
   const names = skipped.map((n) => `\`${n}\``).join(", ");
-  return `Skipped large or non-text attachment(s): ${names} (pi-go accepts text files only).`;
+  return `Skipped large or non-text attachment(s): ${names} (Pi-rate accepts text files only).`;
 }

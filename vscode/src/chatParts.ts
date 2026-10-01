@@ -74,7 +74,7 @@ export function historyFromTurns(turns: Turn[], ctors: PartCtors): unknown[] {
   for (const turn of turns) {
     if (turn.role === "user") {
       if (ctors.ChatRequestTurn) {
-        out.push(new ctors.ChatRequestTurn(turn.prompt, undefined, [], "pi-go", []));
+        out.push(new ctors.ChatRequestTurn(turn.prompt, undefined, [], "pirate", []));
       }
       continue;
     }
@@ -103,7 +103,7 @@ export function historyFromTurns(turns: Turn[], ctors: PartCtors): unknown[] {
       }
     }
     if (parts.length && ctors.ChatResponseTurn2) {
-      out.push(new ctors.ChatResponseTurn2(parts, {}, "pi-go"));
+      out.push(new ctors.ChatResponseTurn2(parts, {}, "pirate"));
     }
   }
   return out;
@@ -119,7 +119,7 @@ export function toolFallbackMarkdown(tool: ToolCallState): string {
 
 /** The agent's advertised slash commands as markdown (for /help). */
 export function availableCommandsMarkdown(commands: acp.AvailableCommand[]): string {
-  if (commands.length === 0) return "_pi-go has not advertised any commands._";
+  if (commands.length === 0) return "_Pi-rate has not advertised any commands._";
   const lines = commands.map((c) => `- **/${c.name}**${c.description ? ` — ${c.description}` : ""}`);
   return `Available commands:\n\n${lines.join("\n")}`;
 }

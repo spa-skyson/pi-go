@@ -1,18 +1,18 @@
 import * as vscode from "vscode";
-import { PiGoAcpClient, type SessionEntry } from "./acp";
+import { PirateAcpClient, type SessionEntry } from "./acp";
 import type { TranscriptStore } from "./transcript";
 
 /**
- * Sessions tree for the pi-go activity-bar container: persisted sessions from
+ * Sessions tree for the pirate activity-bar container: persisted sessions from
  * session/list, with the active-prompt count as the view badge.
  */
-export class PiGoSessionsProvider implements vscode.TreeDataProvider<SessionNode> {
+export class PirateSessionsProvider implements vscode.TreeDataProvider<SessionNode> {
   private readonly didChange = new vscode.EventEmitter<SessionNode | undefined | void>();
   readonly onDidChangeTreeData = this.didChange.event;
   private readonly refreshSub: vscode.Disposable;
 
   constructor(
-    private readonly client: PiGoAcpClient,
+    private readonly client: PirateAcpClient,
     private readonly store: TranscriptStore,
     private readonly refresh: vscode.EventEmitter<void>,
     private readonly active: Set<string>,
@@ -37,9 +37,9 @@ export class PiGoSessionsProvider implements vscode.TreeDataProvider<SessionNode
     item.tooltip = new vscode.MarkdownString(
       `**${node.label}**\n\n${node.entry.sessionId}\n\n${node.description ?? ""}`,
     );
-    item.contextValue = this.active.has(node.entry.sessionId) ? "piGoSessionActive" : "piGoSession";
+    item.contextValue = this.active.has(node.entry.sessionId) ? "pirateSessionActive" : "pirateSession";
     item.command = {
-      command: "pi-go.openSession",
+      command: "pirate.openSession",
       title: "Open in chat",
       arguments: [node],
     };
@@ -59,7 +59,7 @@ export class PiGoSessionsProvider implements vscode.TreeDataProvider<SessionNode
     try {
       entries = await this.client.listSessions();
     } catch {
-      const node = new SessionNode("pi-go unavailable", { sessionId: "", cwd: "" }, "check pi-go.command");
+      const node = new SessionNode("Pi-rate unavailable", { sessionId: "", cwd: "" }, "check pirate.command");
       return [node];
     }
     // Newest first; undated entries last.
@@ -98,14 +98,14 @@ function relativeTime(updatedAt: number | undefined): string {
 /** Wire the sessions tree, its badge, and the open/new commands. */
 export function registerSessionsTree(
   context: vscode.ExtensionContext,
-  client: PiGoAcpClient,
+  client: PirateAcpClient,
   store: TranscriptStore,
   refresh: vscode.EventEmitter<void>,
   active: Set<string>,
   chatPanel: { openSession(entry: SessionEntry): Promise<void>; startNewSession(): void },
-): { treeView: vscode.TreeView<SessionNode>; provider: PiGoSessionsProvider } {
-  const provider = new PiGoSessionsProvider(client, store, refresh, active);
-  const treeView = vscode.window.createTreeView("pi-go.sessions", { treeDataProvider: provider });
+): { treeView: vscode.TreeView<SessionNode>; provider: PirateSessionsProvider } {
+  const provider = new PirateSessionsProvider(client, store, refresh, active);
+  const treeView = vscode.window.createTreeView("pirate.sessions", { treeDataProvider: provider });
 
   // Badge = number of prompts currently running (Claude/Codex pattern: badge
   // 0 is simply not set).
@@ -120,13 +120,13 @@ export function registerSessionsTree(
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("pi-go.openSession", (node: SessionNode) => {
+    vscode.commands.registerCommand("pirate.openSession", (node: SessionNode) => {
       if (!node?.entry?.sessionId) return;
-      void vscode.commands.executeCommand("pi-go.chat.focus");
+      void vscode.commands.executeCommand("pirate.chat.focus");
       void chatPanel.openSession(node.entry);
     }),
-    vscode.commands.registerCommand("pi-go.newSession", () => {
-      void vscode.commands.executeCommand("pi-go.chat.focus");
+    vscode.commands.registerCommand("pirate.newSession", () => {
+      void vscode.commands.executeCommand("pirate.chat.focus");
       chatPanel.startNewSession();
     }),
   );

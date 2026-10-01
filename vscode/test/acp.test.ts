@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
 import vscode from "vscode";
-import { PiGoAcpClient, chunkText, isToolUpdate, thoughtText, toolPayload, workspaceCwd } from "../src/acp";
+import { PirateAcpClient, chunkText, isToolUpdate, thoughtText, toolPayload, workspaceCwd } from "../src/acp";
 
 // The client talks to a real @agentclientprotocol/sdk connection whose
 // transport is a fake child process: stdin is a PassThrough the test taps to
@@ -28,7 +28,7 @@ vi.mock("node:child_process", () => ({ spawn: spawnMock }));
 
 // acp.ts creates its output channel once at import time; __reset() clears the
 // spy registry, so re-register that channel before each test.
-const logChannel = vscode.channelByName("pi-go")!;
+const logChannel = vscode.channelByName("Pi-rate")!;
 
 const CAPS_OK = {
   protocolVersion: acp.PROTOCOL_VERSION,
@@ -95,13 +95,13 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("PiGoAcpClient.ensureConnected", () => {
+describe("PirateAcpClient.ensureConnected", () => {
   it("initializes and maps capabilities (supportsList, embeddedContext)", async () => {
     spawnServing({
       initialize: () => CAPS_OK,
       "session/list": () => ({ sessions: [] }),
     });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     try {
       await client.listSessions(); // triggers connect + initialize
       expect(client.capabilities).toEqual({
@@ -110,7 +110,7 @@ describe("PiGoAcpClient.ensureConnected", () => {
         embeddedContext: true,
       });
       expect(spawnMock).toHaveBeenCalledWith(
-        "pi",
+        "pirate",
         ["acp-server"],
         expect.objectContaining({ cwd: "/tmp/ws" }),
       );
@@ -129,7 +129,7 @@ describe("PiGoAcpClient.ensureConnected", () => {
       }),
       "session/list": () => ({ sessions: [] }),
     });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     try {
       await client.listSessions();
       expect(client.capabilities?.supportsList).toBe(false);
@@ -141,7 +141,7 @@ describe("PiGoAcpClient.ensureConnected", () => {
 
   it("rejects on protocol-version mismatch instead of hanging", async () => {
     spawnServing({ initialize: () => ({ protocolVersion: acp.PROTOCOL_VERSION + 1 }) });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     try {
       await expect(
         Promise.race([
@@ -161,12 +161,12 @@ describe("PiGoAcpClient.ensureConnected", () => {
     spawnMock.mockImplementation(() => {
       const child = new FakeChild();
       setTimeout(() => {
-        const err = Object.assign(new Error("spawn pi ENOENT"), { code: "ENOENT" });
+        const err = Object.assign(new Error("spawn pirate ENOENT"), { code: "ENOENT" });
         child.emit("error", err);
       }, 10);
       return child;
     });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     try {
       await expect(
         Promise.race([
@@ -188,7 +188,7 @@ describe("PiGoAcpClient.ensureConnected", () => {
       setTimeout(() => child.emit("error", Object.assign(new Error("spawn EACCES"), { code: "EACCES" })), 5);
       return child;
     });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     try {
       await expect(
         client.prompt("s1", [{ type: "text", text: "hi" }], {
@@ -207,7 +207,7 @@ describe("PiGoAcpClient.ensureConnected", () => {
       setTimeout(() => child.emit("error", Object.assign(new Error("boom"), { code: "ENOENT" })), 5);
       return child;
     });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     const errors: string[] = [];
     const sub = client.onSpawnError((m) => errors.push(m));
     try {
@@ -244,7 +244,7 @@ describe("PiGoAcpClient.ensureConnected", () => {
     let calls = 0;
     spawnMock.mockImplementation(() => (calls++ === 0 ? first : second));
 
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     try {
       // The retry path sleeps 250ms before respawning; total must stay well
       // under the default 5s test timeout.
@@ -273,7 +273,7 @@ describe("PiGoAcpClient.ensureConnected", () => {
     let calls = 0;
     spawnMock.mockImplementation(() => (calls++ === 0 ? first : second));
 
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     try {
       await client.prompt("s1", [{ type: "text", text: "hi" }], {
         isCancellationRequested: false,
@@ -286,12 +286,12 @@ describe("PiGoAcpClient.ensureConnected", () => {
   });
 });
 
-describe("PiGoAcpClient.listSessions", () => {
+describe("PirateAcpClient.listSessions", () => {
   it("returns [] when the agent does not support list", async () => {
     spawnServing({
       initialize: () => ({ protocolVersion: acp.PROTOCOL_VERSION, agentCapabilities: {} }),
     });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     try {
       expect(await client.listSessions()).toEqual([]);
     } finally {
@@ -310,7 +310,7 @@ describe("PiGoAcpClient.listSessions", () => {
       }),
       "session/new": () => ({ sessionId: "b" }),
     });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     try {
       // Make "b" known with a title the list response must preserve.
       await client.newSession();
@@ -333,7 +333,7 @@ describe("PiGoAcpClient.listSessions", () => {
       initialize: () => CAPS_OK,
       "session/new": () => ({ sessionId: "new-1" }),
     });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     try {
       const entry = await client.newSession();
       expect(entry).toEqual({ sessionId: "new-1", cwd: "/tmp/ws" });
@@ -343,13 +343,13 @@ describe("PiGoAcpClient.listSessions", () => {
   });
 });
 
-describe("PiGoAcpClient notifications and lifecycle", () => {
+describe("PirateAcpClient notifications and lifecycle", () => {
   it("captures available_commands_update notifications", async () => {
     const child = spawnServing({
       initialize: () => CAPS_OK,
       "session/list": () => ({ sessions: [] }),
     });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     try {
       await client.listSessions();
       child.stdout.write(
@@ -381,7 +381,7 @@ describe("PiGoAcpClient notifications and lifecycle", () => {
       initialize: () => CAPS_OK,
       "session/list": () => ({ sessions: [] }),
     });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     const seen: unknown[] = [];
     const sub = client.onSessionUpdate((u) => seen.push(u));
     try {
@@ -420,7 +420,7 @@ describe("PiGoAcpClient notifications and lifecycle", () => {
         return {};
       },
     });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     try {
       await client.load({ sessionId: "s1", cwd: "/tmp/ws" });
     } finally {
@@ -440,7 +440,7 @@ describe("PiGoAcpClient notifications and lifecycle", () => {
       const msg = JSON.parse(line) as { method?: string; params?: unknown };
       if (msg.method === "session/cancel") notifications.push(msg.params);
     });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     try {
       await client.listSessions();
       await client.cancel("s1");
@@ -455,7 +455,7 @@ describe("PiGoAcpClient notifications and lifecycle", () => {
       setTimeout(() => c.emit("error", Object.assign(new Error("gone"), { code: "ENOENT" })), 5);
       return c;
     });
-    const client2 = new PiGoAcpClient();
+    const client2 = new PirateAcpClient();
     await expect(client2.cancel("s1")).resolves.toBeUndefined();
     await client2.dispose();
   });
@@ -465,7 +465,7 @@ describe("PiGoAcpClient notifications and lifecycle", () => {
       initialize: () => CAPS_OK,
       "session/list": () => ({ sessions: [] }),
     });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     await client.listSessions();
     expect(child.killed).toBe(false);
     await client.dispose();
@@ -479,7 +479,7 @@ describe("PiGoAcpClient notifications and lifecycle", () => {
       initialize: () => CAPS_OK,
       "session/list": () => ({ sessions: [] }),
     });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     await client.listSessions();
     await client.reconnect();
     expect(first.killed).toBe(true);
@@ -496,12 +496,12 @@ describe("PiGoAcpClient notifications and lifecycle", () => {
       initialize: () => CAPS_OK,
       "session/list": () => ({ sessions: [] }),
     });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     try {
       await client.listSessions();
       child.stderr.emit("data", Buffer.from("server says hi\n"));
       await vi.waitFor(() => {
-        const ch = vscode.channelByName("pi-go");
+        const ch = vscode.channelByName("Pi-rate");
         expect(ch?.lines.some((l) => l.includes("[acp-server] server says hi"))).toBe(true);
       });
     } finally {
@@ -510,16 +510,16 @@ describe("PiGoAcpClient notifications and lifecycle", () => {
   });
 
   it("uses the configured command and args", async () => {
-    vscode.__config.set("pi-go.command", "my-pi");
-    vscode.__config.set("pi-go.args", ["serve", "--acp"]);
+    vscode.__config.set("pirate.command", "my-pirate");
+    vscode.__config.set("pirate.args", ["serve", "--acp"]);
     spawnServing({
       initialize: () => CAPS_OK,
       "session/list": () => ({ sessions: [] }),
     });
-    const client = new PiGoAcpClient();
+    const client = new PirateAcpClient();
     try {
       await client.listSessions();
-      expect(spawnMock).toHaveBeenCalledWith("my-pi", ["serve", "--acp"], expect.anything());
+      expect(spawnMock).toHaveBeenCalledWith("my-pirate", ["serve", "--acp"], expect.anything());
     } finally {
       await client.dispose();
     }

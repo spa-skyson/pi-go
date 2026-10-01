@@ -1,5 +1,5 @@
 // Pure-logic coverage for the tool-card UX helpers added alongside the
-// Pi-Go visual redesign: duration formatting, output line-capping, and the
+// Pi-rate visual redesign: duration formatting, output line-capping, and the
 // one-shot "auto-expand on first failure" rule. DOM assembly (toolCard()
 // itself) needs a browser context this node-side suite doesn't provide, so
 // only the pure functions are exercised here.

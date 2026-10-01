@@ -98,14 +98,14 @@ vi.mock("../src/acp", () => {
     dispose(): void {}
   }
   return {
-    PiGoAcpClient: FakeClient,
+    PirateAcpClient: FakeClient,
     chunkText: (u: { update?: { sessionUpdate?: string; content?: { type?: string; text?: string } } }) =>
       u.update?.content?.type === "text" &&
       (u.update?.sessionUpdate === "agent_message_chunk" || u.update?.sessionUpdate === "user_message_chunk")
         ? u.update.content.text
         : undefined,
-    SESSION_SCHEME: "pi-go-session",
-    SESSION_TYPE: "pi-go",
+    SESSION_SCHEME: "pirate-session",
+    SESSION_TYPE: "pirate",
   };
 });
 
@@ -116,7 +116,7 @@ function client(): (typeof acpState.instances)[number] {
 function context(): vscode.ExtensionContext {
   return {
     subscriptions: [],
-    extension: { id: "pi-go.pi-go-vscode", packageJSON: { version: "0.3.0" } },
+    extension: { id: "pirate.pirate-vscode", packageJSON: { version: "0.4.0" } },
     extensionUri: vscode.Uri.file("/ext"),
   } as never;
 }
@@ -137,12 +137,12 @@ function fakeStream() {
 
 // extension.ts grabs its log channel at import time; __reset() clears the
 // channel list, so re-register the captured channel before each test.
-const logChannel: ChannelSpy = vscode.channelByName("pi-go")!;
+const logChannel: ChannelSpy = vscode.channelByName("Pi-rate")!;
 
 beforeEach(() => {
   vscode.__reset();
   if (!process.argv.includes("--enable-proposed-api")) {
-    process.argv.push("--enable-proposed-api", "pi-go.pi-go-vscode");
+    process.argv.push("--enable-proposed-api", "pirate.pirate-vscode");
   }
   vscode.outputChannels.push(logChannel);
   vscode.__workspaceFolders.push({ uri: vscode.Uri.file("/tmp/ws"), name: "ws", index: 0 });
@@ -160,31 +160,31 @@ const chatSpies = () => vscode.chat as unknown as Record<string, { calls: unknow
 describe("activate", () => {
   it("detects the proposed API launch switch", () => {
     expect(proposedApiEnabled(["code", "--folder-uri", "/tmp/ws"])).toBe(false);
-    expect(proposedApiEnabled(["code", "--enable-proposed-api", "pi-go.pi-go-vscode"])).toBe(true);
-    expect(proposedApiEnabled(["code", "--enable-proposed-api=pi-go.pi-go-vscode"])).toBe(true);
+    expect(proposedApiEnabled(["code", "--enable-proposed-api", "pirate.pirate-vscode"])).toBe(true);
+    expect(proposedApiEnabled(["code", "--enable-proposed-api=pirate.pirate-vscode"])).toBe(true);
   });
 
   it("registers providers, commands, the panel, and the tree", () => {
     const ctx = context();
     activate(ctx);
-    const log = vscode.channelByName("pi-go")!;
+    const log = vscode.channelByName("Pi-rate")!;
 
-    expect(log.lines.some((l) => l.includes("activating pi-go extension (version 0.3.0)"))).toBe(true);
-    expect(log.lines.some((l) => l.includes("pi-go extension activated"))).toBe(true);
+    expect(log.lines.some((l) => l.includes("activating Pi-rate extension (version 0.4.0)"))).toBe(true);
+    expect(log.lines.some((l) => l.includes("Pi-rate extension activated"))).toBe(true);
     expect(log.lines.some((l) => l.includes("chat panel and sessions tree registered"))).toBe(true);
 
     expect(chatSpies().registerChatSessionItemProvider.calls).toHaveLength(1);
-    expect(chatSpies().registerChatSessionItemProvider.calls[0][0]).toBe("pi-go");
-    expect(chatSpies().registerChatSessionContentProvider.calls[0][0]).toBe("pi-go-session");
+    expect(chatSpies().registerChatSessionItemProvider.calls[0][0]).toBe("pirate");
+    expect(chatSpies().registerChatSessionContentProvider.calls[0][0]).toBe("pirate-session");
     expect((vscode.lm.registerLanguageModelChatProvider as unknown as { calls: unknown[][] }).calls[0][0]).toBe(
-      "pi-go",
+      "pirate",
     );
 
     const providerCalls = vscode.window.registerWebviewViewProvider as unknown as { calls: unknown[][] };
-    expect(providerCalls.calls.map((c) => c[0])).toEqual(["pi-go.chat"]);
-    expect(vscode.__commands.has("pi-go.attachFile")).toBe(true);
-    expect(vscode.__commands.has("pi-go.start")).toBe(false);
-    expect(vscode.__commands.has("pi-go.refreshSessions")).toBe(true);
+    expect(providerCalls.calls.map((c) => c[0])).toEqual(["pirate.chat"]);
+    expect(vscode.__commands.has("pirate.attachFile")).toBe(true);
+    expect(vscode.__commands.has("pirate.start")).toBe(false);
+    expect(vscode.__commands.has("pirate.refreshSessions")).toBe(true);
     expect(chatPanelState.instances).toHaveLength(1);
     expect(sessionsTreeMock.registerSessionsTree).toHaveBeenCalledTimes(1);
     // Subscriptions include the client, the listeners, the panel, the providers…
@@ -194,7 +194,7 @@ describe("activate", () => {
   it("logs an error when the chat session APIs are missing", () => {
     delete (vscode.chat as unknown as Record<string, unknown>).registerChatSessionItemProvider;
     activate(context());
-    const log = vscode.channelByName("pi-go")!;
+    const log = vscode.channelByName("Pi-rate")!;
     expect(log.lines.some((l) => l.includes("chat session APIs unavailable"))).toBe(true);
     // The native providers were never registered, but the panel still was.
     expect(chatSpies().registerChatSessionContentProvider.calls).toHaveLength(0);
@@ -208,15 +208,15 @@ describe("spawn failure surfacing", () => {
     (vscode.window as unknown as { showErrorMessage: unknown }).showErrorMessage = mkSpy(
       async () => "Open Settings",
     );
-    client().fireSpawnError("spawn pi ENOENT");
+    client().fireSpawnError("spawn pirate ENOENT");
     await vi.waitFor(() => {
       const err = vscode.window.showErrorMessage as unknown as { calls: unknown[][] };
-      expect(err.calls[0]?.[0]).toBe("pi-go failed to start: spawn pi ENOENT");
+      expect(err.calls[0]?.[0]).toBe("Pi-rate failed to start: spawn pirate ENOENT");
       expect(err.calls[0]?.[1]).toBe("Open Settings");
     });
     await vi.waitFor(() => {
       const exec = vscode.commands.executeCommand as unknown as { calls: unknown[][] };
-      expect(exec.calls[0]).toEqual(["workbench.action.openSettings", "pi-go.command"]);
+      expect(exec.calls[0]).toEqual(["workbench.action.openSettings", "pirate.command"]);
     });
 
     // A dismissed dialog does not open settings.
@@ -266,8 +266,8 @@ describe("native sessions path", () => {
     expect(items[0].label).toBe("Agent title");
     expect(items[0].status).toBeUndefined(); // no reply yet, not active
     expect(items[0].timing).toEqual({ created: 1_000, lastRequestEnded: 1_000 });
-    expect(items[1].label).toBe("pi-go session"); // falls back to the store title
-    expect(items[1].resource.scheme).toBe("pi-go-session"); // store resources use the session scheme
+    expect(items[1].label).toBe("Pi-rate session"); // falls back to the store title
+    expect(items[1].resource.scheme).toBe("pirate-session"); // store resources use the session scheme
 
     // After an agent reply is recorded, the status turns completed.
     client().fireUpdate(
@@ -280,7 +280,7 @@ describe("native sessions path", () => {
     // Failures degrade to an empty list.
     client().listError = new Error("spawn failed");
     expect(await itemProvider().provideChatSessionItems(fakeToken())).toEqual([]);
-    const log = vscode.channelByName("pi-go")!;
+    const log = vscode.channelByName("Pi-rate")!;
     expect(log.lines.some((l) => l.includes("provideChatSessionItems failed: spawn failed"))).toBe(true);
   });
 
@@ -294,16 +294,16 @@ describe("native sessions path", () => {
     const session = await contentProvider().provideChatSessionContent(resource, fakeToken());
     expect(client().loadCalls).toHaveLength(1);
     expect(client().loadCalls[0]).toEqual({ sessionId: "s1", cwd: "/tmp/ws" });
-    const log = vscode.channelByName("pi-go")!;
+    const log = vscode.channelByName("Pi-rate")!;
     expect(log.lines.some((l) => l.includes("session/load for s1: load failed"))).toBe(true);
     // Nothing replayed: empty history, default title.
-    expect(session.title).toBe("pi-go session");
+    expect(session.title).toBe("Pi-rate session");
     expect(session.history).toEqual([]);
     expect(session.requestHandler).toBeTypeOf("function");
 
     // Unknown resources throw.
     await expect(
-      contentProvider().provideChatSessionContent(vscode.Uri.parse("pi-go-session:local/unknown"), fakeToken()),
+      contentProvider().provideChatSessionContent(vscode.Uri.parse("pirate-session:local/unknown"), fakeToken()),
     ).rejects.toThrow(/unknown session resource/);
   });
 
@@ -335,7 +335,7 @@ describe("native sessions path", () => {
       errorDetails?: { message: string };
     };
     expect(result2.errorDetails?.message).toBe("spawn failed");
-    expect((stream2.pushed as string[]).some((s) => s.includes("pi-go error:"))).toBe(true);
+    expect((stream2.pushed as string[]).some((s) => s.includes("Pi-rate error:"))).toBe(true);
   });
 
   it("requestHandler: /help renders advertised commands", async () => {
@@ -390,7 +390,7 @@ describe("native sessions path", () => {
       fakeToken(),
     )) as { metadata?: Record<string, unknown> };
 
-    expect(result.metadata?.agent).toBe("pi-go");
+    expect(result.metadata?.agent).toBe("pirate");
     expect((stream.pushed as string[]).some((s) => s.includes("reply!"))).toBe(true);
     const pushedNames = stream.push.mock.calls.map(
       (c) => (c[0] as { constructor: { name: string } }).constructor.name,
@@ -432,8 +432,8 @@ describe("native sessions path", () => {
       errorDetails?: { message: string };
     };
     expect(result.errorDetails?.message).toBe("boom");
-    expect((stream.pushed as string[]).some((s) => s.includes("pi-go error:"))).toBe(true);
-    const log = vscode.channelByName("pi-go")!;
+    expect((stream.pushed as string[]).some((s) => s.includes("Pi-rate error:"))).toBe(true);
+    const log = vscode.channelByName("Pi-rate")!;
     expect(log.lines.some((l) => l.includes("prompt failed: boom"))).toBe(true);
 
     // Non-Error throwables are stringified through errString's fallbacks.
@@ -490,7 +490,7 @@ describe("native sessions path", () => {
     (vscode.chat as unknown as Record<string, unknown>).createChatParticipant = mkSpy(() => participant);
 
     activateWithCtors();
-    expect(chatSpies().createChatParticipant.calls[0][0]).toBe("pi-go.pi-go-vscode.agent");
+    expect(chatSpies().createChatParticipant.calls[0][0]).toBe("pirate.pirate-vscode.agent");
 
     client().listResult = [{ sessionId: "s1", cwd: "/tmp/ws" }];
     const items = (await itemProvider().provideChatSessionItems(fakeToken())) as { resource: vscode.Uri }[];
@@ -517,15 +517,15 @@ describe("native sessions path", () => {
     const [vendor, provider] = (
       vscode.lm.registerLanguageModelChatProvider as unknown as { calls: unknown[][] }
     ).calls[0] as [string, Record<string, (...args: unknown[]) => Promise<unknown>>];
-    expect(vendor).toBe("pi-go");
+    expect(vendor).toBe("pirate");
     const models = (await provider.provideLanguageModelChatInformation()) as {
       id: string;
       name: string;
       targetChatSessionType: string;
     }[];
     expect(models[0].id).toBe("agent");
-    expect(models[0].name).toBe("pi-go agent");
-    expect(models[0].targetChatSessionType).toBe("pi-go");
+    expect(models[0].name).toBe("Pi-rate agent");
+    expect(models[0].targetChatSessionType).toBe("pirate");
     await expect(provider.provideLanguageModelChatResponse()).rejects.toThrow(
       /answers prompts inside agent sessions/,
     );
@@ -557,18 +557,18 @@ describe("wiring and live-update paths", () => {
     })();
   }
 
-  it("pi-go.attachFile delegates to the panel", () => {
+  it("pirate.attachFile delegates to the panel", () => {
     activateWithCtors();
-    vscode.__commands.get("pi-go.attachFile")?.();
+    vscode.__commands.get("pirate.attachFile")?.();
     expect(chatPanelState.instances[0].attachFiles).toHaveBeenCalled();
   });
 
-  it("pi-go.refreshSessions and workspace-folder changes refresh the session list", async () => {
+  it("pirate.refreshSessions and workspace-folder changes refresh the session list", async () => {
     activateWithCtors();
     const events: unknown[] = [];
     itemProvider().onDidChangeChatSessionItems(() => events.push(1));
 
-    vscode.__commands.get("pi-go.refreshSessions")?.();
+    vscode.__commands.get("pirate.refreshSessions")?.();
     expect(events).toHaveLength(1);
 
     // A workspace switch reconnects the client (new cwd) and refreshes.

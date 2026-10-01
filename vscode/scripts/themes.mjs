@@ -1,8 +1,8 @@
-// Pi-Go color themes, compiled with Catppuccin for VS Code.
+// Pi-rate color themes, compiled with Catppuccin for VS Code.
 //
 // Catppuccin (https://github.com/catppuccin/vscode, MIT) derives ~560
 // workbench colors, ~180 TextMate rules and its semantic-token rules from a
-// 26-color palette. We keep that machinery and swap in the Pi-Go Design
+// 26-color palette. We keep that machinery and swap in the Pi-rate Design
 // System palette (https://claude.ai/design/p/7009407c-e035-4157-bc52-4d4544f87be9):
 // deep-space navy surfaces, cyan as the accent, magenta / purple / green /
 // yellow / orange neon hues. A handful of workbench colors are then pinned
@@ -18,7 +18,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * Pi-Go palettes in Catppuccin's role names. Syntax roles as Catppuccin uses
+ * Pi-rate palettes in Catppuccin's role names. Syntax roles as Catppuccin uses
  * them: mauve = keywords, blue = functions + UI accent, green = strings,
  * yellow = types, peach = numbers/constants, maroon = parameters,
  * lavender = properties, sky = operators + find highlights, overlay2 =
@@ -149,7 +149,7 @@ const ANSI_BRIGHT = {
 
 /**
  * Terminal colors. Catppuccin reads these from its own ANSI table, which
- * colorOverrides does not reach, so they are derived from the Pi-Go palette
+ * colorOverrides does not reach, so they are derived from the Pi-rate palette
  * here or the terminal keeps Catppuccin's pastels.
  */
 function ansiColors(id) {
@@ -178,11 +178,11 @@ function ansiColors(id) {
 
 /** The themes this extension contributes, in package.json order. */
 export const THEMES = [
-  { id: "neon", label: "Pi-Go Neon", flavor: "mocha", file: "pi-go-neon-color-theme.json" },
-  { id: "daylight", label: "Pi-Go Daylight", flavor: "latte", file: "pi-go-daylight-color-theme.json" },
+  { id: "neon", label: "Pi-rate Neon", flavor: "mocha", file: "pirate-neon-color-theme.json" },
+  { id: "daylight", label: "Pi-rate Daylight", flavor: "latte", file: "pirate-daylight-color-theme.json" },
 ];
 
-/** Compile one Pi-Go theme to the JSON VS Code loads. */
+/** Compile one Pi-rate theme to the JSON VS Code loads. */
 export function buildTheme({ id, label, flavor }) {
   const theme = compile(flavor, {
     accent: "blue",
