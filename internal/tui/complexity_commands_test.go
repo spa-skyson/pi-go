@@ -90,7 +90,7 @@ func TestCplxKeyRegistry_CoversCommandSet(t *testing.T) {
 		"/retry",
 		"/skills", "/skill-list", "/skill-load", "/skill-create", "/theme", "/ping",
 		"/model-price-refresh",
-		"/rtk", "/mcp", "/exit", "/quit",
+		"/rtk", "/update", "/mcp", "/exit", "/quit",
 		// Formerly the extraSlashCommands special case; the registry owns it now.
 		"/todos",
 	}
@@ -126,7 +126,7 @@ func TestCplxSlashCommands_DerivedOrder(t *testing.T) {
 		"/pr-autofix",
 		// After /run, so "/r" still completes to /run.
 		"/retry",
-		"/skills", "/theme", "/ping", "/model-price-refresh", "/rtk", "/mcp", "/exit", "/quit",
+		"/skills", "/theme", "/ping", "/model-price-refresh", "/rtk", "/update", "/mcp", "/exit", "/quit",
 		// The /todos row closes the table (formerly appended via
 		// extraSlashCommands): "/t" still completes to /theme, and "/todos"
 		// owns "/to" outright.

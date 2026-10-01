@@ -11,6 +11,7 @@ const (
 	overlayApproval OverlayKind = iota
 	overlayQuestion
 	overlayCommit
+	overlayUpdate
 	overlayLogin
 	overlaySkillCreate
 	overlayBranchPopup
@@ -31,6 +32,7 @@ var overlayKinds = []OverlayKind{
 	overlayApproval,
 	overlayQuestion,
 	overlayCommit,
+	overlayUpdate,
 	overlayLogin,
 	overlaySkillCreate,
 	overlayBranchPopup,
@@ -216,6 +218,14 @@ func (m *model) overlayEntryFor(kind OverlayKind) overlayEntry {
 			// message generates and turns modal on "confirming".
 			alive:   func(*model) bool { return m.commit != nil },
 			onClose: func(*model) { m.commit = nil },
+		}
+	case overlayUpdate:
+		return overlayEntry{
+			kind:       kind,
+			keyHandler: m.handleUpdateKey,
+			// Same as commit: the check runs passive, the confirm turns modal.
+			alive:   func(*model) bool { return m.update != nil },
+			onClose: func(*model) { m.update = nil },
 		}
 	case overlayLogin:
 		return overlayEntry{

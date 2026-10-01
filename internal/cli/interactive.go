@@ -152,7 +152,7 @@ func runInteractive(
 
 	// Started only now that notices are routed to the TUI: an update banner
 	// written to os.Stderr would land inside the painted frame.
-	go checkForUpdate(ctx, Version)
+	go checkForUpdate(ctx, Version, "/update")
 
 	// Likewise for anything config load decided: it ran before the sink
 	// existed, and the terminal reset before the first frame would have
@@ -272,7 +272,12 @@ func runInteractive(
 		AgentSwitcher: func(switchCtx context.Context, agentName string, modelOverride string) (tui.AgentSwitch, error) {
 			return agentSwitch(switchCtx, cfg, tokenTracker, headerSessionID, &res.cbIn, res.agentConfigs, agentName, modelOverride)
 		},
-		A2A: cfg.A2A,
+		// Update checking and installing for the startup notice and /update.
+		// The checker guards dev builds itself; the installer captures the
+		// script's output — the TUI owns the terminal.
+		CheckUpdate: newUpdateChecker(),
+		ApplyUpdate: newUpdateInstaller(),
+		A2A:         cfg.A2A,
 	})
 
 	initCancel() // signal deferred init to stop

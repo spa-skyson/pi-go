@@ -153,6 +153,17 @@ type Config struct {
 	// specification stand. Used by /agent and Shift+Tab. If nil, agent
 	// switching is disabled.
 	AgentSwitcher func(ctx context.Context, agentName string, modelOverride string) (AgentSwitch, error)
+
+	// CheckUpdate, when non-nil, fetches the newest release and returns its
+	// tag when it is newer than the running build ("" = up to date). Powers
+	// the startup notice and /update; nil disables both. A disabled check
+	// (dev builds) is an error so /update can say why.
+	CheckUpdate func(ctx context.Context) (string, error)
+	// ApplyUpdate runs the official install script with its output captured —
+	// the TUI owns the terminal, so the script must never write to it. The
+	// error carries the tail of the captured output. Used by /update after
+	// the y/n confirmation; nil disables it.
+	ApplyUpdate func(ctx context.Context) error
 }
 
 // AgentSwitch is the payload AgentSwitcher returns for one switch target.

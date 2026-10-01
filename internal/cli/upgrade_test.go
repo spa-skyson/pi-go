@@ -2,11 +2,14 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+
+	"github.com/spa-skyson/pi-rate/internal/notice"
 )
 
 func TestNewUpgradeCmd(t *testing.T) {
@@ -54,9 +57,93 @@ func TestFetchLatestVersionHTTPError(t *testing.T) {
 
 func TestCheckForUpdateSkipsDisabledAndDevVersions(t *testing.T) {
 	t.Setenv("PI_GO_UPDATE_CHECK", "0")
-	checkForUpdate(context.Background(), "v1.0.0")
-	checkForUpdate(context.Background(), "")
-	checkForUpdate(context.Background(), "dev")
+	checkForUpdate(context.Background(), "v1.0.0", "`pirate upgrade`")
+	checkForUpdate(context.Background(), "", "`pirate upgrade`")
+	checkForUpdate(context.Background(), "dev", "`pirate upgrade`")
+}
+
+// TestCheckForUpdateNotifiesWithHint pins the startup banner: point the
+// release URL at a stub, capture the notice sink (the TUI's chat route), and
+// assert the message names both versions and this front end's upgrade command.
+func TestCheckForUpdateNotifiesWithHint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"tag_name":"v9.9.9"}`)
+	}))
+	defer srv.Close()
+	prevURL := latestReleaseURL
+	latestReleaseURL = srv.URL
+	t.Cleanup(func() { latestReleaseURL = prevURL })
+
+	var got []string
+	prevSink := notice.SetSink(func(msg string) { got = append(got, msg) })
+	defer func() { notice.SetSink(prevSink) }()
+
+	checkForUpdate(context.Background(), "v1.0.0", "/update")
+	if len(got) != 1 {
+		t.Fatalf("notices = %v, want exactly one", got)
+	}
+	want := "⬆ Update available: v1.0.0 → v9.9.9 — run /update to upgrade"
+	if got[0] != want {
+		t.Errorf("notice = %q, want %q", got[0], want)
+	}
+
+	// Same version: silence.
+	got = nil
+	checkForUpdate(context.Background(), "v9.9.9", "/update")
+	if len(got) != 0 {
+		t.Errorf("up-to-date produced notices %v, want none", got)
+	}
+}
+
+// TestNewUpdateChecker pins the /update check callback across its outcomes:
+// a newer release is returned, an equal one comes back empty, and the dev
+// guard reports the disabled error instead of a version.
+func TestNewUpdateChecker(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"tag_name":"v2.0.0"}`)
+	}))
+	defer srv.Close()
+	prevURL := latestReleaseURL
+	latestReleaseURL = srv.URL
+	t.Cleanup(func() { latestReleaseURL = prevURL })
+	prevVersion := Version
+	t.Cleanup(func() { Version = prevVersion })
+
+	Version = "v1.0.0"
+	latest, err := newUpdateChecker()(context.Background())
+	if err != nil || latest != "v2.0.0" {
+		t.Fatalf("checker = (%q, %v), want (v2.0.0, nil)", latest, err)
+	}
+
+	Version = "v2.0.0"
+	latest, err = newUpdateChecker()(context.Background())
+	if err != nil || latest != "" {
+		t.Fatalf("up-to-date checker = (%q, %v), want (\"\", nil)", latest, err)
+	}
+
+	Version = "dev"
+	if _, err := newUpdateChecker()(context.Background()); !errors.Is(err, errUpdateDisabled) {
+		t.Fatalf("dev build err = %v, want errUpdateDisabled", err)
+	}
+
+	t.Setenv("PI_GO_UPDATE_CHECK", "0")
+	Version = "v1.0.0"
+	if _, err := newUpdateChecker()(context.Background()); !errors.Is(err, errUpdateDisabled) {
+		t.Fatalf("opted-out err = %v, want errUpdateDisabled", err)
+	}
+}
+
+func TestOutputTail(t *testing.T) {
+	if got := outputTail("", 3); got != "" {
+		t.Errorf("outputTail(\"\") = %q, want \"\"", got)
+	}
+	out := "l1\nl2\nl3\nl4\n"
+	if got := outputTail(out, 3); got != "l2\nl3\nl4" {
+		t.Errorf("outputTail = %q, want the last 3 lines", got)
+	}
+	if got := outputTail("only\n", 5); got != "only" {
+		t.Errorf("outputTail = %q, want %q", got, "only")
+	}
 }
 
 func TestFetchLatestVersionInvalidURLAndBadJSON(t *testing.T) {
