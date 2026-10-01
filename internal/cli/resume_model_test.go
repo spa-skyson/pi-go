@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/provider"
 	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
@@ -98,6 +99,92 @@ func TestResolveRuntimeModel_ExplicitURLWinsResume(t *testing.T) {
 	}
 	if baseURL != "https://flag.example/v1" {
 		t.Fatalf("baseURL = %q, want explicit URL", baseURL)
+	}
+}
+
+// zaiNamedProviderCfg declares the provider the live bug failed on, with a
+// declared endpoint that differs from the recorded one so each test pins which
+// URL wins.
+func zaiNamedProviderCfg() config.Config {
+	return config.Config{
+		Roles: map[string]config.RoleConfig{"default": {Model: "gpt-5.6-sol", Provider: "openai"}},
+		Providers: map[string]config.ProviderConfig{
+			"zai-coding-plan": {
+				Type:    "openai-compatible",
+				BaseURL: "https://declared.example/api",
+				APIKey:  "sk-zai",
+			},
+		},
+	}
+}
+
+func withResumeFlags(t *testing.T, home, sessionID, model, provider, baseURL string) config.Config {
+	t.Helper()
+	testenv.SetHome(t, home)
+	writeSessionBackendMeta(t, home, sessionID, model, provider, baseURL)
+	origSession := flagSession
+	t.Cleanup(func() { flagSession = origSession })
+	flagSession = sessionID
+	resetResolveFlags(t)
+	return zaiNamedProviderCfg()
+}
+
+// A resumed session whose recorded provider is user-declared must resolve
+// through that provider's protocol and endpoint. meta.Model is the bare
+// llm.Name(), so the prefixed named lookup at the top of
+// resolveRuntimeModelForRole misses it, and the recorded-provider fallback
+// used to build an Info with no Protocol — NewLLM then failed with
+// "unsupported provider: zai-coding-plan" (live on v0.5.1).
+func TestResolveRuntimeModel_ResumeNamedProvider(t *testing.T) {
+	cfg := withResumeFlags(t, t.TempDir(), "sess-zai", "glm-5.3-flash", "zai-coding-plan", "https://recorded.example/api")
+
+	info, baseURL, err := resolveRuntimeModelForRole(cfg, "glm-5.3-flash", "openai", "default")
+	if err != nil {
+		t.Fatalf("resolveRuntimeModelForRole: %v", err)
+	}
+	want := provider.Info{
+		Provider: "zai-coding-plan",
+		Model:    "glm-5.3-flash",
+		Custom:   true,
+		Protocol: "openai-compatible",
+		BaseURL:  "https://recorded.example/api",
+	}
+	if info != want {
+		t.Errorf("info = %+v, want %+v", info, want)
+	}
+	if baseURL != "https://recorded.example/api" {
+		t.Errorf("baseURL = %q, want the endpoint recorded with the session", baseURL)
+	}
+}
+
+// A named-provider session recorded without a baseURL falls back to the
+// provider's declared endpoint.
+func TestResolveRuntimeModel_ResumeNamedProviderDeclaredURL(t *testing.T) {
+	cfg := withResumeFlags(t, t.TempDir(), "sess-zai", "glm-5.3-flash", "zai-coding-plan", "")
+
+	info, baseURL, err := resolveRuntimeModelForRole(cfg, "glm-5.3-flash", "openai", "default")
+	if err != nil {
+		t.Fatalf("resolveRuntimeModelForRole: %v", err)
+	}
+	if info.Provider != "zai-coding-plan" || !info.Custom || info.Protocol != "openai-compatible" {
+		t.Errorf("info = %+v", info)
+	}
+	if baseURL != "https://declared.example/api" {
+		t.Errorf("baseURL = %q, want the declared endpoint", baseURL)
+	}
+}
+
+// A session that persisted the prefixed spelling keeps resolving on resume,
+// with the prefix stripped from the model name.
+func TestResolveRuntimeModel_ResumeNamedProviderPrefixedModel(t *testing.T) {
+	cfg := withResumeFlags(t, t.TempDir(), "sess-zai", "zai-coding-plan/glm-5.3-flash", "zai-coding-plan", "https://recorded.example/api")
+
+	info, _, err := resolveRuntimeModelForRole(cfg, "zai-coding-plan/glm-5.3-flash", "openai", "default")
+	if err != nil {
+		t.Fatalf("resolveRuntimeModelForRole: %v", err)
+	}
+	if info.Provider != "zai-coding-plan" || info.Model != "glm-5.3-flash" || info.Protocol != "openai-compatible" {
+		t.Errorf("info = %+v, want the prefix stripped and the declared protocol", info)
 	}
 }
 

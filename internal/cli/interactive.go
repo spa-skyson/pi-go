@@ -297,7 +297,7 @@ func printSessionEpilogue(w io.Writer, sessionID string) {
 	if sessionID == "" {
 		return
 	}
-	fmt.Fprintf(w, "\nSession: %s\nResume:  pi --session %s\n", sessionID, sessionID)
+	fmt.Fprintf(w, "\nSession: %s\nResume:  pirate --session %s\n", sessionID, sessionID)
 }
 
 // deferredInit performs all heavy initialization, sending progress via ch.
