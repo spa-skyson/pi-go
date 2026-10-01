@@ -149,12 +149,15 @@ OpenAI-совместимых (chat + responses) и Anthropic-путях; guard:
 если thinking активен. `reasoningEffort` нормализуется (minimal→none) и бьёт
 конфигурационный `thinkingLevel` (флаг `--thinking` на самом `pi` — тоже).
 `steps` — `agent.NewStepLimitCallback` в after-tool цепочке (до
-`ComposeAfterToolChain`): (N+1)-й вызов инструмента прерывает цикл ошибкой
-`steps limit N reached`. Мусорные значения во frontmatter — warning и дефолт.
+`ComposeAfterToolChain`): (N+1)-й вызов инструмента завершает ход — колбэк
+выставляет `SkipSummarization` на event actions (функция-response событие
+становится для ADK финальным, `Flow.Run` останавливается) и возвращает ошибку
+`steps limit N reached` в качестве последнего результата. Мусорные значения во
+frontmatter — warning и дефолт.
 
 Проверено живым прогоном: агент с `steps: 2` выполнил два инструментальных
-вызова, третий заблокирован «steps limit 2 reached». Temperature покрыта
-wire-тестами (применяется при заданном, отсутствует при nil).
+вызова, на третьем ход завершился с «steps limit 2 reached». Temperature
+покрыта wire-тестами (применяется при заданном, отсутствует при nil).
 
 Сейчас: `temperature` в коде отсутствует полностью. `reasoningEffort` частично
 покрыт `thinkingLevel` (`provider.LLMOptions.ThinkingLevel`), но на уровне
