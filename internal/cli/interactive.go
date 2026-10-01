@@ -636,13 +636,29 @@ func deferredInitCoreTools(sandboxRoot, worktreeDir, headerSessionID string, tod
 			}
 		}
 	}
-	// The question notifier's send must not drop (the tool would wait on a
-	// Reply nobody owns), and it does not need to: the channel is buffered
-	// to one and the TUI keeps exactly one reader parked on it. A blocking
-	// send is safe here — the tool call is an interactive wait anyway.
+	// The question notifier must not block: a blocked send here parks the
+	// tool call forever (production hang #32). The buffer-1 channel plus the
+	// TUI's parked reader make the fast path non-blocking; if the slot is
+	// still full (a delivered-but-unshown request), the stale one is
+	// displaced with a canceled answer — nobody is waiting to show it, and
+	// its tool call stops waiting on a Reply nobody owns.
 	var questionNotifier func(tools.QuestionRequest)
 	if questionCh != nil {
-		questionNotifier = func(req tools.QuestionRequest) { questionCh <- req }
+		questionNotifier = func(req tools.QuestionRequest) {
+			select {
+			case questionCh <- req:
+				return
+			default:
+			}
+			select {
+			case stale := <-questionCh:
+				// Reply is buffered to one: the send never blocks, even
+				// when the abandoned call has stopped reading.
+				stale.Reply <- tools.QuestionAnswer{Selected: "canceled"}
+			default:
+			}
+			questionCh <- req
+		}
 	}
 	coreTools, err := tools.CoreTools(sandbox, coreToolOptions(bashSup, headerSessionID, todoNotifier, questionNotifier)...)
 	if err != nil {

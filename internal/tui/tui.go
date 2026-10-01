@@ -1372,6 +1372,9 @@ func (m *model) updateSession(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case approvalRequestMsg:
 		model, cmd := m.handleApprovalRequest(msg)
 		return model, cmd, true
+	case questionRequestMsg:
+		model, cmd := m.handleQuestionRequest(msg)
+		return model, cmd, true
 	}
 	return nil, nil, false
 }
