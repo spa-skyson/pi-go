@@ -176,6 +176,10 @@ type model struct {
 	// Commit flow state.
 	commit *commitState
 
+	// Update flow state (/update command): the confirm prompt or the running
+	// installer, or nil.
+	update *updateState
+
 	// Tool-approval dialog state: the pending permission request, or nil.
 	// Set by the ApprovalCh listener, answered and cleared by the key handler;
 	// see approval.go.
@@ -1356,6 +1360,12 @@ func (m *model) updateSession(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return model, cmd, true
 	case commitDoneMsg:
 		model, cmd := m.handleCommitDone(msg)
+		return model, cmd, true
+	case updateCheckMsg:
+		model, cmd := m.handleUpdateCheckDone(msg)
+		return model, cmd, true
+	case updateAppliedMsg:
+		model, cmd := m.handleUpdateApplied(msg)
 		return model, cmd, true
 	case memoryTickMsg:
 		model, cmd := m.handleMemoryTick(msg)

@@ -805,7 +805,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		)
 	}
 
-	go checkForUpdate(cmd.Context(), Version)
+	go checkForUpdate(cmd.Context(), Version, "`pirate upgrade`")
 	config.NotifyReroutedLLMS(runtime.cfg)
 
 	return runNonInteractive(

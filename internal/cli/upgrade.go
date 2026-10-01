@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -19,14 +22,26 @@ import (
 
 const upgradeScriptURL = "https://raw.githubusercontent.com/spa-skyson/pi-rate/main/scripts/install.sh"
 const upgradeScriptURLWin = "https://raw.githubusercontent.com/spa-skyson/pi-rate/main/scripts/install.ps1"
-const latestReleaseURL = "https://api.github.com/repos/spa-skyson/pi-rate/releases/latest"
+
+// latestReleaseURL is a var so tests can point it at an httptest server.
+var latestReleaseURL = "https://api.github.com/repos/spa-skyson/pi-rate/releases/latest"
 
 type releaseInfo struct {
 	TagName string `json:"tag_name"`
 }
 
-func checkForUpdate(ctx context.Context, currentVersion string) {
-	if currentVersion == "" || currentVersion == "dev" || os.Getenv("PI_GO_UPDATE_CHECK") == "0" {
+// updateCheckAllowed reports whether an update check may run at all: dev
+// builds have no release version to compare against, and PI_GO_UPDATE_CHECK=0
+// opts the host out entirely.
+func updateCheckAllowed(version string) bool {
+	return version != "" && version != "dev" && os.Getenv("PI_GO_UPDATE_CHECK") != "0"
+}
+
+// checkForUpdate fetches the newest release and raises a notice when it is
+// newer than the running build. hint names the upgrade command for this front
+// end ("`pirate upgrade`" on the CLI, "/update" in the TUI).
+func checkForUpdate(ctx context.Context, currentVersion, hint string) {
+	if !updateCheckAllowed(currentVersion) {
 		return
 	}
 
@@ -38,7 +53,60 @@ func checkForUpdate(ctx context.Context, currentVersion string) {
 		return
 	}
 	if isNewerVersion(currentVersion, latest) {
-		notice.Notifyf("update available: %s -> %s (run `pirate upgrade`)", currentVersion, latest)
+		notice.Notifyf("⬆ Update available: %s → %s — run %s to upgrade", currentVersion, latest, hint)
+	}
+}
+
+// errUpdateDisabled marks a check that cannot run: dev build or opted-out
+// host. The startup check swallows it; /update surfaces it.
+var errUpdateDisabled = errors.New("update checks are disabled for dev builds")
+
+// newUpdateChecker builds the TUI's update-check callback: the newest release
+// tag when it is newer than the running build, "" when up to date. Errors are
+// returned, not swallowed — /update reports them in the chat.
+func newUpdateChecker() func(context.Context) (string, error) {
+	return func(ctx context.Context) (string, error) {
+		if !updateCheckAllowed(Version) {
+			return "", errUpdateDisabled
+		}
+		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		latest, err := fetchLatestVersion(ctx, http.DefaultClient, latestReleaseURL)
+		if err != nil {
+			return "", err
+		}
+		if !isNewerVersion(Version, latest) {
+			return "", nil
+		}
+		return latest, nil
+	}
+}
+
+// outputTail keeps the last maxLines lines of captured installer output, for
+// an error notice that names what actually went wrong.
+func outputTail(out string, maxLines int) string {
+	out = strings.TrimRight(out, "\n")
+	if out == "" {
+		return ""
+	}
+	lines := strings.Split(out, "\n")
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+	return strings.Join(lines, "\n")
+}
+
+// newUpdateInstaller builds the TUI's apply-update callback. The script runs
+// with its output captured — the TUI owns the terminal, so the script must
+// never write to it (AGENTS.md, TUI output safety) — and on failure the error
+// carries the tail of what it printed.
+func newUpdateInstaller() func(context.Context) error {
+	return func(ctx context.Context) error {
+		var out bytes.Buffer
+		if err := runUpgradeScript(ctx, &out, &out); err != nil {
+			return fmt.Errorf("%s: %w", outputTail(out.String(), 10), err)
+		}
+		return nil
 	}
 }
 
@@ -141,34 +209,26 @@ Run with sudo if the default location requires elevated permissions.`,
 
 func runUpgrade(cmd *cobra.Command, _ []string) error {
 	fmt.Fprintln(os.Stderr, "Upgrading pi-go...")
-
-	var scriptURL string
 	if runtime.GOOS == "windows" {
-		scriptURL = upgradeScriptURLWin
 		fmt.Fprintln(os.Stderr, "Detected Windows — using PowerShell install script.")
-	} else {
-		scriptURL = upgradeScriptURL
 	}
+	// The CLI owns the terminal: the script's progress goes straight to it.
+	return runUpgradeScript(cmd.Context(), os.Stdout, os.Stderr)
+}
 
+// runUpgradeScript downloads and runs the official install script. ctx bounds
+// the run; out and errOut receive the script's streams — the CLI wires the
+// terminal, the TUI captures both into one buffer.
+func runUpgradeScript(ctx context.Context, out, errOut io.Writer) error {
+	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		return runUpgradePowerShell(scriptURL)
+		cmd = runUpgradePowerShellCommand(upgradeScriptURLWin)
+	} else {
+		cmd = exec.CommandContext(ctx, "sh", "-c", fmt.Sprintf("curl -fsSL %s | bash", upgradeScriptURL))
 	}
-	return runUpgradeShell(scriptURL)
-}
-
-func runUpgradeShell(scriptURL string) error {
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("curl -fsSL %s | bash", scriptURL))
 	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-func runUpgradePowerShell(scriptURL string) error {
-	cmd := runUpgradePowerShellCommand(scriptURL)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = out
+	cmd.Stderr = errOut
 	return cmd.Run()
 }
 
