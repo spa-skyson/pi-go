@@ -20,23 +20,24 @@
 A terminal-based coding agent built on [Google ADK Go](https://adk.dev/). It connects to multiple LLM providers, runs
 sandboxed tools, integrates LSP, and ships with a process-based subagent system.
 
-![pi-go TUI](docs/screen/pi-go.gif)
+![Pi-rate TUI](docs/screen/pi-go.gif)
 
 ## Features
 
-- **Multi-provider LLM** — Claude (Anthropic), GPT/O-series (OpenAI), Gemini (Google), Mistral, Grok (xAI), Azure OpenAI, OpenRouter, OpenCode, and Ollama (local or cloud) for models
+- **Multi-provider LLM** — Claude (Anthropic), GPT/O-series (OpenAI), Gemini, Mistral, Grok (xAI), Azure OpenAI, OpenRouter, OpenCode, agentgateway, and Ollama (local or cloud) — plus **named providers** you declare in `config.json` (`providers` section: any OpenAI-compatible or Anthropic endpoint becomes a `name/model` prefix)
+- **Model roles** — named configurations (default, smol, slow, plan, commit) selectable via CLI flags
+- **Agents as markdown** — agent files with frontmatter: `model`/`role`, `tools`, `temperature`, `reasoningEffort`, `steps`, `timeout`, `worktree`, `lsp`, `permission`; bundled agents included
+- **Primary agents** — `mode: primary` / `all` agents can run the main session: switch with **Shift+Tab** or `/agent` mid-conversation, pick the startup one with `defaultAgent`
+- **Permission subsystem** — `allow`/`deny`/`ask` rules on tool-name globs and bash command patterns, globally in config and per-agent in frontmatter, with an interactive approval dialog in the TUI
+- **Subagents with monitor** — process-based subagents; live monitor (**Ctrl+T**) with per-run cards, steering (`s`), background runs collected via the `agent_result` tool, and a prompt queue instead of dropped input
+- **Todo plans** — plan-driven checklists with a live sidebar and `/todos`
+- **Interactive TUI** — Bubble Tea v2 with Markdown rendering (Glamour), multiline prompt editor (**Shift+Enter**), paste collapsing (**Alt+V**), `@`-file mentions, fullscreen `/diff`, `/help` dialog, custom themes, terminal attention (bell + OSC 777 notify), **Ctrl+Z** suspend — with pirate flair: a moody mascot and an animated sea
 - **Sandboxed tools** — read, write, edit, shell, grep, find, tree, and git operations. All tools are restricted to the project directory via `os.Root`.
-- **Interactive TUI** — Bubble Tea v2 with Markdown rendering (Glamour), slash commands, and theming
-- **Session persistence** — JSONL append-only event logs with branching, compaction, and resume
-- **Model roles** — Named configurations (default, smol, slow, plan, commit) selectable via CLI flags
-- **Subagents** — Process-based multi-agent system with types: explore, plan, designer, reviewer, task, quick_task
 - **LSP** — JSON-RPC client for Go, TypeScript/JS, Python, Rust, and Java, with auto-format and diagnostics hooks
-- **AI Git tools** — Repository overview, file diffs, hunk parsing, and LLM-generated conventional commits (`/commit`)
-- **RPC server** — Unix socket JSON-RPC 2.0 for IDE/editor integration
+- **Session persistence** — JSONL append-only event logs with branching, compaction, and resume
+- **AI Git tools** — repository overview, file diffs, hunk parsing, LLM-generated conventional commits (`/commit`), and PR autofix (`/pr-autofix`)
 - **Memory Palace** — 4-layer contextual memory with SQLite storage, semantic embeddings (all-MiniLM-L6-v2), temporal knowledge graph, and project/conversation miners
-- **Extensions** — Hooks (shell callbacks), skills (`.SKILL.md` instructions), and Model Context Protocol (MCP) servers
-- **Plugin marketplaces** — Install skill bundles from any Claude Code-compatible plugin marketplace, with version tracking and updates (`pi plugin`)
-- **Skills audit** — Security scanning for hidden Unicode characters, BiDi attacks, and supply-chain threats in skill files (`pi audit`)
+- **Extensions & integration** — hooks (shell callbacks), skills, MCP servers, plugin marketplaces (`pirate plugin`), a skills security audit (`pirate audit`), and a Unix-socket JSON-RPC 2.0 server for IDE/editor integration
 
 ## Architecture
 
@@ -46,6 +47,7 @@ internal/
 ├── agent/          ADK agent setup, retry logic, runner
 ├── cli/            Cobra CLI flags, output modes (interactive, print, json, rpc)
 ├── config/         Global and project config (roles, hooks, MCP, themes)
+├── permission/     Tool-call gating — allow/deny/ask on tool globs and bash patterns
 ├── audit/          Security scanner for skills (hidden Unicode, supply-chain threats)
 ├── extension/      Hooks, skills, MCP server integration
 ├── plugin/         Plugin marketplaces — manifests, registry, install/update
@@ -82,8 +84,6 @@ curl -fsSL https://raw.githubusercontent.com/spa-skyson/pi-rate/main/scripts/ins
 ```
 
 This script detects your OS/arch, downloads the latest release binary, and installs it to `/usr/local/bin` (or `~/.local/bin` if needed).
-
-> **Note:** the shell installer falls back to building from source while the fork has no releases.
 
 **Windows**
 
@@ -150,21 +150,13 @@ run `nix run github:spa-skyson/pi-rate` or install it into a profile with
 
 ### go install
 
-The module now lives at `github.com/spa-skyson/pi-rate`, so from the first
-`pi-rate` release on:
-
 ```bash
 go install github.com/spa-skyson/pi-rate/cmd/pirate@latest
 ```
 
-Until that first release is cut, `@latest` resolves to nothing — use one of
-these instead:
+Or build from source:
 
 ```bash
-# 1) Shell installer (falls back to a source build while there are no releases)
-curl -fsSL https://raw.githubusercontent.com/spa-skyson/pi-rate/main/scripts/install.sh | bash
-
-# 2) Build from source
 git clone https://github.com/spa-skyson/pi-rate.git
 cd pi-rate
 make build
@@ -306,7 +298,7 @@ A name with no recognized prefix is rejected rather than guessed at — reach fo
 To configure a provider interactively instead of exporting the variable yourself:
 
 ```bash
-pi setup
+pirate setup
 ```
 
 The wizard asks which provider to use, for its API key, and which model should
@@ -320,7 +312,7 @@ you know what your daemon or deployment serves.
 A `:cloud` tag names a model, not a destination. With `OLLAMA_API_KEY` set the
 request goes straight to `api.ollama.com`; without one it goes to the local
 daemon, which has served cloud models on your `ollama signin` identity since
-Ollama 0.12 — so `pi --model deepseek-v3.1:671b-cloud` works with no key at all.
+Ollama 0.12 — so `pirate --model deepseek-v3.1:671b-cloud` works with no key at all.
 The `ollama/` prefix always means the local daemon, tag notwithstanding, and an
 explicit `OLLAMA_HOST` overrides both.
 
@@ -338,39 +330,136 @@ make clean      # remove binary
 
 ```bash
 # Default interactive mode
-pi
+pirate
 
 # Select a model by prefix
-pi --model claude:sonnet
-pi --model openai:gpt-4o
-pi --model gemini:gemini-2.5-pro
-pi --model mistral-large-latest
-pi --model grok-4.6
-pi --model azure/my-gpt5-deployment
-pi --model openrouter/google/gemini-3.7-flash
-pi --model ollama/gemma4:12b-mlx
-pi --model opencode/kimi-k3
-pi --model agentgateway/deepseek-v4-flash:0731-cloud
-pi --model minimax-m3:cloud # automatically detect ollama if :cloud
+pirate --model claude:sonnet
+pirate --model openai:gpt-4o
+pirate --model gemini:gemini-2.5-pro
+pirate --model mistral-large-latest
+pirate --model grok-4.6
+pirate --model azure/my-gpt5-deployment
+pirate --model openrouter/google/gemini-3.7-flash
+pirate --model ollama/gemma4:12b-mlx
+pirate --model opencode/kimi-k3
+pirate --model corp-claude/claude-opus-5   # a provider declared in config.json
+pirate --model agentgateway/deepseek-v4-flash:0731-cloud
+pirate --model minimax-m3:cloud # automatically detect ollama if :cloud
 
 # Use model roles
-pi --smol          # fast, cheap model
-pi --slow          # most capable model
-pi --plan          # planning-oriented model
+pirate --smol          # fast, cheap model
+pirate --slow          # most capable model
+pirate --plan          # planning-oriented model
 
 # Additional options
-pi --continue      # continue last session
-pi --session <id>  # resume specific session
-pi --system "..." # custom system instructions
-pi --url "..."    # custom API endpoint URL
+pirate --continue      # continue last session
+pirate --session <id>  # resume specific session
+pirate --system "..." # custom system instructions
+pirate --url "..."    # custom API endpoint URL
 
 # Non-interactive modes
-pi --mode print "explain this codebase"
-pi --mode json "list all TODO comments"
-pi --mode json --json-deltas full "..."      # one event per model chunk, not per sentence
-pi --mode socket --socket /tmp/pi-go.sock  # JSON-RPC 2.0 over a Unix socket
-pi --mode rpc                              # pi-compatible NDJSON over stdio (for pi-acp)
+pirate --mode print "explain this codebase"
+pirate --mode json "list all TODO comments"
+pirate --mode json --json-deltas full "..."      # one event per model chunk, not per sentence
+pirate --mode socket --socket /tmp/pi-go.sock  # JSON-RPC 2.0 over a Unix socket
+pirate --mode rpc                              # pi-compatible NDJSON over stdio (for pi-acp)
 ```
+
+### Agents
+
+Agents are markdown files with YAML frontmatter, discovered from
+`~/.pirate/agents/` (global) and `.pirate/agents/` (project). Same-named
+files resolve project > user > bundled; a set of agents ships bundled
+(explore, plan, task, code-reviewer, designer, claude, codex, gemini, …).
+
+```markdown
+---
+name: reviewer
+description: Reviews diffs for correctness and style
+mode: all                      # primary | subagent | all (default: subagent)
+model: corp-codex/gpt-5.6-sol  # overrides role; may carry a provider prefix
+role: smol                     # config role used when model: is absent
+tools: read, grep, find        # comma-separated; empty = all tools
+temperature: 0.2
+reasoningEffort: high          # none | minimal | low | medium | high | max
+steps: 150                     # tool-call iterations cap; 0 = unlimited
+timeout: 600000                # milliseconds
+worktree: true                 # run in an isolated git worktree
+lsp: full                      # off | min | full
+permission:                    # agent-scoped rules, layered over the global ones
+  edit: deny
+  bash:
+    "git *": allow
+---
+System prompt body in markdown.
+```
+
+`mode:` decides where an agent may run: `subagent` (default — spawned as a
+subagent only), `primary` (reserved for the main session), `all` (both).
+Primary-capable agents are switchable with **Shift+Tab** or `/agent`
+mid-conversation; `defaultAgent` in `config.json` names the one an
+interactive session starts in (an explicit `--model` keeps the flag's model
+and takes only the agent's prompt). Unknown or subagent-only `defaultAgent`
+names fall back to the built-in agent with a notice.
+
+### Prompt editor
+
+- **Shift+Enter** inserts a newline; **Enter** submits. The area grows to a
+  visual-row cap.
+- **Paste collapsing** — a large paste (more than 2 KiB or 30 lines) folds
+  into a summary placeholder (`[вставка: N строк / N КБ]`) in the input; the
+  full text is restored on submit. **Alt+V** opens the paste nearest the
+  cursor fullscreen to read it before sending.
+- **`@`-mentions** — typing `@` opens a fuzzy file picker; each mentioned
+  path is appended to the submitted prompt as a `[Referenced file: …]`
+  annotation, across lines too.
+
+### Subagents
+
+The `subagent` tool spawns subagents as child processes. While they run:
+
+- **Monitor** — **Ctrl+T** (or `/subagents`) opens a live view with one card
+  per run: agent, model, elapsed timer.
+- **Steer** — press `s` on a running agent in the monitor to send it a
+  follow-up instruction mid-run.
+- **Background** — long runs detach; the model collects their output later
+  with the `agent_result` tool, optionally waiting for completion.
+- **Prompt queue** — input typed while a response is active is queued, not
+  cancelled; queued prompts run in order when the turn ends.
+
+### Permissions
+
+The `permission` block in `config.json` gates tool calls before execution —
+the opencode-compatible format: directives on tool-name globs plus bash
+command patterns.
+
+```json
+{
+  "permission": {
+    "edit": "deny",
+    "serena*": "ask",
+    "bash": {
+      "*": "ask",
+      "git *": "allow"
+    }
+  }
+}
+```
+
+- **Directives**: `allow` passes through; `deny` blocks with an error the
+  model sees; `ask` opens the approval dialog in the TUI — and denies in
+  headless and subagent runs, where no one can answer.
+- **Matching**: `*` matches any run of characters; the most specific pattern
+  wins (`edit` beats `ed*`). For bash the command line is matched first, so
+  `"git *": allow` allows `git status` even when the bash tool itself is
+  `ask`.
+- **Layering**: agent frontmatter `permission:` blocks (see
+  [Agents](#agents)) replace same-named tool keys and append bash patterns
+  over the global rules, and are forwarded to spawned subagents
+  automatically.
+- **Approval dialog**: answer once, or "always" — the latter records an
+  allow override on that rule for the rest of the session, in memory only.
+  Persistence is always a manual edit of `config.json`.
 
 ### JSON mode
 
@@ -391,25 +480,59 @@ reconstruct the text; that is how every consumer uses it.
 
 ### Slash commands
 
-| Command         | Description                                              |
-|-----------------|----------------------------------------------------------|
-| `/help`         | Show available commands                                  |
-| `/model`        | Switch model mid-conversation                            |
-| `/session`      | List and switch sessions                                 |
-| `/branch`       | Create a conversation branch                             |
-| `/commit`       | Generate and apply a git commit                          |
-| `/compact`      | Compact session history                                  |
-| `/agents`       | Show running subagents                                   |
-| `/history`      | Show command history                                     |
-| `/plan`         | Start a Plan-Driven Development (PDD) session (auto-resumes if a spec exists) |
-| `/run`          | Execute a spec with task agent                           |
-| `/skill-create` | Create a new skill                                       |
-| `/skill-list`   | List available skills                                    |
-| `/skill-load`   | Reload skills from disk                                  |
-| `/memory`       | Memory Palace commands (see below)                       |
-| `/audit`        | Scan skills for hidden Unicode threats                   |
-| `/clear`        | Clear conversation                                       |
-| `/exit`         | Exit the agent                                           |
+The TUI autocomplete and the `/help` dialog (a searchable popup grouping every
+command and hotkey by category) are generated from one registry, so what is
+listed here is what ships.
+
+| Command                | Description                                                     |
+|------------------------|-----------------------------------------------------------------|
+| `/help`                | Show help (searchable dialog of commands and keys)              |
+| `/clear`               | Clear conversation                                              |
+| `/copy`                | Copy conversation to clipboard                                  |
+| `/model`               | Show or switch model (no args opens the picker)                 |
+| `/agent`               | Show or switch the session agent (no args opens the picker)     |
+| `/session`             | Show session info                                               |
+| `/context`             | Show context usage                                              |
+| `/branch`              | Manage branches                                                 |
+| `/compact`             | Compact context                                                 |
+| `/subagents`           | Monitor subagents (no args opens the monitor popup)             |
+| `/history`             | Command history                                                 |
+| `/login`               | Configure API keys (codex, openai, anthropic, gemini)           |
+| `/commit`              | Create commit from staged changes                               |
+| `/diff`                | Fullscreen diff viewer (working tree / last commit)             |
+| `/plan`                | Start PDD planning session                                      |
+| `/run`                 | Execute a spec with task agent                                  |
+| `/pr-autofix`          | Watch a GitHub PR's checks and fix them until it is green       |
+| `/retry`               | Re-send the prompt of a turn that failed                        |
+| `/skills`              | List skills (create, load)                                      |
+| `/theme`               | Switch theme or list themes                                     |
+| `/todos`               | Show todo/plan list                                             |
+| `/ping`                | Test LLM connectivity                                           |
+| `/model-price-refresh` | Refresh model prices from models.dev                            |
+| `/rtk`                 | Output compaction stats                                         |
+| `/mcp`                 | List MCP servers and tool status                                |
+| `/exit`, `/quit`       | Exit                                                            |
+
+`/skill-list`, `/skill-load` and `/skill-create` also work (via `/skills`)
+but stay out of autocomplete to keep it concise.
+
+### Hotkeys
+
+| Key         | Action                                                        |
+|-------------|---------------------------------------------------------------|
+| `Ctrl+T`    | Toggle the subagent monitor                                   |
+| `Shift+Tab` | Cycle the session agent                                       |
+| `Ctrl+R`    | Re-send the prompt of a turn that failed                      |
+| `Ctrl+O`    | Toggle compact tool output                                    |
+| `Ctrl+B`    | Toggle the branch popup                                       |
+| `Ctrl+H`    | Open history search                                           |
+| `Ctrl+Z`    | Suspend the process                                           |
+| `Ctrl+C`    | Cancel the running turn; press twice to quit                  |
+| `Esc`       | Dismiss an overlay or cancel the running turn                 |
+| `Up` / `Down` | Prompt history window / scroll chat; at the bottom `Down` opens the subagent monitor |
+| `PgUp` / `PgDn` | Scroll the chat by a page                                 |
+| `s`         | Steer the selected running subagent (inside the monitor)      |
+| `Alt+V`     | View the collapsed paste nearest the cursor fullscreen        |
 
 ### Plugin marketplaces
 
@@ -419,23 +542,23 @@ marketplaces work unchanged:
 
 ```bash
 # Register the Superpowers marketplace
-pi plugin marketplace add obra/superpowers-marketplace
+pirate plugin marketplace add obra/superpowers-marketplace
 
 # Install a plugin from it
-pi plugin install superpowers@superpowers-marketplace
+pirate plugin install superpowers@superpowers-marketplace
 
 # See what is installed
-pi plugin list
+pirate plugin list
 ```
 
 | Command                                          | Description                                             |
 |--------------------------------------------------|---------------------------------------------------------|
-| `pi plugin marketplace add <source>`             | Register a marketplace (GitHub `owner/repo`, git URL, or local directory) |
-| `pi plugin marketplace list`                     | List registered marketplaces                            |
-| `pi plugin install <plugin[@marketplace]>`       | Install a plugin and make its skills available          |
-| `pi plugin list`                                 | List installed plugins, versions, and commits           |
-| `pi plugin update [plugin]`                      | Update one plugin, or all of them                       |
-| `pi plugin uninstall <plugin>`                   | Remove a plugin and its files                           |
+| `pirate plugin marketplace add <source>`         | Register a marketplace (GitHub `owner/repo`, git URL, or local directory) |
+| `pirate plugin marketplace list`                 | List registered marketplaces                            |
+| `pirate plugin install <plugin[@marketplace]>`   | Install a plugin and make its skills available          |
+| `pirate plugin list`                             | List installed plugins, versions, and commits           |
+| `pirate plugin update [plugin]`                  | Update one plugin, or all of them                       |
+| `pirate plugin uninstall <plugin>`               | Remove a plugin and its files                           |
 
 Installed plugins live in `~/.pirate/plugins/`, and their skills are discovered
 automatically. **Plugin skills have lower precedence than your own**: a skill in
@@ -463,24 +586,24 @@ A 4-layer contextual memory system that gives the agent persistent awareness acr
 
 ```bash
 # Setup
-pi memory model download         # download all-MiniLM-L6-v2 embedding model
-pi memory model status           # check model path and status
-pi memory init [dir]             # create palace.db + generate mempalace.yaml
+pirate memory model download         # download all-MiniLM-L6-v2 embedding model
+pirate memory model status           # check model path and status
+pirate memory init [dir]             # create palace.db + generate mempalace.yaml
 
 # Ingest
-pi memory mine <dir>             # mine source files into drawers
-pi memory mine --convos <dir>    # mine conversation files (JSONL/text)
+pirate memory mine <dir>             # mine source files into drawers
+pirate memory mine --convos <dir>    # mine conversation files (JSONL/text)
 
 # Query
-pi memory status                 # palace overview (drawers, wings, rooms, KG)
-pi memory search <query>         # semantic or keyword search
-pi memory wake-up                # print L0+L1 context for system prompt
-pi memory recent [project]       # recent memory observations
+pirate memory status                 # palace overview (drawers, wings, rooms, KG)
+pirate memory search <query>         # semantic or keyword search
+pirate memory wake-up                # print L0+L1 context for system prompt
+pirate memory recent [project]       # recent memory observations
 
 # Knowledge Graph
-pi memory kg query <entity>      # query triples involving an entity
-pi memory kg add <s> <p> <o>     # add a fact triple
-pi memory kg timeline <entity>   # chronological timeline of facts
+pirate memory kg query <entity>      # query triples involving an entity
+pirate memory kg add <s> <p> <o>     # add a fact triple
+pirate memory kg timeline <entity>   # chronological timeline of facts
 ```
 
 **Configuration** via `mempalace.yaml` in the project root:
@@ -502,22 +625,22 @@ When the Palace is enabled, the agent also gains tool access: `palace-search`, `
 
 ```bash
 # Scan all skill files for hidden Unicode characters
-pi audit
+pirate audit
 
 # Scan with verbose output (include info-level findings)
-pi audit -v
+pirate audit -v
 
 # Output as JSON for CI pipelines
-pi audit --format json --output report.json
+pirate audit --format json --output report.json
 
 # Auto-remove dangerous characters (creates .bak backups)
-pi audit --strip
+pirate audit --strip
 
 # Preview what would be removed
-pi audit --strip --dry-run
+pirate audit --strip --dry-run
 
 # Scan a specific file
-pi audit --file path/to/SKILL.md
+pirate audit --file path/to/SKILL.md
 ```
 
 Skills are automatically scanned on load — skills with critical findings (Unicode tags, BiDi overrides, variation selector attacks) are blocked from loading.
@@ -531,6 +654,10 @@ first run; the old directory is left untouched.
 Configuration covers:
 
 - **Model roles** — Map role names to specific model strings
+- **Default agent** — `defaultAgent` names the primary agent the interactive session starts in (see [Agents](#agents))
+- **Providers** — Declared providers: custom OpenAI-compatible or Anthropic endpoints keyed by name (see below)
+- **Permission** — Tool-call gating rules (see [Permissions](#permissions))
+- **Attention** — Terminal bell and desktop notification on approvals and long-turn completion (see below)
 - **Hooks** — Shell commands triggered on tool events (e.g., post-write formatting)
 - **MCP servers** — External tool servers via Model Context Protocol
 - **Themes** — Terminal color schemes via `theme` config field
@@ -568,6 +695,22 @@ calls; `diffAdded`/`diffRemoved` tint added and removed diff lines and
 JSON or declares no color roles is reported and skipped; the running theme is
 never affected.
 
+### Attention
+
+When the TUI needs you back — a tool-approval dialog opening, or a long turn
+finishing — it rings the terminal bell and sends an OSC 777 desktop
+notification. Both channels are on by default; `attention` turns them off
+individually:
+
+```json
+{
+  "attention": {
+    "bell": true,
+    "notify": false
+  }
+}
+```
+
 ### Provider base URLs
 
 Self-hosted or LAN endpoints can be declared in config instead of exported in every shell:
@@ -587,6 +730,47 @@ Precedence is `--url` flag, then environment variable, then `baseURLs` config. T
 `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `GEMINI_BASE_URL`, `MISTRAL_BASE_URL`, `XAI_BASE_URL`, `OPENROUTER_BASE_URL`, `OPENCODE_BASE_URL`, and `OLLAMA_HOST`. A per-shell or
 CI override still takes effect. An empty env var does not mask a configured value.
 
+### Declared providers
+
+Beyond the built-ins, any OpenAI-compatible or Anthropic endpoint can be
+declared by name in the `providers` section. The entry name becomes a
+model-name prefix — `corp-claude` serves `corp-claude/claude-opus-5`:
+
+```json
+{
+  "providers": {
+    "corp-claude": {
+      "type": "anthropic",
+      "baseURL": "https://llm.corp.example/v1",
+      "apiKey": "${CORP_LLM_KEY}",
+      "headers": {
+        "x-opencode-session": "${SESSION_ID}"
+      },
+      "models": {
+        "claude-opus-5": { "contextWindow": 200000 }
+      }
+    }
+  }
+}
+```
+
+- **`type`** — `openai-compatible` (default) or `anthropic`. For
+  openai-compatible endpoints the `baseURL` is the full endpoint:
+  `/chat/completions` and `/models` are appended to it, no `/v1` is added.
+- **Credentials** — `apiKey` expands `${VAR}` from the environment or
+  `~/.pirate/.env` at load (so the secret stays out of config.json); the
+  literal value wins over `apiKeyEnv`, which names the variable to read
+  instead.
+- **`${SESSION_ID}`** in `headers` is not an env var: it survives load
+  verbatim and is replaced with the current session's id when the client is
+  built, so session-scoped headers (like prompt-cache routing) stay stable
+  per conversation.
+- **`models`** — optional per-model metadata; `contextWindow` enables
+  auto-compaction for models absent from the embedded catalog.
+- Names must not collide with a built-in provider, and every entry is
+  validated at load — a bad `baseURL` or `type` fails fast, naming the
+  entry.
+
 ### Ollama generation tuning
 
 Ollama's per-request options are left at the server's own defaults, except for an
@@ -596,7 +780,7 @@ fatal — a typo in an env var should not take down an otherwise healthy session
 
 | Env var | Ollama option | Ollama default | Purpose |
 |---|---|---|---|
-| `PI_OLLAMA_NUM_PREDICT` | `num_predict` | unlimited | Max tokens generated per turn. Pi defaults this to `16384`; `0` or less removes the cap. |
+| `PI_OLLAMA_NUM_PREDICT` | `num_predict` | unlimited | Max tokens generated per turn. Pi-rate defaults this to `16384`; `0` or less removes the cap. |
 | `PI_OLLAMA_REPEAT_PENALTY` | `repeat_penalty` | `1.1` | How strongly repeated tokens are penalised. `1.0` disables. |
 | `PI_OLLAMA_REPEAT_LAST_N` | `repeat_last_n` | `64` | How many recent tokens the penalty looks back over. `0` disables, `-1` uses the full context. |
 | `PI_OLLAMA_PRESENCE_PENALTY` | `presence_penalty` | `0.0` | Flat penalty for tokens already used. |
@@ -636,11 +820,11 @@ web_search  error: Post "https://ollama.com:443/api/web_search": net/http: TLS h
 Turn it on with the flag, or with the environment variable:
 
 ```bash
-pi --web-search-enabled "what changed in the latest Ollama release?"   # flag
-PI_WEB_SEARCH=1 pi "what changed in the latest Ollama release?"        # env
+pirate --web-search-enabled "what changed in the latest Ollama release?"   # flag
+PI_WEB_SEARCH=1 pirate "what changed in the latest Ollama release?"        # env
 ```
 
-Prefer `PI_WEB_SEARCH` when subagents matter: a subagent runs as a child `pi`
+Prefer `PI_WEB_SEARCH` when subagents matter: a subagent runs as a child `pirate`
 process whose command line carries only model, url, headers and `--lsp`, so a
 flag does not reach it, while the `PI_` prefix is forwarded to every child.
 
@@ -669,16 +853,16 @@ with `bash` when a snippet is not enough.
 
 ```bash
 # Local daemon (no key needed)
-pi --web-search-enabled "what changed in the latest Ollama release?"
+pirate --web-search-enabled "what changed in the latest Ollama release?"
 
 # Headless / CI, using the cloud search API
 export OLLAMA_API_KEY="..."
-PI_WEB_SEARCH=1 pi "what changed in the latest Ollama release?"
+PI_WEB_SEARCH=1 pirate "what changed in the latest Ollama release?"
 ```
 
 ### Custom OpenAI-compatible provider
 
-For OpenAI-compatible APIs with model names that Pi cannot infer from a prefix, explicitly set the role provider to
+For OpenAI-compatible APIs with model names that Pi-rate cannot infer from a prefix, explicitly set the role provider to
 `openai` and point `OPENAI_BASE_URL` at the custom endpoint:
 
 ```bash
@@ -697,16 +881,16 @@ export OPENAI_BASE_URL="https://api.example.com/v1"
 }
 ```
 
-Then run Pi normally:
+Then run Pi-rate normally:
 
 ```bash
-pi
+pirate
 ```
 
 You can also pass the endpoint per invocation:
 
 ```bash
-OPENAI_API_KEY="your-api-key" pi --model Qwen3.5-397B-A17B-FP8 --url https://api.example.com/v1
+OPENAI_API_KEY="your-api-key" pirate --model Qwen3.5-397B-A17B-FP8 --url https://api.example.com/v1
 ```
 
 When `--url` or `OPENAI_BASE_URL` is set, unknown model names are treated as custom OpenAI-compatible models. Setting
@@ -714,7 +898,7 @@ When `--url` or `OPENAI_BASE_URL` is set, unknown model names are treated as cus
 
 ### MCP server integration
 
-Pi supports the [Model Context Protocol](https://modelcontextprotocol.io/). Use it to extend the agent with external tools. Configure servers in
+Pi-rate supports the [Model Context Protocol](https://modelcontextprotocol.io/). Use it to extend the agent with external tools. Configure servers in
 `~/.pirate/config.json`:
 
 ```json
@@ -764,22 +948,22 @@ Or in standalone `~/.pirate/mcp.json` (Claude Desktop compatible format):
 - **HTTP/Streamable** — `url` field for cloud-based MCP servers
 - **Stdio** — `command` + `args` for local subprocess servers
 
-**Environment variable substitution:** Pi automatically expands `${ENV_VAR}` patterns in server URLs using `.pirate/.env`
+**Environment variable substitution:** Pi-rate automatically expands `${ENV_VAR}` patterns in server URLs using `.pirate/.env`
 
 ## Editor integration
 
-Pi can run as an Agent Client Protocol (ACP) server. Use it from any IDE that supports ACP.
+Pi-rate can run as an Agent Client Protocol (ACP) server. Use it from any IDE that supports ACP.
 
 ### Zed
 
-Add pi to Zed's `agent_servers` in your settings:
+Add pirate to Zed's `agent_servers` in your settings:
 
 ```json
 {
   "agent_servers": {
-    "pi": {
+    "pirate": {
       "type": "custom",
-      "command": "pi",
+      "command": "pirate",
       "args": ["acp-server", "--model", "glm-5.2:cloud"],
       "env": {}
     }
@@ -787,19 +971,19 @@ Add pi to Zed's `agent_servers` in your settings:
 }
 ```
 
-Then invoke via Zed's agent panel (`⌘⇧A` / `Ctrl+Shift+A`) and select "pi". The agent runs in the current Zed project
-directory with full access to pi's tools and memory.
+Then invoke via Zed's agent panel (`⌘⇧A` / `Ctrl+Shift+A`) and select "pirate". The agent runs in the current Zed project
+directory with full access to pirate's tools and memory.
 
 ### JetBrains IDEs
 
 JetBrains IDEs (IntelliJ IDEA, GoLand, PyCharm, WebStorm, …) discover ACP agents
-from `~/.jetbrains/acp.json`. Add pi under `agent_servers`:
+from `~/.jetbrains/acp.json`. Add pirate under `agent_servers`:
 
 ```json
 {
   "agent_servers": {
     "Pi-rate": {
-      "command": "pi",
+      "command": "pirate",
       "args": ["acp-server", "--model", "agentgateway/ollama/glm-5.3-flash:cloud"]
     }
   }
@@ -807,7 +991,7 @@ from `~/.jetbrains/acp.json`. Add pi under `agent_servers`:
 ```
 
 Restart the IDE so it picks up the file, then open the AI Assistant / agent panel and select "Pi-rate". The agent runs in
-the current project directory. `pi acp-server` accepts `--model` plus `--url`, `--header key=value` (repeatable) and
+the current project directory. `pirate acp-server` accepts `--model` plus `--url`, `--header key=value` (repeatable) and
 `--insecure`; with no `--model` it falls back to `glm-5.2:cloud`.
 
 ### VS Code
@@ -822,14 +1006,14 @@ Every ACP session's transcript is written to the same store the terminal uses
 (`~/.pirate/sessions/<session-id>/`, or `$PI_SESSIONS_DIR`), keyed by the ACP
 session id. The server implements the protocol's session lifecycle on top of it:
 
-| Method | What pi does |
+| Method | What pirate does |
 |---|---|
 | `session/load` | Replays the stored transcript to the client, then continues it |
 | `session/resume` | Continues the transcript without replaying it |
 | `session/list` | Lists stored sessions, newest first, optionally filtered by `cwd` |
 
-So an editor can restart pi — or the machine — and pick a thread up where it
-left off, and `pi --session <id>` reopens the same conversation from the terminal.
+So an editor can restart pirate — or the machine — and pick a thread up where it
+left off, and `pirate --session <id>` reopens the same conversation from the terminal.
 
 ## kagent
 
