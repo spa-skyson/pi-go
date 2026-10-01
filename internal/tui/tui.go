@@ -217,6 +217,10 @@ type model struct {
 	// See paste.go.
 	pasteViewer *pasteViewerState
 
+	// diffViewer is the fullscreen diff viewer (/diff) over the working
+	// tree or the last commit; nil when closed. See diffview.go.
+	diffViewer *diffViewerState
+
 	// steerInput is the monitor's mini-input for sending a follow-up message
 	// to a running subagent (`s` on a running row); nil when closed. See
 	// subagent_monitor.go.
@@ -1833,12 +1837,21 @@ func (m *model) handleToggleKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 // A prompt starting with "/" is excluded: those arrows drive the slash-command
 // popup instead. An open search popup never gets here either: its stack entry
 // owns Up/Down for list navigation and wins the key before the globals run.
+//
+// With a multi-line prompt the two edges belong to the input: when the cursor
+// sits on an inner display row, Up/Down move it between lines (the engine's
+// job) and never reach this handler. Only from the very first row does Up
+// open the history window, and only from the very last row does Down scroll
+// the chat — so single-line prompts behave exactly as they always did.
 func (m *model) handleHistoryKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 	if m.shouldShowSlashCommandPopup() {
 		return nil, nil, false
 	}
 	switch hotkeyIDFor(key) {
 	case "key.history-window":
+		if !m.inputModel.CursorOnFirstVisualRow() {
+			return nil, nil, false
+		}
 		if len(m.inputModel.History) == 0 {
 			m.chatModel.ScrollUp(3, m.height)
 			return m, nil, true
@@ -1846,6 +1859,9 @@ func (m *model) handleHistoryKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 		m.newSearchPopup(searchModeHistory)
 		return m, nil, true
 	case "key.monitor-down":
+		if !m.inputModel.CursorOnLastVisualRow() {
+			return nil, nil, false
+		}
 		if m.inputModel.Text == "" && m.chatModel.Scroll == 0 && m.runningSubagentCount() > 0 {
 			m.newSearchPopup(searchModeSubagents)
 			return m, nil, true
@@ -2102,6 +2118,9 @@ func (m *model) View() tea.View {
 
 	// Render components.
 	m.inputModel.SetWidth(max(0, m.width-3))
+	// The input grows with its content up to a third of the terminal and
+	// scrolls internally past that; the message viewport yields the rows.
+	m.inputModel.SetMaxHeight(max(1, m.height/3))
 	messagesView, lineKinds := m.chatModel.renderMessages(m.running)
 	statusBar := m.statusModel.Render(m.statusRenderInput())
 	inputArea := m.inputModel.View(m.loading)
@@ -2124,6 +2143,9 @@ func (m *model) View() tea.View {
 	// The paste viewer paints last: opened from the prompt, it sits on top of
 	// whatever popup happens to be live beneath it.
 	visibleMessages = m.overlayPasteViewer(visibleMessages, bodyWidth)
+	// The diff viewer (/diff) is likewise a prompt-opened fullscreen mode;
+	// it paints on top so the command works no matter what is live below.
+	visibleMessages = m.overlayDiffViewer(visibleMessages, bodyWidth)
 
 	// Note: width constraint is handled by glamour's WithWordWrap(contentWidth) in chatModel.UpdateRenderer.
 	// lipgloss.Width() counts raw bytes including invisible ANSI codes, causing wrapping issues.
@@ -2639,6 +2661,9 @@ func (m *model) applyResize() {
 	}
 	// Scene height can affect the message viewport, so clamp again after it updates.
 	m.clampScroll()
+	// The input's row cap follows the new terminal height (a third of it),
+	// so a resize re-bounds how much prompt the layout can spend.
+	m.inputModel.SetMaxHeight(max(1, m.height/3))
 	// The search popup exposes a fixed number of item rows.  Recompute that
 	// here so a resize keeps the highlighted row inside the new window —
 	// otherwise the Up/Down math still trusts the old budget and the

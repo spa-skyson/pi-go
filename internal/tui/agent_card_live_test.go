@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -151,6 +152,48 @@ func TestAgentCardHeaderNoClockWithoutStamps(t *testing.T) {
 	got := ansi.Strip(td.agentCardHeader(message{role: "tool", tool: "agent"}, paletteOrDark(td.Palette)))
 	if strings.Contains(got, "·") {
 		t.Errorf("a stamp-less card must have no clock, got %q", got)
+	}
+}
+
+// The card header names the model between the label and the clock — dim, like
+// the clock, so the agent name stays the loudest thing in the row. After the
+// done stamp the same layout carries the frozen duration. Without a model the
+// header is unchanged.
+func TestAgentCardHeaderShowsModelBetweenLabelAndClock(t *testing.T) {
+	td := ToolDisplayModel{Width: 120}
+	pal := paletteOrDark(td.Palette)
+	msg := message{
+		role: "tool", tool: "agent", agentType: "golang-pro",
+		agentTitle:   "fix the race",
+		agentModel:   "glm-5.3-flash",
+		agentStarted: time.Now().Add(-86 * time.Second),
+	}
+
+	raw := td.agentCardHeader(msg, pal)
+	got := ansi.Strip(raw)
+	if !strings.Contains(got, "agent[pi] · glm-5.3-flash · running 1m26s") {
+		t.Errorf("header = %q, want the model between label and clock", got)
+	}
+	wantDim := lipgloss.NewStyle().Foreground(pal.Faint).Render("· glm-5.3-flash")
+	if !strings.Contains(raw, wantDim) {
+		t.Errorf("model must render dim; missing %q in %q", wantDim, raw)
+	}
+
+	// After done: model, then the frozen final duration.
+	msg.agentEnded = time.Now().Add(-26 * time.Second)
+	got = ansi.Strip(td.agentCardHeader(msg, pal))
+	if !strings.Contains(got, "glm-5.3-flash · 1m0s") {
+		t.Errorf("done header = %q, want model then frozen duration", got)
+	}
+
+	// No model: exactly the old header, no stray separator.
+	msg.agentModel = ""
+	got = ansi.Strip(td.agentCardHeader(msg, pal))
+	if strings.Contains(got, "glm-5.3-flash") {
+		t.Errorf("header = %q, model must be omitted when unknown", got)
+	}
+	if !strings.Contains(got, "agent[pi] · 1m0s") {
+		t.Errorf("header without model = %q, want the plain pre-model form", got)
 	}
 }
 

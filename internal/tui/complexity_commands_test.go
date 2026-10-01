@@ -85,7 +85,7 @@ func (c *cplxTracker) CachePrefixTokens() int64    { return c.prefix }
 func TestCplxKeyRegistry_CoversCommandSet(t *testing.T) {
 	want := []string{
 		"/help", "/clear", "/copy", "/model", "/agent", "/session", "/context", "/branch",
-		"/compact", "/subagents", "/history", "/login", "/commit", "/plan", "/run",
+		"/compact", "/subagents", "/history", "/login", "/commit", "/diff", "/plan", "/run",
 		"/pr-autofix",
 		"/retry",
 		"/skills", "/skill-list", "/skill-load", "/skill-create", "/theme", "/ping",
@@ -120,7 +120,7 @@ func TestCplxKeyRegistry_CoversCommandSet(t *testing.T) {
 func TestCplxSlashCommands_DerivedOrder(t *testing.T) {
 	want := []string{
 		"/help", "/clear", "/copy", "/model", "/agent", "/session", "/context", "/branch",
-		"/compact", "/subagents", "/history", "/login", "/commit", "/plan", "/run",
+		"/compact", "/subagents", "/history", "/login", "/commit", "/diff", "/plan", "/run",
 		// After /plan, so "/p" still completes to /plan and "/pr" is
 		// unambiguous: autocomplete returns the first prefix match.
 		"/pr-autofix",

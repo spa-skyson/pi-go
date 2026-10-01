@@ -9,7 +9,7 @@ import (
 
 	"github.com/spa-skyson/pi-rate/internal/extension"
 
-	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -50,12 +50,40 @@ type InputSubmitMsg struct {
 	Mentions []string // file paths referenced via @path
 }
 
-// InputModel wraps Bubble Tea's standard textinput component with history
-// and slash-command support. All completion/mention state has been removed;
-// the textinput library handles cursor movement and editing directly.
+const (
+	// inputDefaultMaxHeight is the fallback visual-row cap used until the
+	// root model wires the real one (a third of the terminal) via
+	// SetMaxHeight. Bounds growth even for bare models in tests.
+	inputDefaultMaxHeight = 10
+
+	// inputPromptWidth is the cell width reserved for the prompt column.
+	// "> " on the first line, two spaces on continuation lines.
+	inputPromptWidth = 2
+)
+
+// inputPrompt renders the per-line prompt: the "> " glyph on the first
+// display row and a blank indent on every continuation (and scrolled filler)
+// row, so a multi-line prompt reads as one block.
+func inputPrompt(pi textarea.PromptInfo) string {
+	if pi.LineNumber == 0 {
+		return "> "
+	}
+	return "  "
+}
+
+// InputModel wraps Bubble Tea's textarea component with history and
+// slash-command support. The engine is multi-line: Enter submits,
+// Shift+Enter inserts a newline, and the area grows to a visual-row cap
+// (a third of the terminal) before scrolling internally.
 //
-// History is recorded here but not navigated here: the root model binds Up to
-// the history window (see handleKey), so the input never sees arrow keys.
+// History is recorded here but not navigated here: the root model binds Up
+// to the history window (see handleKey), so the input only sees Up/Down when
+// the cursor sits on an inner row of a multi-line prompt.
+//
+// Text and CursorPos are mirrors of the engine state, refreshed after every
+// edit (syncFromInput); ensureInput pushes them back before an edit, so
+// writes to the fields take effect on the next interaction exactly as they
+// did with the single-line engine.
 type InputModel struct {
 	Text      string
 	CursorPos int // character position (not byte offset)
@@ -74,11 +102,14 @@ type InputModel struct {
 	pastes   map[rune]pasteRecord // marker rune → full pasted text
 	pasteSeq rune                 // last issued marker number
 
-	input textinput.Model
+	input textarea.Model
 
-	// stylePaletteKey fingerprints the palette `input`'s prompt and cursor
+	// maxHeight is the visual-row cap handed to the engine by SetMaxHeight.
+	maxHeight int
+
+	// stylePaletteKey fingerprints the palette the input's prompt and cursor
 	// styles were built from, so RefreshTheme can rebuild them on a theme
-	// switch. textinput bakes its styles in at construction, so unlike the
+	// switch. The textarea bakes its styles in at construction, so unlike the
 	// lipgloss chrome they do not follow Palette on their own.
 	stylePaletteKey uint64
 }
@@ -114,8 +145,16 @@ func (im *InputModel) HandleKey(msg tea.KeyPressMsg) tea.Cmd {
 
 	switch key.Code {
 	case tea.KeyEnter:
-		// Expand first: submit, mentions and history all see the full
-		// pasted text — the placeholder exists only in the rendering.
+		if key.Mod&tea.ModShift != 0 {
+			// Shift+Enter inserts a newline. The textarea's own keymap does
+			// not know the chord (its Update treats it as a no-op), so the
+			// insertion happens here, at the engine cursor.
+			im.input.InsertString("\n")
+			im.syncFromInput()
+			return nil
+		}
+		// Enter submits. Expand first: submit, mentions and history all see
+		// the full pasted text — the placeholder exists only in the rendering.
 		text := strings.TrimSpace(im.expandMarkers(im.input.Value()))
 		if text == "" {
 			return nil
@@ -149,17 +188,46 @@ func (im *InputModel) SetWidth(width int) {
 	if width < 0 {
 		width = 0
 	}
-	pos := im.CursorPos
 	im.input.SetWidth(width)
-	// The textinput viewport only recalculates when the cursor moves outside
-	// the current bounds. After a width change (especially from the initial
-	// width=0 to a real value), the old viewport covers the full text and the
-	// cursor stays within it, so the viewport never narrows. CursorEnd forces
-	// a right-edge recalculation with the new width; SetCursor restores the
-	// actual position.
-	im.input.CursorEnd()
-	im.input.SetCursor(pos)
 	im.syncFromInput()
+}
+
+// SetMaxHeight caps the input's rendered height at rows visual rows (soft
+// wraps count). Content beyond the cap scrolls inside the textarea instead
+// of growing the layout. The root model calls this with terminalHeight/3 on
+// every resize and frame.
+func (im *InputModel) SetMaxHeight(rows int) {
+	im.ensureInput()
+	if rows < 1 {
+		rows = 1
+	}
+	if im.maxHeight == rows {
+		return
+	}
+	im.maxHeight = rows
+	im.input.MaxHeight = rows
+	// Re-clamp the current height against the new cap and keep the cursor
+	// inside the shrunken viewport.
+	im.input.SetHeight(im.input.Height())
+	im.syncFromInput()
+}
+
+// CursorOnFirstVisualRow reports whether the engine cursor sits on the very
+// first display row of the prompt (top edge, soft wraps included). The root
+// model gives Up to the history window only on that edge; any inner row
+// keeps the arrow for cursor movement.
+func (im *InputModel) CursorOnFirstVisualRow() bool {
+	im.ensureInput()
+	return im.input.Line() == 0 && im.input.LineInfo().RowOffset == 0
+}
+
+// CursorOnLastVisualRow reports whether the engine cursor sits on the very
+// last display row of the prompt (bottom edge, soft wraps included). The
+// root model gives Down to the chat scroll only on that edge.
+func (im *InputModel) CursorOnLastVisualRow() bool {
+	im.ensureInput()
+	li := im.input.LineInfo()
+	return im.input.Line() == im.input.LineCount()-1 && li.RowOffset >= li.Height-1
 }
 
 // View renders the input area.
@@ -198,11 +266,24 @@ func (im *InputModel) InsertText(text string) {
 			insert = string(r)
 		}
 	}
-	pos := im.CursorPos
-	beforeByte := charOffsetToByteOffset(im.Text, im.CursorPos)
-	im.setValue(im.Text[:beforeByte] + insert + im.Text[beforeByte:])
-	im.input.SetCursor(pos + utf8.RuneCountInString(insert))
+	// The textarea sanitizer turns a lone \r into \n, which would double
+	// every CRLF pair; normalize before the engine sees the text. Marker
+	// runes are unaffected (PUA is printable), and the engine parks the
+	// cursor right after the inserted text itself.
+	insert = normalizePasteNewlines(insert)
+	im.input.InsertString(insert)
+	im.repositionEngine()
 	im.syncFromInput()
+}
+
+// normalizePasteNewlines folds CRLF and lone CR into plain LF so the
+// textarea's sanitizer cannot double line breaks in pasted text.
+func normalizePasteNewlines(s string) string {
+	if !strings.ContainsRune(s, '\r') {
+		return s
+	}
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	return strings.ReplaceAll(s, "\r", "\n")
 }
 
 // Clear resets the input text and cursor.
@@ -216,6 +297,7 @@ func (im *InputModel) SetText(text string) {
 	im.ensureInput()
 	im.setValue(text)
 	im.input.CursorEnd()
+	im.repositionEngine()
 	im.syncFromInput()
 }
 
@@ -256,7 +338,10 @@ func (im *InputModel) Cursor() *tea.Cursor {
 }
 
 // applyPaletteStyles paints the text input's prompt and cursor from the current
-// palette and records which palette they came from.
+// palette and records which palette they came from. The value region is
+// deliberately left style-free: renderPastePlaceholders does a plain string
+// replace over the rendered view, which is only exact when marker runes appear
+// verbatim in the output.
 func (im *InputModel) applyPaletteStyles() {
 	p := paletteOrDark(im.Palette)
 	promptStyle := lipgloss.NewStyle().
@@ -265,6 +350,23 @@ func (im *InputModel) applyPaletteStyles() {
 	styles := im.input.Styles()
 	styles.Focused.Prompt = promptStyle
 	styles.Blurred.Prompt = promptStyle
+	zero := lipgloss.NewStyle()
+	styles.Focused.CursorLine = zero
+	styles.Blurred.CursorLine = zero
+	styles.Focused.Text = zero
+	styles.Blurred.Text = zero
+	styles.Focused.Base = zero
+	styles.Blurred.Base = zero
+	styles.Focused.EndOfBuffer = zero
+	styles.Blurred.EndOfBuffer = zero
+	styles.Focused.Placeholder = zero
+	styles.Blurred.Placeholder = zero
+	styles.Focused.LineNumber = zero
+	styles.Blurred.LineNumber = zero
+	styles.Focused.CursorLineNumber = zero
+	styles.Blurred.CursorLineNumber = zero
+	styles.Focused.Selection = zero
+	styles.Blurred.Selection = zero
 	styles.Cursor.Color = p.Primary
 	styles.Cursor.Shape = tea.CursorBar
 	im.input.SetStyles(styles)
@@ -287,17 +389,35 @@ func (im *InputModel) RefreshTheme() bool {
 
 func (im *InputModel) ensureInput() {
 	if im.input.KeyMap.CharacterForward.Keys() == nil {
-		im.input = textinput.New()
+		ta := textarea.New()
+		ta.ShowLineNumbers = false
+		ta.Placeholder = ""
+		ta.EndOfBufferCharacter = ' '
+		ta.CharLimit = 0
+		ta.MaxWidth = 0
+		ta.MaxContentHeight = 0 // never block input; the cap only bounds the view
+		ta.DynamicHeight = true
+		ta.MinHeight = 1
+		ta.MaxHeight = inputDefaultMaxHeight
+		ta.SetPromptFunc(inputPromptWidth, inputPrompt)
+		ta.SetVirtualCursor(false)
+		// Enter is owned by HandleKey (submit / Shift+Enter newline); the
+		// engine must never insert a newline on its own. Bracketed paste is
+		// the only paste path — it routes through InsertText so large pastes
+		// collapse into markers — so the engine's ctrl+v clipboard binding
+		// is off.
+		ta.KeyMap.InsertNewline.SetEnabled(false)
+		ta.KeyMap.Paste.SetEnabled(false)
+		ta.SetHeight(1)
+		im.input = ta
+		im.maxHeight = inputDefaultMaxHeight
 		im.applyPaletteStyles()
-		im.input.Prompt = "> "
-		im.input.SetVirtualCursor(false)
-		im.input.SetWidth(0)
 		_ = im.input.Focus()
 	}
 	if im.input.Value() != im.Text {
 		im.input.SetValue(im.Text)
 	}
-	im.input.SetCursor(im.CursorPos)
+	im.setFlatCursor(im.CursorPos)
 	im.syncFromInput()
 }
 
@@ -308,11 +428,82 @@ func (im *InputModel) setValue(text string) {
 
 func (im *InputModel) syncFromInput() {
 	im.Text = im.input.Value()
-	im.CursorPos = im.input.Position()
+	im.CursorPos = im.flatCursorPos()
 	// Editing keys that bypass InsertText (backspace on the marker rune,
 	// ctrl+u, SetText) can drop markers from the value; drop their buffer
 	// entries with them so the buffer never outlives its placeholders.
 	im.prunePastes()
+}
+
+// flatCursorPos converts the engine's (line, column) cursor into the flat
+// character position the mirror field exposes: every line before the cursor
+// contributes its runes plus one for its newline.
+func (im *InputModel) flatCursorPos() int {
+	pos := im.input.Column()
+	line := im.input.Line()
+	if line == 0 {
+		return pos
+	}
+	for i, l := range strings.Split(im.input.Value(), "\n") {
+		if i >= line {
+			break
+		}
+		pos += utf8.RuneCountInString(l) + 1
+	}
+	return pos
+}
+
+// setFlatCursor moves the engine cursor to the flat character position pos.
+// The textarea has no flat-position API, so the walk goes MoveToBegin and
+// then down one visual row at a time until the target logical line is
+// reached (every row crossing lands at column 0), with SetCursorColumn
+// fixing the final offset. A no-op when the cursor is already there, which
+// is the steady state in production — the mirror and the engine agree after
+// every edit.
+func (im *InputModel) setFlatCursor(pos int) {
+	if im.input.Value() == "" || im.flatCursorPos() == pos {
+		return
+	}
+	lines := strings.Split(im.input.Value(), "\n")
+	if pos < 0 {
+		pos = 0
+	}
+	row, col := len(lines)-1, 0
+	found := false
+	for i, l := range lines {
+		w := utf8.RuneCountInString(l)
+		if pos <= w {
+			row, col, found = i, pos, true
+			break
+		}
+		pos -= w + 1
+	}
+	if !found {
+		// pos past the end: last line, remainder as the column;
+		// SetCursorColumn clamps it to the line length.
+		col = max(0, pos)
+	}
+	ta := &im.input
+	ta.MoveToBegin()
+	// Soft wraps make one logical line span several visual rows; walk until
+	// the logical line index matches. The bound is generous (wraps can never
+	// exceed the rune count) and only guards a stuck loop on the last line.
+	for steps := utf8.RuneCountInString(im.Text) + len(lines) + 1; ta.Line() < row && steps > 0; steps-- {
+		ta.CursorDown()
+	}
+	ta.SetCursorColumn(col)
+	im.repositionEngine()
+}
+
+// repositionEngine re-runs the engine's update tail after a programmatic
+// edit or cursor walk: SetValue/InsertString and the cursor primitives move
+// the cursor but leave the viewport scrolled to its old window, and the
+// scroll itself only re-anchors once the viewport content is rebuilt — which
+// happens inside Update. An empty key press matches no binding, so the call
+// is exactly that tail: recalculate height, rebuild content, keep the cursor
+// in view.
+func (im *InputModel) repositionEngine() {
+	im.input, _ = im.input.Update(tea.KeyPressMsg{})
 }
 
 func isLineStartKey(key tea.Key) bool {

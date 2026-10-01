@@ -1969,6 +1969,11 @@ func (m *model) handleAgentSubEvent(msg agentSubEventMsg) (tea.Model, tea.Cmd) {
 			// against the orchestrator's own StartedAt is invisible at a
 			// seconds-granularity timer.
 			m.chatModel.Messages[idx].agentStarted = time.Now()
+			// The model the child runs on, resolved the same way the spawn
+			// path did; background spawns land in this branch too.
+			if m.cfg.Orchestrator != nil {
+				m.chatModel.Messages[idx].agentModel = m.cfg.Orchestrator.AgentModel(msg.content)
+			}
 		}
 	} else {
 		if msg.kind == "done" && msg.background {

@@ -89,6 +89,7 @@ var keyRegistry = []keyBinding{
 	{ID: "cmd.history", Key: "/history", Description: "Command history", Category: catSession, Kind: kindSlash},
 	{ID: "cmd.login", Key: "/login", Description: "Configure API keys (codex, openai, anthropic, gemini)", Category: catSession, Kind: kindSlash},
 	{ID: "cmd.commit", Key: "/commit", Description: "Create commit from staged changes", Category: catGit, Kind: kindSlash},
+	{ID: "cmd.diff", Key: "/diff", Description: "Fullscreen diff viewer (working tree / last commit)", Category: catGit, Kind: kindSlash},
 	{ID: "cmd.plan", Key: "/plan", Description: "Start PDD planning session", Category: catGit, Kind: kindSlash},
 	{ID: "cmd.run", Key: "/run", Description: "Execute a spec with task agent (verifies subagent exit status before merging)", Category: catGit, Kind: kindSlash},
 	// After /run and /pr-autofix: autocomplete returns the first prefix
@@ -247,6 +248,7 @@ func bindSlashHandlers() {
 		"cmd.history":             slashCmdArgs((*model).handleHistoryCommand),
 		"cmd.login":               (*model).handleLoginCommand,
 		"cmd.commit":              slashCmdBare((*model).handleCommitCommand),
+		"cmd.diff":                slashCmdBare((*model).openDiffViewer),
 		"cmd.plan":                (*model).handlePlanCommand,
 		"cmd.run":                 (*model).handleRunCommand,
 		"cmd.pr-autofix":          (*model).handlePRAutofixCommand,
