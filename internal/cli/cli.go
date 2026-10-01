@@ -377,10 +377,12 @@ func resolveRuntimeModel(cfg config.Config, modelName, providerName string) (pro
 
 // namedModelInfo resolves a model that belongs to a user-declared provider —
 // an entry in config.json's "providers" section. Either the model name itself
-// carries the provider prefix ("corp-claude/claude-opus-5", which is also the
-// spelling a switched session persists, so a resumed model matches it too) or
-// the role names such a provider for a bare model. ok is false when neither
-// applies and the built-in resolution should run.
+// carries the provider prefix ("corp-claude/claude-opus-5" — the spelling a
+// /model switch persists) or the role names such a provider for a bare model.
+// A resumed session is neither: its meta records the bare llm.Name() plus the
+// provider separately, so resolveRuntimeModelForRole re-runs this with the
+// recorded provider name. ok is false when neither applies and the built-in
+// resolution should run.
 //
 // The declared provider's endpoint is used unless --url overrides it, and the
 // key comes from the provider entry (literal or env). internal/config and
@@ -439,6 +441,29 @@ func resolveRuntimeModelForRole(cfg config.Config, modelName, providerName, acti
 				}
 				baseURL = resumedURL
 			}
+		}
+	}
+	// A session backed by a user-declared provider persists the bare model
+	// name (meta.Model is llm.Name(), which carries no "provider/" prefix),
+	// so the namedModelInfo call above missed it: the name is bare and
+	// providerName is still the config's default, not the recorded one.
+	// Re-run the named resolution against the provider the session recorded —
+	// without it the fallback below built an Info with no Protocol and
+	// NewLLM failed with "unsupported provider: zai-coding-plan". A recorded
+	// built-in provider (ollama, agentgateway, openai) is not declared in
+	// config, misses here, and keeps the fallback below.
+	if resumedProvider != "" {
+		if info, _, declaredURL, ok := namedModelInfo(cfg, modelName, resumedProvider); ok {
+			if err := provider.ValidateModel(info); err != nil {
+				return provider.Info{}, "", fmt.Errorf("model validation: %w", err)
+			}
+			// The endpoint recorded with the session is what actually served
+			// it; the provider's declared URL only fills a blank.
+			if baseURL == "" {
+				baseURL = declaredURL
+			}
+			info.BaseURL = baseURL
+			return info, baseURL, nil
 		}
 	}
 	// An explicit provider prefix on the model name wins over the role's

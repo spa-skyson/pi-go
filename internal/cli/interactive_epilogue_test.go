@@ -20,7 +20,7 @@ func TestPrintSessionEpilogue(t *testing.T) {
 		{
 			name:      "writes session and resume command",
 			sessionID: "260930-1200-abcd",
-			want:      "\nSession: 260930-1200-abcd\nResume:  pi --session 260930-1200-abcd\n",
+			want:      "\nSession: 260930-1200-abcd\nResume:  pirate --session 260930-1200-abcd\n",
 		},
 		{
 			name:      "empty session id prints nothing",
