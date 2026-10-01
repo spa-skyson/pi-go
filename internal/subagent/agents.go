@@ -121,6 +121,7 @@ type AgentDiscoveryResult struct {
 // temperature: 0.3
 // reasoningEffort: high
 // steps: 150
+// timeout: 30m
 // mode: primary
 // ---
 // Markdown instruction body...
@@ -129,7 +130,10 @@ type AgentDiscoveryResult struct {
 // provider's model or a declared one ("provider/model", see the `providers`
 // section of config.json). `temperature:`, `reasoningEffort:` and `steps:`
 // tune the child's sampling and iteration budget; unusable values warn and
-// leave the field at its zero value (= inherit / unlimited).
+// leave the field at its zero value (= inherit / unlimited). `timeout:` is
+// milliseconds by default and also takes unit suffixes — 30m, 1h, 90s,
+// 500ms; a value resolving to under a second warns and falls back to the
+// default.
 func ParseAgentFile(path string) (AgentConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -370,14 +374,26 @@ func unquoteFrontmatter(s string) string {
 // parseAgentTimeout reads a frontmatter `timeout:` value, reporting ok=false
 // when it is unusable and the default should stand instead.
 //
-// The unit is milliseconds, which reads as seconds at a glance — a bundled
-// agent shipped `timeout: 30` and was SIGKILLed 30ms in, every time, unable to
-// emit a single token. Anything under a second cannot be deliberate, so treat
-// it as the unit mistake it is rather than honoring a value that guarantees the
-// agent never runs.
+// The value is a bare count of milliseconds ("600000", the original spelling)
+// or a number with one unit suffix — "1h", "45m", "90s", "500ms". The suffix
+// is case-insensitive and a space between the number and the unit is
+// tolerated ("45 m"); combined forms ("1h30m") are not supported and fall
+// back to the default with a warning.
+//
+// The result is still guarded against sub-second values, explicit "500ms"
+// included: the unit is milliseconds, which reads as seconds at a glance — a
+// bundled agent shipped `timeout: 30` and was SIGKILLed 30ms in, every time,
+// unable to emit a single token. Anything under a second cannot be deliberate,
+// so treat it as the unit mistake it is rather than honoring a value that
+// guarantees the agent never runs.
 func parseAgentTimeout(agentName, value string) (int, bool) {
-	ms, err := strconv.Atoi(value)
-	if err != nil || ms <= 0 {
+	ms, err := parseTimeoutMs(value)
+	if err != nil {
+		slog.Warn("subagent: unusable timeout ignored",
+			"agent", agentName, "timeout", value, "using", "default")
+		return 0, false
+	}
+	if ms <= 0 {
 		return 0, false
 	}
 	if ms < minAgentTimeoutMs {
@@ -386,6 +402,46 @@ func parseAgentTimeout(agentName, value string) (int, bool) {
 		return 0, false
 	}
 	return ms, true
+}
+
+// timeoutUnitMs maps a `timeout:` unit suffix to its length in milliseconds.
+var timeoutUnitMs = map[string]int{
+	"ms": 1,
+	"s":  1000,
+	"m":  60 * 1000,
+	"h":  60 * 60 * 1000,
+}
+
+// parseTimeoutMs converts a `timeout:` value to milliseconds: a bare integer
+// counts as milliseconds, otherwise an integer followed by exactly one unit
+// suffix (ms, s, m, h — case-insensitive, surrounding space tolerated).
+// Combined forms ("1h30m") and anything non-numeric are an error.
+func parseTimeoutMs(value string) (int, error) {
+	v := strings.ToLower(strings.TrimSpace(value))
+	i := 0
+	if i < len(v) && (v[i] == '-' || v[i] == '+') {
+		i++
+	}
+	for i < len(v) && v[i] >= '0' && v[i] <= '9' {
+		i++
+	}
+	ms, err := strconv.Atoi(v[:i])
+	if err != nil {
+		return 0, err
+	}
+	unit := strings.TrimSpace(v[i:])
+	if unit == "" {
+		return ms, nil
+	}
+	factor, ok := timeoutUnitMs[unit]
+	if !ok {
+		return 0, fmt.Errorf("unknown unit %q (want ms, s, m or h, or bare milliseconds)", unit)
+	}
+	scaled := ms * factor
+	if scaled/factor != ms {
+		return 0, fmt.Errorf("timeout %q overflows milliseconds", value)
+	}
+	return scaled, nil
 }
 
 // parseAgentTemperature reads a frontmatter `temperature:` value, reporting

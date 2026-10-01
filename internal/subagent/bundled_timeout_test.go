@@ -113,3 +113,57 @@ body
 		t.Errorf("resolved absolute = %v, want 10m", got.Absolute)
 	}
 }
+
+// TestParseAgentTimeoutSuffixes pins the human-readable `timeout:` spellings:
+// unit suffixes (1h/45m/90s/500ms — case-insensitive, "45 m" tolerated) plus
+// the bare-milliseconds backcompat form. The sub-second guard applies after
+// conversion, so an explicit `500ms` is rejected exactly like the bare `30`
+// that started it all: no agent run is over in under a second on purpose.
+func TestParseAgentTimeoutSuffixes(t *testing.T) {
+	tests := []struct {
+		value  string
+		wantMs int
+		wantOK bool
+	}{
+		{"1h", 3600000, true},
+		{"45m", 2700000, true},
+		{"90s", 90000, true},
+		{"2H", 7200000, true},
+		{"45 m", 2700000, true},
+		{"3600000", 3600000, true}, // bare milliseconds still honored
+		{"500ms", 0, false},        // explicit but sub-second: the guard still applies
+		{"1h30m", 0, false},        // combined forms are not parsed
+		{"abc", 0, false},
+		{"", 0, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			gotMs, gotOK := parseAgentTimeout("agent", tt.value)
+			if gotMs != tt.wantMs || gotOK != tt.wantOK {
+				t.Errorf("parseAgentTimeout(%q) = (%d, %v), want (%d, %v)",
+					tt.value, gotMs, gotOK, tt.wantMs, tt.wantOK)
+			}
+		})
+	}
+}
+
+// TestParseAgentContentTimeoutSuffix drives the suffix through the real
+// frontmatter path, the way an author writes it.
+func TestParseAgentContentTimeoutSuffix(t *testing.T) {
+	const def = `---
+name: patient-suffix
+description: test
+role: smol
+timeout: 30m
+---
+body
+`
+	cfg, err := parseAgentContent(def, "test.md")
+	if err != nil {
+		t.Fatalf("parseAgentContent: %v", err)
+	}
+	if cfg.Timeout != 30*60*1000 {
+		t.Errorf("Timeout = %d, want %d (30m)", cfg.Timeout, 30*60*1000)
+	}
+}
