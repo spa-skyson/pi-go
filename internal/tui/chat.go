@@ -92,6 +92,7 @@ func (c *ChatModel) renderWelcome(p Palette) string {
 		// already-open popup — advertising a cycle from the prompt was the
 		// promise bug #8 is about.
 		dim.Render("  Press ") + cmd.Render("@") + dim.Render(" to mention files"),
+		dim.Render("  Press ") + cmd.Render("Shift+Enter") + dim.Render(" for a new line"),
 	}
 	return strings.Join(lines, "\n")
 }
@@ -150,7 +151,12 @@ type message struct {
 	// configured agent name (e.g. "istio-agent") so the card reads
 	// "agent[istio-agent]" instead of collapsing to "agent[pi]". Empty for
 	// subagent cards, which derive the label from agentType.
-	agentLabel    string
+	agentLabel string
+	// agentModel is the model the subagent runs on, resolved from the
+	// orchestrator when the spawn event binds the card; the header shows it
+	// dim between the label and the clock. Empty for cards without a spawn
+	// binding (restored sessions, stamp-less events).
+	agentModel    string
 	pipelineID    string // pipeline ID for grouping
 	pipelineMode  string // "single", "parallel", "chain"
 	pipelineStep  int    // 1-based step in pipeline
@@ -213,6 +219,7 @@ func (m *message) renderKey(width int, compactTools, hasSeparator, streamingPlac
 	h = fnvStr(h, m.agentType)
 	h = fnvStr(h, m.agentTitle)
 	h = fnvStr(h, m.agentLabel)
+	h = fnvStr(h, m.agentModel)
 	h = fnvStr(h, m.pipelineID)
 	h = fnvStr(h, m.pipelineMode)
 	for _, ev := range m.agentEvents {

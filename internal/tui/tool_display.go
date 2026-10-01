@@ -269,13 +269,21 @@ func (t *ToolDisplayModel) agentCardHeader(msg message, p Palette) string {
 	if label != "" {
 		b.WriteString(typeStyle.Render("[" + label + "]"))
 	}
+	// The model the agent runs on, dim like the clock so the agent name stays
+	// the loudest thing in the row. Omitted entirely when unknown.
+	model := msg.agentModel
 	// The card's clock: "· running 1m26s" while the agent is live, the frozen
-	// final duration once done. It sits between the label and the title, and
-	// the title is fitted to the width that is left.
+	// final duration once done. It sits after the model, and the title is
+	// fitted to the width that is left.
 	timer := agentCardTimer(msg)
 	reserve := 0
+	if model != "" {
+		reserve += len(" · ") + len(model)
+		b.WriteString(" ")
+		b.WriteString(lipgloss.NewStyle().Foreground(p.Faint).Render("· " + model))
+	}
 	if timer != "" {
-		reserve = len(" · ") + len([]rune(timer))
+		reserve += len(" · ") + len([]rune(timer))
 		b.WriteString(" ")
 		b.WriteString(lipgloss.NewStyle().Foreground(p.Faint).Render("· " + timer))
 	}

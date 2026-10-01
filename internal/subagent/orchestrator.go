@@ -312,6 +312,22 @@ func (o *Orchestrator) LookupAgent(name string) (AgentConfig, error) {
 	return ac, nil
 }
 
+// AgentModel returns the model string the named agent spawns on — the same
+// raw resolution the Spawn path applies (frontmatter `model:` wins, otherwise
+// the agent's role), so callers can show the child's model without
+// duplicating the rules. Empty for an unknown agent or an unresolvable role.
+func (o *Orchestrator) AgentModel(name string) string {
+	agent, err := o.LookupAgent(name)
+	if err != nil {
+		return ""
+	}
+	model, err := agentSpawnModel(o.cfg, agent)
+	if err != nil {
+		return ""
+	}
+	return model
+}
+
 // SpawnWithRetry spawns a subagent with automatic retry on crash (up to maxRetries).
 // It monitors the subagent and re-spawns if the subagent crashes with status "failed" or "killed".
 // Returns the final events channel, agentID, and error (nil on success).
