@@ -31,6 +31,11 @@ type coreConfig struct {
 	// with the new aggregated state. The caller is responsible for non-blocking
 	// delivery (buffered channel, or drop-on-overflow).
 	todoNotifier func(TodoState)
+	// questionNotifier, when non-nil, receives each question tool request;
+	// the tool then blocks on the request's Reply channel until the TUI
+	// dialog answers it or the turn context is canceled. nil keeps the
+	// headless behavior: the tool returns canceled immediately.
+	questionNotifier func(QuestionRequest)
 }
 
 // WithBashSupervisor makes the bash tool use a caller-owned supervisor, so the
@@ -61,6 +66,15 @@ func WithSessionID(id string) CoreOption {
 // buffered channel, or drop on overflow).
 func WithTodoNotifier(fn func(TodoState)) CoreOption {
 	return func(c *coreConfig) { c.todoNotifier = fn }
+}
+
+// WithQuestionNotifier wires the question tool to an interactive answerer
+// (the TUI dialog): each request is handed to fn and the tool blocks on the
+// request's Reply until the dialog answers it or the turn is canceled. Pass
+// nil (or omit the option) for non-interactive sessions — the tool then
+// returns canceled immediately instead of blocking forever.
+func WithQuestionNotifier(fn func(QuestionRequest)) CoreOption {
+	return func(c *coreConfig) { c.questionNotifier = fn }
 }
 
 // WithWebSearch registers the web_search tool.
@@ -150,6 +164,15 @@ func CoreTools(sandbox *Sandbox, opts ...CoreOption) ([]tool.Tool, error) {
 		return nil, err
 	}
 	tools = append(tools, sessionStatsTool)
+
+	// Add the question tool. It registers unconditionally: without a
+	// notifier it answers immediately (canceled + note), so advertising it
+	// can never hand the model a call that hangs.
+	questionTool, err := newQuestionTool(cfg.questionNotifier)
+	if err != nil {
+		return nil, err
+	}
+	tools = append(tools, questionTool)
 
 	// Add todo_write/todo_read when a session ID is configured.
 	if cfg.sessionID != "" {
