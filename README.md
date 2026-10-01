@@ -383,7 +383,7 @@ tools: read, grep, find        # comma-separated; empty = all tools
 temperature: 0.2
 reasoningEffort: high          # none | minimal | low | medium | high | max
 steps: 150                     # tool-call iterations cap; 0 = unlimited
-timeout: 600000                # milliseconds
+timeout: 600000                # ms; accepts 1h/30m/90s/500ms suffixes
 worktree: true                 # run in an isolated git worktree
 lsp: full                      # off | min | full
 permission:                    # agent-scoped rules, layered over the global ones
