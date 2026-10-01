@@ -573,16 +573,21 @@ func TestServerPromptWithSessionID(t *testing.T) {
 	cancel()
 }
 
-// waitForSocket waits for the socket file to appear.
+// waitForSocket waits for the server to create its socket file, polling until
+// it appears or the budget elapses. The budget is generous because on loaded
+// CI runners goroutine scheduling can delay the server's Listen well past a
+// sub-second window (Windows flake: "socket ... did not appear").
 func waitForSocket(t *testing.T, path string) {
 	t.Helper()
-	for i := 0; i < 50; i++ {
+	const budget = 10 * time.Second
+	deadline := time.Now().Add(budget)
+	for time.Now().Before(deadline) {
 		if _, err := os.Stat(path); err == nil {
 			return
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
-	t.Fatalf("socket %s did not appear", path)
+	t.Fatalf("socket %s did not appear within %s", path, budget)
 }
 
 func TestServerSessionList(t *testing.T) {
