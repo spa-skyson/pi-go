@@ -2508,6 +2508,11 @@ func applyTransportOptions(opts *provider.LLMOptions, cfg config.Config, info pr
 	// function. A provider added to the switch in NewLLM without a stop here
 	// would silently send unpaced.
 	opts.RateLimit = cfg.ResolveRateLimits(info.Provider, info.Model)
+
+	// Same reasoning, same funnel: the stream-idle watch is built into every
+	// model NewLLM returns, so the budget has to ride the options or the
+	// watch stays off everywhere.
+	opts.StreamIdleTimeout = cfg.ResolveStreamIdleTimeout()
 }
 
 // convertHooks converts config.HookConfig to extension.HookConfig.

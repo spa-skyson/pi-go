@@ -141,6 +141,46 @@ func TestWithRetryTransientThenSuccess(t *testing.T) {
 	}
 }
 
+// The stream-idle failure (issue #37) must ride the same budget as any other
+// transient: retried while the run has produced nothing, passed through as a
+// run-ending failure once it has. The wording matches what the provider's
+// idleStreamModel emits — this is the seam where the two layers meet.
+func TestWithRetryIdleStreamThenSuccess(t *testing.T) {
+	idleErr := errors.New("llm stream idle: no stream data for 1m30s")
+	if !isTransient(idleErr) {
+		t.Fatalf("agent classification rejected the idle error %q", idleErr)
+	}
+
+	ev := newTestEvent("hello")
+	calls := 0
+	cfg := RetryConfig{MaxRetries: 3, InitialDelay: time.Millisecond, MaxDelay: time.Millisecond}
+
+	runFn := func() iter.Seq2[*session.Event, error] {
+		return func(yield func(*session.Event, error) bool) {
+			calls++
+			if calls == 1 {
+				yield(nil, idleErr)
+				return
+			}
+			yield(ev, nil)
+		}
+	}
+
+	var collected []*session.Event
+	for ev, err := range WithRetry(cfg, runFn) {
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		collected = append(collected, ev)
+	}
+	if calls != 2 {
+		t.Errorf("expected the idle failure to be retried once (2 calls), got %d", calls)
+	}
+	if len(collected) != 1 {
+		t.Errorf("expected 1 event after the retry, got %d", len(collected))
+	}
+}
+
 func TestWithRetryExhausted(t *testing.T) {
 	cfg := RetryConfig{MaxRetries: 2, InitialDelay: time.Millisecond, MaxDelay: time.Millisecond}
 

@@ -151,6 +151,12 @@ var transientPatterns = []string{
 	"internal_error",
 	"unexpected eof",
 	"unexpected end of json input",
+
+	// A stream that went silent — the provider's own idle timeout aborted it
+	// (internal/provider idleStreamModel). Retryable by construction: the
+	// request was already accepted once, and the observed TTFT failures this
+	// guards against clear on a re-send (issue #37).
+	"llm stream idle",
 }
 
 // status402Re matches HTTP 402 as a standalone status token: the code is

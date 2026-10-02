@@ -122,6 +122,10 @@
 
   // Budgets and guards.
   "maxDailyTokens": 50000000,
+  // Abort an LLM stream that delivers no chunks for this many milliseconds
+  // and hand the failure to the retry budget. Default 90000 (90s); 0 turns
+  // the abort off. PI_STREAM_IDLE_TIMEOUT_MS overrides per process.
+  // "streamIdleTimeout": 60000,
   "insecureSkipTLS": false,
   // "caCertPath": "/etc/ssl/company-proxy.pem",
   "traceHTTP": false

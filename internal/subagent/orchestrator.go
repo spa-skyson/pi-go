@@ -375,6 +375,17 @@ func effectiveSpawnTimeout(agent AgentConfig, input SpawnInput) int {
 	return agent.Timeout
 }
 
+// streamIdleEnv renders an agent's frontmatter `streamIdleTimeout:` as the
+// child env override the config resolver reads (EnvStreamIdleTimeoutMS).
+// Nil frontmatter renders nothing — absence is inherit, "0" is off — and
+// append accepts the empty slice, so the caller needs no nil check.
+func streamIdleEnv(agent AgentConfig) []string {
+	if agent.StreamIdleTimeout == nil {
+		return nil
+	}
+	return []string{fmt.Sprintf("%s=%d", config.EnvStreamIdleTimeoutMS, *agent.StreamIdleTimeout)}
+}
+
 // streamStart is the synchronous handshake of SpawnWithInputFallback: the
 // first attempt that produced a live event stream, or the failure when no
 // attempt ever did.
@@ -759,6 +770,13 @@ func (o *Orchestrator) Spawn(ctx context.Context, input SpawnInput) (<-chan Even
 				"agent", agent.Name, "error", err)
 		}
 	}
+
+	// The child's stream-idle budget: the frontmatter value rides the
+	// environment — nil means absent (the child keeps its own config or the
+	// default), 0 means explicitly off — because it governs the child's own
+	// LLM streams and the child is a separate pi process that never sees
+	// this agent's frontmatter.
+	spawnOpts.Env = append(spawnOpts.Env, streamIdleEnv(agent)...)
 
 	proc, err := o.dispatchSpawn(ctx, spawnOpts, agent.Name)
 	if err != nil {

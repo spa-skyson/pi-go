@@ -343,6 +343,9 @@ func buildSessionLLM(ctx context.Context, rt RuntimeConfig, cfg config.Config) (
 		// as a terminal session, so leaving this path unpaced would let the
 		// two of them exhaust a window neither could see the other filling.
 		RateLimit: cfg.ResolveRateLimits(info.Provider, info.Model),
+		// Watched like them too: a gateway stalling before its first token
+		// hangs an editor session exactly as it hangs a terminal one.
+		StreamIdleTimeout: cfg.ResolveStreamIdleTimeout(),
 	})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("creating LLM provider: %w", err)

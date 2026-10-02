@@ -407,6 +407,73 @@ Agent with a 30s timeout.`
 	}
 }
 
+func TestParseAgentFile_WithStreamIdleTimeout(t *testing.T) {
+	tmpDir := t.TempDir()
+	write := func(t *testing.T, body string) AgentConfig {
+		t.Helper()
+		path := filepath.Join(tmpDir, "idle.md")
+		if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+			t.Fatal(err)
+		}
+		agent, err := ParseAgentFile(path)
+		if err != nil {
+			t.Fatalf("ParseAgentFile failed: %v", err)
+		}
+		return agent
+	}
+
+	t.Run("unit suffix resolves to ms", func(t *testing.T) {
+		agent := write(t, `---
+name: idle-agent
+description: Agent with a stream idle budget
+role: smol
+streamIdleTimeout: 45s
+---
+Body.`)
+		if agent.StreamIdleTimeout == nil || *agent.StreamIdleTimeout != 45000 {
+			t.Errorf("StreamIdleTimeout = %v, want 45000", agent.StreamIdleTimeout)
+		}
+	})
+
+	t.Run("bare zero disables", func(t *testing.T) {
+		agent := write(t, `---
+name: idle-agent
+description: Agent with the idle abort off
+role: smol
+streamIdleTimeout: 0
+---
+Body.`)
+		if agent.StreamIdleTimeout == nil || *agent.StreamIdleTimeout != 0 {
+			t.Errorf("StreamIdleTimeout = %v, want 0 (explicit off)", agent.StreamIdleTimeout)
+		}
+	})
+
+	t.Run("absent inherits", func(t *testing.T) {
+		agent := write(t, `---
+name: idle-agent
+description: Agent without the key
+role: smol
+---
+Body.`)
+		if agent.StreamIdleTimeout != nil {
+			t.Errorf("StreamIdleTimeout = %v, want nil (inherit)", *agent.StreamIdleTimeout)
+		}
+	})
+
+	t.Run("sub-second value refused", func(t *testing.T) {
+		agent := write(t, `---
+name: idle-agent
+description: Agent with a unit mistake
+role: smol
+streamIdleTimeout: 300
+---
+Body.`)
+		if agent.StreamIdleTimeout != nil {
+			t.Errorf("StreamIdleTimeout = %v, want nil (300ms is a seconds typo)", *agent.StreamIdleTimeout)
+		}
+	})
+}
+
 func TestParseAgentFile_NoFrontmatter(t *testing.T) {
 	tmpDir := t.TempDir()
 	agentFile := filepath.Join(tmpDir, "no-fm.md")
