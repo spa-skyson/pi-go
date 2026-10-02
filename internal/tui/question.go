@@ -74,7 +74,7 @@ func (m *model) handleQuestionRequest(msg questionRequestMsg) (tea.Model, tea.Cm
 	m.openOverlay(overlayQuestion)
 	// Attention first: the loop is blocked until the dialog is answered, so
 	// a user who switched away needs the bell/notification to come back.
-	return m, tea.Batch(m.attentionCmd("π Pi-rate", "Question: "+truncateLabel(msg.req.Question, 60)),
+	return m, tea.Batch(m.attentionCmd("☠ Pi-rate", "Question: "+truncateLabel(msg.req.Question, 60)),
 		waitForQuestion(m.cfg.QuestionCh))
 }
 
