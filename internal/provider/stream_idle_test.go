@@ -232,3 +232,96 @@ func TestStreamIdleConsumerStopEndsCleanly(t *testing.T) {
 		t.Fatal("watch did not return after the consumer stopped ranging")
 	}
 }
+
+// boundaryModel yields three chunks on a fixed schedule from the call start:
+// the first is handed to the consumer, the second lands in the watch's
+// buffered channel while the consumer holds the watch inside its first
+// yield, and the third arrives once the watch is back to watching.
+type boundaryModel struct{}
+
+func (boundaryModel) Name() string { return "boundary" }
+
+func (boundaryModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+	return func(yield func(*model.LLMResponse, error) bool) {
+		start := time.Now()
+		for _, at := range []time.Duration{3 * time.Millisecond, 6 * time.Millisecond, 60 * time.Millisecond} {
+			select {
+			case <-ctx.Done():
+				yield(nil, ctx.Err())
+				return
+			case <-time.After(time.Until(start.Add(at))):
+			}
+			if !yield(&model.LLMResponse{
+				Partial: true,
+				Content: &genai.Content{Role: string(genai.RoleModel), Parts: []*genai.Part{{Text: "x"}}},
+			}, nil) {
+				return
+			}
+		}
+	}
+}
+
+// A chunk and the idle budget can go ready together; select picks between
+// ready cases at random, so an unfixed watch aborts a live stream on a coin
+// flip and drops the chunk it was delivering. Each round engineers that tie:
+// the consumer parks the watch inside its first yield past the timer's fire,
+// with the second chunk already buffered, so both select cases are ready
+// when the watch resumes. 25 rounds make an unfixed watch fail with
+// probability 1-2^-25; a fixed watch delivers all three chunks every time.
+func TestStreamIdleRacingChunkBeatsIdleAbort(t *testing.T) {
+	const (
+		idle   = 30 * time.Millisecond
+		hold   = 45 * time.Millisecond // past the fire, chunk 2 long buffered
+		rounds = 25
+	)
+
+	for i := 0; i < rounds; i++ {
+		watched := idleStreamModel{inner: boundaryModel{}, timeout: idle, tick: 0}
+
+		start := time.Now()
+		got := 0
+		for _, err := range watched.GenerateContent(context.Background(), nil, true) {
+			if err != nil {
+				t.Fatalf("round %d: live stream aborted at the timer boundary: %v", i, err)
+			}
+			got++
+			if got == 1 {
+				// Park the watch here until the idle budget has fired
+				// with chunk 2 already sitting in its buffer.
+				if d := hold - time.Since(start); d > 0 {
+					time.Sleep(d)
+				}
+			}
+		}
+		if got != 3 {
+			t.Fatalf("round %d: delivered %d chunks, want all 3", i, got)
+		}
+	}
+}
+
+// The watch is streaming-only: a non-streaming call that outlives the budget
+// passes through untouched at any timeout. Autocompact and summarize call
+// GenerateContent with stream=false and have no retry budget, so a
+// whole-call abort would silently degrade them on slow gateways; issue #37
+// is about streams.
+func TestStreamIdleNonStreamingPassesThrough(t *testing.T) {
+	var ticks atomic.Int64
+	ctx := WithStreamHeartbeat(context.Background(), func() { ticks.Add(1) })
+
+	inner := &stallModel{chunks: 1, delay: 60 * time.Millisecond}
+	watched := idleStreamModel{inner: inner, timeout: 20 * time.Millisecond, tick: 5 * time.Millisecond}
+
+	resps, errs := drainWatch(watched.GenerateContent(ctx, nil, false))
+	if len(errs) != 0 {
+		t.Fatalf("non-streaming call hit the idle watch: %v", errs)
+	}
+	if len(resps) != 1 {
+		t.Errorf("got %d responses, want 1", len(resps))
+	}
+	if inner.canceled.Load() {
+		t.Error("non-streaming request context was canceled")
+	}
+	if got := ticks.Load(); got != 0 {
+		t.Errorf("non-streaming call produced %d keep-alive ticks, want 0 (nothing watches it)", got)
+	}
+}

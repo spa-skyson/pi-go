@@ -63,12 +63,17 @@ type chunk struct {
 	err  error
 }
 
-// GenerateContent forwards to the wrapped model, watching for silence. The
-// watch applies to non-streaming calls too when the timeout is on: with no
-// chunk cadence the budget degenerates to a whole-call budget, the same
-// "no data for timeout" rule. A caller that leaves StreamIdleTimeout zero
-// (eval judge, commit-msg) passes straight through with no wrapper overhead.
+// GenerateContent forwards to the wrapped model, watching streaming calls
+// for silence. Non-streaming calls pass through untouched at any timeout:
+// with no chunk cadence a budget would degenerate into a whole-call cap,
+// which is wrong for callers that run without a retry budget — autocompact
+// and summarize (internal/session) would silently degrade on slow gateways,
+// and issue #37 is about streams, not whole calls. A caller that leaves
+// StreamIdleTimeout zero passes straight through with no wrapper overhead.
 func (m idleStreamModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+	if !stream {
+		return m.inner.GenerateContent(ctx, req, stream)
+	}
 	heartbeat := streamHeartbeatFromContext(ctx)
 	if m.timeout <= 0 && heartbeat == nil {
 		return m.inner.GenerateContent(ctx, req, stream)
@@ -108,24 +113,45 @@ func (m idleStreamModel) GenerateContent(ctx context.Context, req *model.LLMRequ
 			defer ticker.Stop()
 		}
 
+		// deliver hands one chunk to the consumer and rearms the timers.
+		// It reports whether to keep watching: false when the stream has
+		// ended (chunks closed) or the consumer stopped ranging.
+		deliver := func(c chunk, ok bool) bool {
+			if !ok {
+				return false
+			}
+			if timer != nil {
+				resetTimer(timer, m.timeout)
+			}
+			if ticker != nil {
+				ticker.Reset(m.tick)
+			}
+			return yield(c.resp, c.err)
+		}
+
 		for {
 			select {
 			case c, ok := <-chunks:
-				if !ok {
-					return
-				}
-				if timer != nil {
-					resetTimer(timer, m.timeout)
-				}
-				if ticker != nil {
-					ticker.Reset(m.tick)
-				}
-				if !yield(c.resp, c.err) {
+				if !deliver(c, ok) {
 					return
 				}
 			case <-tickerC(ticker):
 				heartbeat()
 			case <-timerC(timer):
+				// The budget and a chunk can go ready together; select
+				// picks between ready cases at random, so a live stream
+				// would be torn down on a coin flip and its in-flight
+				// chunk dropped. One non-blocking read settles it: a
+				// chunk in the buffer means the stream is alive —
+				// deliver it and keep watching.
+				select {
+				case c, ok := <-chunks:
+					if !deliver(c, ok) {
+						return
+					}
+					continue
+				default:
+				}
 				// Unblocks the stream read; the pump then drains and exits
 				// via done. Everything it still delivers is discarded — the
 				// failure below replaces whatever a canceled request was
