@@ -112,6 +112,26 @@ func TestStepLimitCallback(t *testing.T) {
 		}
 	})
 
+	t.Run("nil ctx keeps counting against the current run", func(t *testing.T) {
+		// Nil ctx (test doubles) skips invocation-id detection: calls keep
+		// counting against the current run's budget, so the over-budget
+		// call still trips the limit instead of silently passing.
+		const limit = 3
+		cb := NewStepLimitCallback(limit)
+		for i := range limit {
+			if _, err := cb(nil, nil, nil, nil, nil); err != nil {
+				t.Fatalf("call %d: unexpected error %v", i+1, err)
+			}
+		}
+		_, err := cb(nil, nil, nil, nil, nil)
+		if err == nil {
+			t.Fatal("4th call: expected steps limit error, got nil")
+		}
+		if !strings.Contains(err.Error(), "steps limit 3 reached") {
+			t.Fatalf("error = %v, want containing %q", err, "steps limit 3 reached")
+		}
+	})
+
 	t.Run("parallel calls of one run share one budget", func(t *testing.T) {
 		// A parallel tool batch of one turn shares one invocation id, so a
 		// batch of N tools must eat N steps of that turn's single budget —

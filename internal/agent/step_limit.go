@@ -14,6 +14,8 @@ import (
 // ADK invocation id and restarts from zero whenever it changes, so every user
 // turn (one Run/RunStreaming call) gets a fresh budget even when the callback
 // instance is built once and kept alive for a whole interactive session.
+// A resumed run (human-in-the-loop) reuses the paused run's invocation id and
+// continues its budget, so pausing for a confirmation cannot bypass the limit.
 //
 // The (maxSteps+1)-th call still runs — the callback is after-tool — but that
 // call's callback then sets SkipSummarization on the event actions and fails
