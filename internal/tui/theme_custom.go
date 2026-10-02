@@ -125,7 +125,13 @@ func (tm *ThemeManager) loadThemeFile(path string) (Theme, string) {
 			theme.ThemeType = "dark"
 		}
 	}
+	// The extended marker is read before merged() fills the roles in: after
+	// the fill every custom theme carries the extended roles (from its own
+	// legacy colors, see merged), so the field has to be decided from what
+	// the file actually declared.
+	extended := theme.Colors.hasExtendedTokens()
 	theme.Colors = theme.Colors.merged(builtin.Colors)
+	theme.Extended = extended
 	return theme, ""
 }
 
@@ -152,10 +158,27 @@ func (c ThemeColors) colorRoleCount() int {
 			n++
 		}
 	}
+	for _, s := range []string{
+		c.BackgroundPanel, c.BackgroundElement, c.BorderSubtle, c.BorderBase,
+		c.BorderActive, c.Accent, c.TextMuted, c.DiffContext, c.DiffHunkHeader,
+		c.DiffLineNumber, c.EditorCursor,
+	} {
+		if strings.TrimSpace(s) != "" {
+			n++
+		}
+	}
 	return n
 }
 
 // merged fills the roles this palette leaves empty from base, role by role.
+//
+// The extended roles (#38) get a second-level fallback onto the theme's own
+// legacy colors, so a custom theme written before the tokens existed still
+// renders the extended chrome in neutral colors taken from itself: panel and
+// element surfaces from base, borders, muted text and diff detail from the
+// secondary gray, the editor cursor from primary. Accent is the exception —
+// it stays empty when undeclared and keeps the palette default, since no
+// legacy role carries a violet.
 func (c ThemeColors) merged(base ThemeColors) ThemeColors {
 	out := c
 	if out.Text == "" {
@@ -196,6 +219,59 @@ func (c ThemeColors) merged(base ThemeColors) ThemeColors {
 	}
 	if out.DiffRemovedText == "" {
 		out.DiffRemovedText = base.DiffRemovedText
+	}
+	if out.BackgroundPanel == "" {
+		if out.BackgroundPanel = base.BackgroundPanel; out.BackgroundPanel == "" {
+			out.BackgroundPanel = out.Base
+		}
+	}
+	if out.BackgroundElement == "" {
+		if out.BackgroundElement = base.BackgroundElement; out.BackgroundElement == "" {
+			out.BackgroundElement = out.Base
+		}
+	}
+	if out.BorderSubtle == "" {
+		if out.BorderSubtle = base.BorderSubtle; out.BorderSubtle == "" {
+			out.BorderSubtle = out.Secondary
+		}
+	}
+	if out.BorderBase == "" {
+		if out.BorderBase = base.BorderBase; out.BorderBase == "" {
+			out.BorderBase = out.Secondary
+		}
+	}
+	if out.BorderActive == "" {
+		if out.BorderActive = base.BorderActive; out.BorderActive == "" {
+			out.BorderActive = out.Secondary
+		}
+	}
+	if out.TextMuted == "" {
+		if out.TextMuted = base.TextMuted; out.TextMuted == "" {
+			out.TextMuted = out.Secondary
+		}
+	}
+	if out.Accent == "" {
+		out.Accent = base.Accent
+	}
+	if out.DiffContext == "" {
+		if out.DiffContext = base.DiffContext; out.DiffContext == "" {
+			out.DiffContext = out.Secondary
+		}
+	}
+	if out.DiffHunkHeader == "" {
+		if out.DiffHunkHeader = base.DiffHunkHeader; out.DiffHunkHeader == "" {
+			out.DiffHunkHeader = out.Secondary
+		}
+	}
+	if out.DiffLineNumber == "" {
+		if out.DiffLineNumber = base.DiffLineNumber; out.DiffLineNumber == "" {
+			out.DiffLineNumber = out.Secondary
+		}
+	}
+	if out.EditorCursor == "" {
+		if out.EditorCursor = base.EditorCursor; out.EditorCursor == "" {
+			out.EditorCursor = out.Primary
+		}
 	}
 	return out
 }

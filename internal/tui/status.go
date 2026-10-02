@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"charm.land/lipgloss/v2"
 )
 
@@ -286,4 +288,108 @@ func sortedKeys(m map[string]bool) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// The opencode-style line under the prompt (#38): one row carrying the
+// session identity on the left — provider/model and the run status — and two
+// to four key hints for the current mode on the right. It is pure display: it
+// binds no keys of its own, everything it names is dispatched elsewhere.
+//
+// Colors come from the extended theme tokens: backgroundPanel fill, textMuted
+// for the muted text, primary for the live status word. Themes without the
+// tokens get the palette's neutral defaults, so the line simply appears in
+// the colors the rest of the chrome already uses.
+
+// bottomStatusLine renders the line at the given terminal width, padded to
+// exactly width cells so the frame stays flush right.
+func (m *model) bottomStatusLine(width int) string {
+	p := paletteOrDark(m.palette)
+
+	status := "idle"
+	statusStyle := lipgloss.NewStyle().Foreground(p.TextMuted)
+	switch {
+	case m.running:
+		status = "running"
+		statusStyle = lipgloss.NewStyle().Foreground(p.Primary).Bold(true)
+	case m.loading:
+		status = "starting"
+		statusStyle = lipgloss.NewStyle().Foreground(p.Primary)
+	}
+
+	muted := lipgloss.NewStyle().Foreground(p.TextMuted)
+	sep := muted.Render(" │ ")
+	var left string
+	if model := strings.TrimSpace(m.cfg.ModelName); model != "" {
+		left = muted.Render(providerModelLabel(m.providerDisplayName(), model)) + sep + statusStyle.Render(status)
+	} else {
+		left = statusStyle.Render(status)
+	}
+	leftW := lipgloss.Width(left)
+
+	right := muted.Render(strings.Join(bottomKeyHints(m.mode, m.running), " │ "))
+	rightW := lipgloss.Width(right)
+
+	// Two blank cells between the halves; the hints yield first on a narrow
+	// terminal, then the left half truncates; if that still collides the
+	// hints drop entirely, so the row never wraps.
+	gap := width - leftW - rightW - 2
+	if gap < 1 {
+		if avail := width - leftW - 2; avail > 0 && rightW > 0 {
+			right = lipgloss.NewStyle().Foreground(p.TextMuted).Render(
+				ansi.Truncate(ansi.Strip(right), avail, "…"))
+			rightW = lipgloss.Width(right)
+			gap = width - leftW - rightW - 2
+		}
+		if gap < 1 {
+			left = ansi.Truncate(ansi.Strip(left), max(1, width-1), "…")
+			leftW = lipgloss.Width(left)
+			// Halves still collide (the terminal is at most as wide as the
+			// left half): drop the hints entirely so the row never wraps.
+			if leftW+rightW > width {
+				right, rightW = "", 0
+			}
+			gap = max(0, width-leftW-rightW)
+		}
+	}
+	if rightW == 0 {
+		gap = max(0, width-leftW)
+	}
+
+	line := left + strings.Repeat(" ", gap) + right
+	return lipgloss.NewStyle().
+		Width(width).
+		Background(p.BackgroundPanel).
+		Render(line)
+}
+
+// providerModelLabel formats the "provider/model" identity. The provider is
+// dropped when it is empty or already contained in the model name (some
+// configured model names carry their provider prefix).
+func providerModelLabel(provider, model string) string {
+	provider = strings.TrimSpace(provider)
+	if provider == "" || strings.HasPrefix(strings.ToLower(model), strings.ToLower(provider)+"/") {
+		return model
+	}
+	return provider + "/" + model
+}
+
+// bottomKeyHints returns the hints for the current mode. The bindings are
+// literals pinned to the key registry defaults, not resolved from it — the
+// registry has no lookup for a label's key yet. Revisit when Phase 2 user
+// key overrides land: esc cancels a running turn (key.cancel), shift+tab
+// cycles the session agent (key.agent-cycle), ctrl+h opens history
+// (key.history), ctrl+o toggles compact tool output (key.compact-tools),
+// ctrl+t the subagent monitor (key.monitor), ctrl+c quits (key.quit), and
+// /run executes the plan in plan mode.
+func bottomKeyHints(mode string, running bool) []string {
+	if running {
+		return []string{"esc cancel", "ctrl+t agents", "ctrl+o compact"}
+	}
+	var hints []string
+	if mode == "plan" {
+		hints = append(hints, "/run execute")
+	} else {
+		hints = append(hints, "shift+tab agent")
+	}
+	return append(hints, "ctrl+h history", "ctrl+o compact", "ctrl+c quit")
 }

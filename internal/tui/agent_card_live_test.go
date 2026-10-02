@@ -215,7 +215,7 @@ func TestAgentRunningStopsOnResultWithoutDone(t *testing.T) {
 // finished — a finished card's cache never invalidates again.
 func TestAgentCardRenderKeyTicksOnlyWhileRunning(t *testing.T) {
 	key := func(m message) uint64 {
-		return m.renderKey(100, false, false, false, 0, false)
+		return m.renderKey(100, false, false, false, 0, false, "")
 	}
 
 	running := message{role: "tool", tool: "agent", agentStarted: time.Now().Add(-50 * time.Millisecond)}

@@ -209,7 +209,7 @@ func fnvInt(h uint64, v int) uint64 {
 // (and re-syntax-highlighted) the entire scrollback, several times a second.
 // Keying on the inputs gets the same safety without the cost: a mutated message
 // simply gets a different key and re-renders.
-func (m *message) renderKey(width int, compactTools, hasSeparator, streamingPlaceholder bool, themeKey uint64, blinkOn bool) uint64 {
+func (m *message) renderKey(width int, compactTools, hasSeparator, streamingPlaceholder bool, themeKey uint64, blinkOn bool, modelLabel string) uint64 {
 	h := fnvOffset64
 	h = fnvStr(h, m.role)
 	h = fnvStr(h, m.content)
@@ -222,6 +222,9 @@ func (m *message) renderKey(width int, compactTools, hasSeparator, streamingPlac
 	h = fnvStr(h, m.agentModel)
 	h = fnvStr(h, m.pipelineID)
 	h = fnvStr(h, m.pipelineMode)
+	// The framed reply header shows the session model; a /model switch must
+	// re-render the blocks that display it.
+	h = fnvStr(h, modelLabel)
 	for _, ev := range m.agentEvents {
 		h = fnvStr(h, ev.kind)
 		h = fnvStr(h, ev.content)
@@ -323,6 +326,9 @@ type ChatModel struct {
 	// Palette is the resolved theme palette, set each frame by the model before
 	// rendering. Zero means the dark default.
 	Palette Palette
+	// ModelLabel is the session model name shown in the framed reply headers.
+	// Set each frame by the root model; empty renders the role name instead.
+	ModelLabel string
 }
 
 // NewChatModel creates a ChatModel with the given markdown renderer.
@@ -796,7 +802,7 @@ func (c *ChatModel) renderMessages(running bool) (string, []blockKind) {
 		msg := &c.Messages[i]
 
 		isLastAndStreaming := running && i == lastIdx
-		key := msg.renderKey(c.Width, c.ToolDisplay.CompactTools, i > 0, isLastAndStreaming, themeKey, c.ToolDisplay.BlinkOn)
+		key := msg.renderKey(c.Width, c.ToolDisplay.CompactTools, i > 0, isLastAndStreaming, themeKey, c.ToolDisplay.BlinkOn, c.ModelLabel)
 		if msg.renderCached && msg.renderCacheKey == key {
 			b.WriteString(msg.renderCache)
 			kinds = appendKind(kinds, kindOf(msg), strings.Count(msg.renderCache, "\n"))
@@ -916,6 +922,13 @@ func (c *ChatModel) renderThinkingBlock(content string, p Palette) string {
 // renderAssistantBlock renders an assistant turn, or "" when there is nothing
 // to show. A streaming turn with no content yet renders as "..." so the reply
 // has somewhere to appear.
+//
+// A regular reply is framed the opencode way (#38): a thin border around the
+// block with a compact one-line header — role marker and the session model,
+// in the muted role. Errors, warnings, meta tallies, notices and pre-rendered
+// content keep their bare bullet form: they are one-liners or closed system
+// output, and boxing every one of them would bury the reply the frame is
+// meant to make findable.
 func (c *ChatModel) renderAssistantBlock(msg *message, p Palette, bullet string, isLastAndStreaming bool) string {
 	content := msg.content
 	if content == "" && isLastAndStreaming {
@@ -924,7 +937,36 @@ func (c *ChatModel) renderAssistantBlock(msg *message, p Palette, bullet string,
 	if content == "" {
 		return ""
 	}
-	return "\n" + c.assistantBody(msg, content, p, bullet) + "\n"
+	body := c.assistantBody(msg, content, p, bullet)
+	if !msg.isError && !msg.isWarning && !msg.isMeta && !msg.preRendered {
+		body = c.frameReplyBlock(body, p)
+	}
+	return "\n" + body + "\n"
+}
+
+// frameReplyBlock draws the bordered reply block: a compact header line
+// ("◉ model") in the muted role above the markdown body, wrapped in a thin
+// borderSubtle box filled with the base background. The box spans the chat
+// width; lipgloss counts the border columns inside that width, so the content
+// area is width-2 — exactly the width glamour wraps at (its longest rendered
+// line is width-2) — and nothing inside can push the border past the pane to
+// drag the rail and sidebar with it.
+func (c *ChatModel) frameReplyBlock(body string, p Palette) string {
+	inner := c.Width
+	if inner < 20 {
+		inner = 20
+	}
+	label := c.ModelLabel
+	if label == "" {
+		label = "assistant"
+	}
+	header := lipgloss.NewStyle().Foreground(p.TextMuted).Render("◉ " + label)
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(p.BorderSubtle).
+		Background(p.Background).
+		Width(inner).
+		Render(header + "\n" + body)
 }
 
 // assistantBody renders the assistant content itself, styled by which kind of
@@ -949,7 +991,9 @@ func (c *ChatModel) assistantBody(msg *message, content string, p Palette, bulle
 	case msg.preRendered:
 		return bullet + content
 	default:
-		return bullet + c.RenderMarkdown(content)
+		// The reply bullet lives in the frame header (frameReplyBlock); the
+		// body is the markdown itself.
+		return c.RenderMarkdown(content)
 	}
 }
 

@@ -16,22 +16,23 @@ func viewRows(im *InputModel) int {
 // --- auto-grow and the visual-row cap --------------------------------------
 
 // The input grows line by line until the cap and then stops growing: 1 line
-// renders 1 row, 5 lines render 5 rows, and 50 lines render exactly the cap.
+// renders 3 rows (the bordered box adds two), 5 lines render 7, and 50 lines
+// render exactly the cap plus the box.
 func TestInputAutoGrow_UpToCap(t *testing.T) {
 	im := NewInputModel(nil, nil, nil, "")
 	im.SetWidth(40)
 	im.SetMaxHeight(4)
 
-	if rows := viewRows(&im); rows != 1 {
-		t.Fatalf("empty input rows = %d, want 1", rows)
+	if rows := viewRows(&im); rows != 3 {
+		t.Fatalf("empty input rows = %d, want 3 (1 content + 2 border)", rows)
 	}
 	im.SetText(strings.Repeat("l\n", 4) + "l") // 5 lines
-	if rows := viewRows(&im); rows != 4 {
-		t.Fatalf("5 lines at cap 4 rows = %d, want 4", rows)
+	if rows := viewRows(&im); rows != 6 {
+		t.Fatalf("5 lines at cap 4 rows = %d, want 6 (4 content + 2 border)", rows)
 	}
 	im.SetText(strings.Repeat("line\n", 49) + "line") // 50 lines
-	if rows := viewRows(&im); rows != 4 {
-		t.Fatalf("50 lines at cap 4 rows = %d, want 4", rows)
+	if rows := viewRows(&im); rows != 6 {
+		t.Fatalf("50 lines at cap 4 rows = %d, want 6 (4 content + 2 border)", rows)
 	}
 }
 
@@ -61,24 +62,26 @@ func TestInputInternalScroll_AtCap(t *testing.T) {
 	}
 }
 
-// Raising the cap on resize un-clamps the view; lowering it re-clamps.
+// Raising the cap on resize un-clamps the view; lowering it re-clamps. Rows
+// are counted on the rendered View, so every expectation carries the two
+// border rows of the prompt box.
 func TestInputMaxHeight_Resize(t *testing.T) {
 	im := NewInputModel(nil, nil, nil, "")
 	im.SetWidth(40)
 	im.SetText(strings.Repeat("line\n", 9) + "line") // 10 lines
 
 	im.SetMaxHeight(8)
-	if rows := viewRows(&im); rows != 8 {
-		t.Fatalf("rows = %d, want 8", rows)
+	if rows := viewRows(&im); rows != 10 {
+		t.Fatalf("rows = %d, want 10 (8 content + 2 border)", rows)
 	}
 	im.SetMaxHeight(2)
-	if rows := viewRows(&im); rows != 2 {
-		t.Fatalf("rows = %d, want 2", rows)
+	if rows := viewRows(&im); rows != 4 {
+		t.Fatalf("rows = %d, want 4 (2 content + 2 border)", rows)
 	}
 	// Cap of at least one row, even for a degenerate resize.
 	im.SetMaxHeight(0)
-	if rows := viewRows(&im); rows != 1 {
-		t.Fatalf("rows = %d, want 1", rows)
+	if rows := viewRows(&im); rows != 3 {
+		t.Fatalf("rows = %d, want 3 (1 content + 2 border)", rows)
 	}
 }
 
@@ -331,8 +334,8 @@ func TestPaste_MultilineLiteralAndMarker(t *testing.T) {
 	if im.Text != "one\ntwo" {
 		t.Fatalf("literal paste = %q", im.Text)
 	}
-	if rows := viewRows(&im); rows != 2 {
-		t.Fatalf("a two-line paste should render two rows, got %d", rows)
+	if rows := viewRows(&im); rows != 4 {
+		t.Fatalf("a two-line paste should render four rows (2 content + 2 border), got %d", rows)
 	}
 
 	r := insertCollapsed(t, &im, bigPaste())
@@ -443,7 +446,9 @@ func TestWelcome_ShiftEnterHint(t *testing.T) {
 }
 
 // The rendered value region stays ANSI-free around marker runes, so the
-// placeholder replace remains exact on the multiline engine too.
+// placeholder replace remains exact on the multiline engine too. The prompt
+// box adds a border row above and below; the assertions run on the content
+// rows between them.
 func TestRender_PromptOnFirstRowOnly(t *testing.T) {
 	im := NewInputModel(nil, nil, nil, "")
 	im.SetWidth(40)
@@ -452,16 +457,17 @@ func TestRender_PromptOnFirstRowOnly(t *testing.T) {
 	view := im.View(false)
 	plain := ansi.Strip(view)
 	lines := strings.Split(plain, "\n")
-	if len(lines) != 2 {
-		t.Fatalf("rendered %d rows for a 2-line prompt", len(lines))
+	if len(lines) != 4 {
+		t.Fatalf("rendered %d rows for a 2-line prompt, want 4 (2 content + 2 border)", len(lines))
 	}
-	if !strings.HasPrefix(lines[0], "> ") {
-		t.Errorf("first row = %q, want the > prompt", lines[0])
+	// The left border glyph precedes the prompt on every content row.
+	if !strings.HasPrefix(strings.TrimPrefix(lines[1], "│"), "> ") {
+		t.Errorf("first content row = %q, want the > prompt", lines[1])
 	}
-	if strings.HasPrefix(lines[1], "> ") {
-		t.Errorf("continuation row must not repeat the > prompt: %q", lines[1])
+	if strings.HasPrefix(strings.TrimPrefix(lines[2], "│"), "> ") {
+		t.Errorf("continuation row must not repeat the > prompt: %q", lines[2])
 	}
-	if !strings.Contains(lines[1], "two") {
-		t.Errorf("continuation row lost its text: %q", lines[1])
+	if !strings.Contains(lines[2], "two") {
+		t.Errorf("continuation row lost its text: %q", lines[2])
 	}
 }

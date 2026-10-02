@@ -902,6 +902,9 @@ func (m *model) syncPalette() {
 		m.palette = paletteFor(m.themeManager.Current())
 	}
 	m.chatModel.Palette = m.palette
+	// The framed reply headers name the session model; read fresh so a
+	// /model switch shows up without extra plumbing.
+	m.chatModel.ModelLabel = m.cfg.ModelName
 	m.chatModel.ToolDisplay.Palette = m.palette
 	m.inputModel.Palette = m.palette
 	m.sea.palette = m.palette
@@ -2182,7 +2185,10 @@ func (m *model) View() tea.View {
 	showSidebar := sideW > 0
 
 	// Render components.
-	m.inputModel.SetWidth(max(0, m.width-3))
+	// The editable width shrinks by the box chrome (two border columns) plus
+	// the two prompt columns and one column of slack, so the bordered prompt
+	// occupies exactly the row width the unbordered one did.
+	m.inputModel.SetWidth(max(0, m.width-5))
 	// The input grows with its content up to a third of the terminal and
 	// scrolls internally past that; the message viewport yields the rows.
 	m.inputModel.SetMaxHeight(max(1, m.height/3))
@@ -2312,6 +2318,10 @@ func (m *model) View() tea.View {
 	inputCursorY := strings.Count(topSection, "\n") + 1 + strings.Count(bottom.String(), "\n")
 	bottom.WriteString(inputArea)
 	bottom.WriteString("\n")
+	// The opencode-style line under the prompt: session identity and run
+	// status on the left, mode key hints on the right.
+	bottom.WriteString(m.bottomStatusLine(m.width))
+	bottom.WriteString("\n")
 	// The closing rule doubles as the session context gauge — same row, same
 	// width, now carrying a reading instead of only closing the frame.
 	bottom.WriteString(renderContextRule(m.contextRuleFor(m.width), m.palette))
@@ -2411,6 +2421,17 @@ func clipMessagesToViewport(messagesView string, availableHeight, scroll int) (v
 	}
 
 	visible = strings.Join(msgLines[startLine:endLine], "\n")
+
+	// A visible window whose last line is the empty string ends in a bare
+	// newline — the row is open. The blank-row bookkeeping in View assumes a
+	// terminated last row (its "blank row below" newline then closes the
+	// open row instead of adding one), which silently dropped a row and left
+	// the frame one line shorter than the terminal whenever an exact-fit
+	// clip landed on a blank line. Materialize the row with a space, the
+	// same cell the pad rows below use.
+	if strings.HasSuffix(visible, "\n") {
+		visible += " "
+	}
 
 	// Pad to fill the viewport. availableHeight is message rows only — the blank
 	// rows that inset the block from the rules are budgeted separately.
@@ -2759,14 +2780,17 @@ func (m *model) messageViewportHeight() int {
 	}
 	statusBar := m.statusModel.Render(m.statusRenderInput())
 	inputArea := m.inputModel.View(m.loading)
+	bottomLine := m.bottomStatusLine(m.width)
 	statusLines := strings.Count(statusBar, "\n") + 1
 	inputLines := strings.Count(inputArea, "\n") + 1
+	bottomLines := strings.Count(bottomLine, "\n") + 1
 	// The chrome around the messages: the panel's closing rule plus the two rules
-	// that frame the input below it. The two blank rows that inset the messages
-	// from those rules are not message rows either. Counting them as such made
-	// the panel one row taller than the terminal, so the terminal scrolled the
-	// frame and tore the panel away from the sidebar.
-	availableHeight := m.height - statusLines - inputLines - 3 - 2
+	// that frame the input below it, and the status line under the prompt. The
+	// two blank rows that inset the messages from those rules are not message
+	// rows either. Counting them as such made the panel one row taller than the
+	// terminal, so the terminal scrolled the frame and tore the panel away from
+	// the sidebar.
+	availableHeight := m.height - statusLines - inputLines - bottomLines - 3 - 2
 	if m.sea.visible() {
 		// The sea scene adds its rows plus two framing rules above the messages.
 		// visible() answers the same question as render() != "" without
