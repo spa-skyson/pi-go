@@ -143,3 +143,42 @@ func TestSubagentSteer_CardRendersMarker(t *testing.T) {
 		t.Errorf("steer_queued line = %q, want the marker", lines[0])
 	}
 }
+
+// TestSubagentSteer_AcceptsNonASCII pins issue #42: the steer mini-input
+// counts runes, not bytes — Cyrillic must type, chords must not, Backspace
+// must drop a whole rune, and Enter delivers the text as typed.
+func TestSubagentSteer_AcceptsNonASCII(t *testing.T) {
+	m, steered := openMonitor(t)
+	selectRow(t, m, "explore-1727000000000000000")
+	m = pressKey(t, m, tea.Key{Code: 's', Text: "s"}) // open the mini-input
+
+	// A Cyrillic rune is 2 bytes; the old byte guard dropped it silently.
+	m.handleSubagentSteerKey(tea.Key{Code: 'п', Text: "п"})
+	m.handleSubagentSteerKey(tea.Key{Code: 'р', Text: "р"})
+	if got := m.steerInput.text; got != "пр" {
+		t.Fatalf("steer text = %q, want %q", got, "пр")
+	}
+
+	// Latin still appends as before.
+	m.handleSubagentSteerKey(tea.Key{Code: 'x', Text: "x"})
+	if got := m.steerInput.text; got != "прx" {
+		t.Fatalf("steer text = %q, want %q", got, "прx")
+	}
+
+	// A chord never lands, even when Text looks insertable.
+	m.handleSubagentSteerKey(tea.Key{Code: 'r', Text: "r", Mod: tea.ModCtrl})
+	if got := m.steerInput.text; got != "прx" {
+		t.Fatalf("chord inserted: steer text = %q, want %q", got, "прx")
+	}
+
+	// Backspace drops the whole rune, not one of its bytes.
+	m.handleSubagentSteerKey(tea.Key{Code: tea.KeyBackspace})
+	if got := m.steerInput.text; got != "пр" {
+		t.Fatalf("after backspace = %q, want %q", got, "пр")
+	}
+
+	m.handleSubagentSteerKey(tea.Key{Code: tea.KeyEnter})
+	if len(*steered) != 1 || (*steered)[0] != "explore-1727000000000000000|пр" {
+		t.Fatalf("steered = %v, want the Cyrillic text delivered", *steered)
+	}
+}

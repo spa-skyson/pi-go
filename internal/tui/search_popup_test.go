@@ -333,3 +333,46 @@ func TestSearchPopupRenderWidthAllModes(t *testing.T) {
 		})
 	}
 }
+
+// TestSearchPopup_TypingFiltersByRunes pins issue #42: the filter guard counts
+// runes, not bytes — a Cyrillic keystroke (2 bytes in UTF-8) must land in the
+// query, a chord must not, and Backspace must drop a whole rune.
+func TestSearchPopup_TypingFiltersByRunes(t *testing.T) {
+	m := popupWithEntries(searchModeCommands,
+		SearchItem{Text: "/help"}, SearchItem{Text: "/heap"},
+	)
+
+	// A Cyrillic rune is 2 bytes; the old byte guard dropped it silently.
+	if _, handled := m.handleSearchPopupKey(tea.Key{Code: 'я', Text: "я"}); !handled {
+		t.Fatal("typing must be handled by the popup")
+	}
+	if got := m.searchPopup.search; got != "я" {
+		t.Fatalf("search = %q, want %q", got, "я")
+	}
+
+	// Latin still filters as before.
+	m.handleSearchPopupKey(tea.Key{Code: 'a', Text: "a"})
+	if got := m.searchPopup.search; got != "яa" {
+		t.Fatalf("search = %q, want %q", got, "яa")
+	}
+
+	// A chord never lands, even when Text looks insertable.
+	if _, handled := m.handleSearchPopupKey(tea.Key{Code: 'r', Text: "r", Mod: tea.ModCtrl}); handled {
+		t.Fatal("a chord must fall through, not insert")
+	}
+	if got := m.searchPopup.search; got != "яa" {
+		t.Fatalf("chord inserted: search = %q, want %q", got, "яa")
+	}
+
+	// Backspace drops the whole last rune. A byte-wise slice happens to be
+	// right on "яa" (drops the latin 'a'), but the next one on "я" would
+	// leave a lone UTF-8 byte — invalid — instead of the empty string.
+	m.handleSearchPopupKey(tea.Key{Code: tea.KeyBackspace})
+	if got := m.searchPopup.search; got != "я" {
+		t.Fatalf("after backspace = %q, want %q", got, "я")
+	}
+	m.handleSearchPopupKey(tea.Key{Code: tea.KeyBackspace})
+	if got := m.searchPopup.search; got != "" {
+		t.Fatalf("after backspace = %q, want empty", got)
+	}
+}
