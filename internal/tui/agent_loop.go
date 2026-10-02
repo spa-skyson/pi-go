@@ -2093,6 +2093,10 @@ func (m *model) maybeFallbackModel(msg agentDoneMsg) bool {
 	}
 
 	next := m.modelFallbacks[m.modelFallbackUsed]
+	// Consume the entry up front: a switcher or rebuild failure means this
+	// fallback is unusable too, and the next terminal error must advance to
+	// the following entry instead of knocking on the same broken door forever.
+	m.modelFallbackUsed++
 	failed := m.cfg.ModelName
 	newLLM, newName, newProvider, err := m.cfg.ModelSwitcher(m.ctx, next)
 	if err != nil {
@@ -2109,7 +2113,6 @@ func (m *model) maybeFallbackModel(msg agentDoneMsg) bool {
 	m.cfg.LLM = newLLM
 	m.cfg.ModelName = newName
 	m.cfg.ProviderName = newProvider
-	m.modelFallbackUsed++
 
 	if m.activeAgent != "" {
 		// Session-only override scoped to the active agent, mirroring what a

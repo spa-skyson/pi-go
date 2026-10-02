@@ -222,6 +222,46 @@ func TestFallbackResetOnSuccessAndManualModel(t *testing.T) {
 	}
 }
 
+// TestFallbackSwitcherFailureConsumesEntry pins the consumption rule: a
+// switcher (or rebuild) failure consumes the entry it tried, so the next
+// terminal error advances to the following model instead of knocking on the
+// same broken door forever.
+func TestFallbackSwitcherFailureConsumesEntry(t *testing.T) {
+	var asked []string
+	m := newFallbackTestModel(t, &asked)
+	m.cfg.Roles = map[string]config.RoleConfig{
+		"default": {Model: "primary", FallbackModels: []string{"broken", "works"}},
+	}
+	m.cfg.ModelSwitcher = func(_ context.Context, modelName string) (adkmodel.LLM, string, string, error) {
+		asked = append(asked, modelName)
+		if modelName == "broken" {
+			return nil, "", "", errors.New("no such model")
+		}
+		return &stubLLM{name: modelName}, modelName, "anthropic", nil
+	}
+
+	m.handleAgentDone(agentDoneMsg{err: errTerminalQuota})
+
+	if len(asked) != 1 || asked[0] != "broken" {
+		t.Fatalf("switcher got %v, want [broken]", asked)
+	}
+	if m.modelFallbackUsed != 1 {
+		t.Errorf("modelFallbackUsed = %d, want 1: a failed switch must consume the entry", m.modelFallbackUsed)
+	}
+	if m.cfg.ModelName != "test-model" {
+		t.Errorf("ModelName = %q, want it untouched by the failed switch", m.cfg.ModelName)
+	}
+
+	m.handleAgentDone(agentDoneMsg{err: errTerminalQuota})
+
+	if len(asked) != 2 || asked[1] != "works" {
+		t.Fatalf("switcher got %v, want [broken works]: the next wall must advance", asked)
+	}
+	if m.cfg.ModelName != "works" {
+		t.Errorf("ModelName = %q, want works", m.cfg.ModelName)
+	}
+}
+
 // TestFallbackFrontmatterOverridesRole pins the frontmatter-over-role
 // priority stage A documented for the chain resolution.
 func TestFallbackFrontmatterOverridesRole(t *testing.T) {
