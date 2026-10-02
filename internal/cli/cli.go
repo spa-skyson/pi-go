@@ -2239,6 +2239,13 @@ func startJSONSteer(ctx context.Context, r io.Reader, em *jsonEmitter) <-chan st
 // and message_end), so a steer turn reads exactly like the first one.
 func runJSONTurn(ctx context.Context, ag *agent.Agent, sessionID, msg string, em *jsonEmitter, retryCfg agent.RetryConfig, log *logger.Logger) error {
 	log.UserMessage(msg)
+	// Keep-alive while waiting on the LLM: the provider's stream watch ticks
+	// this hook (see provider.WithStreamHeartbeat), and each tick writes one
+	// keep-alive line. That is what keeps the parent's inactivity watchdog
+	// from reading a long time-to-first-token as a wedged child (issue #37).
+	// Only this JSON-mode loop installs the hook, so nothing is written in
+	// TUI or print mode.
+	ctx = provider.WithStreamHeartbeat(ctx, em.keepalive)
 	started := false
 	// SSE delivers the reply as deltas and then once more as an aggregate;
 	// without this every text_delta is emitted twice. One dedup per turn: it

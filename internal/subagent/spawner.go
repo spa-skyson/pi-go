@@ -410,6 +410,12 @@ func (p *Process) emitChildLine(line string, result *strings.Builder) {
 		// (internal/cli/cli.go); keep the text in Event.Error so the parent can
 		// classify it instead of dropping it into Content.
 		p.sendEvent(Event{Type: "error", Error: ev.Error})
+	case "keepalive":
+		// The child's LLM-wait pulse (issue #37). readChildLines already
+		// reset the inactivity watchdog before this call — the line arriving
+		// is the whole point — so swallow it here: it carries no content and
+		// must not surface in the event stream.
+		return
 	case "text_delta":
 		result.WriteString(ev.Delta)
 		p.sendEvent(Event{Type: "text_delta", Content: ev.Delta})
