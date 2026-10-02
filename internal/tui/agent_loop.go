@@ -102,6 +102,17 @@ const (
 	// Deliberately small: repetition that survives being named is not going to
 	// be fixed by naming it a third time, and each attempt costs a whole turn.
 	maxStuckRecoveries = 2
+
+	// maxMidTurnAttempts is how many times a turn may run in total when a
+	// transient failure cuts it short mid-reply (issue #41). A stalled stream
+	// usually clears on a fresh connection, so the turn is replayed from its
+	// prompt instead of dying and waiting for a manual /retry — but only
+	// while the failed attempt produced no tool traffic, which a replay
+	// would execute twice (see streamTurn's toolTraffic flag). The budget
+	// counts every run of the turn, so the first replay warns "retrying 2/3"
+	// and a third straight failure ends the turn through the ordinary error
+	// path, where handleAgentDone offers /retry.
+	maxMidTurnAttempts = 3
 )
 
 // extractAgentType returns a label for the subagent tool call by inspecting
@@ -1088,6 +1099,30 @@ func (m *model) setSessionTitle(text string) string {
 	return title
 }
 
+// midturnRetryPause is how long runAgentLoop waits between mid-turn retry
+// attempts. A stalled stream clears on a fresh connection, so the wait is
+// short and fixed — long enough for a flapping gateway to settle, short
+// enough not to read as a hang. A var so tests can shorten it.
+var midturnRetryPause = 1500 * time.Millisecond
+
+// sleepContext waits for d, reporting false if ctx was canceled first. The
+// local twin of unexported agent.sleepContext: the pause between mid-turn
+// retries must break the moment the user cancels the turn (Esc), not hold the
+// cancelation for the full wait.
+func sleepContext(ctx context.Context, d time.Duration) bool {
+	if d <= 0 {
+		return ctx.Err() == nil
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
 // runAgentLoop runs the agent and sends events to the channel. The channel is
 // passed in rather than read from m.agentCh: the goroutine outlives the Update
 // call that started it, and a subsequent turn's handleAgentDone→startNextPrompt
@@ -1160,38 +1195,76 @@ func (m *model) runAgentLoop(ctx context.Context, prompt string, ch chan agentMs
 	// covers the model work and not the setup around it; stuck recoveries are
 	// part of the turn the user waited on, so they stay inside the span.
 	turnStart := time.Now()
-	for attempt := 0; ; attempt++ {
-		usage, err := m.streamTurn(ctx, ch, prompt, run, groundedSeen, &truncated, log)
+	// Two counters because one loop serves two budgets: stuckRecoveries
+	// counts detector-driven recoveries, midturnAttempts counts replays of
+	// the whole turn after a transient stall (#41).
+	stuckRecoveries := 0
+	midturnAttempts := 0
+	for {
+		// toolTraffic is set when this attempt emits a FunctionCall or
+		// FunctionResponse part. It is per-attempt on purpose: only the
+		// traffic a replay would repeat can make one unsafe.
+		var toolTraffic bool
+		usage, err := m.streamTurn(ctx, ch, prompt, run, groundedSeen, &truncated, log, &toolTraffic)
 		turnUsage = addUsage(turnUsage, usage)
 
 		var stuck *stuckError
-		if !errors.As(err, &stuck) {
-			if err == nil && turnUsage != nil {
+		if errors.As(err, &stuck) {
+			if stuckRecoveries >= maxStuckRecoveries {
+				fail(fmt.Errorf("%w (gave up after %d recovery attempt(s))", err, stuckRecoveries))
+				return
+			}
+			stuckRecoveries++
+			log.Info(fmt.Sprintf("agent loop stuck (%s); telling the model and resuming", stuck.Detail()))
+			ch <- agentWarningMsg{
+				text: fmt.Sprintf("Loop detected (%s) — telling the model and resuming (attempt %d of %d).",
+					stuck.Detail(), stuckRecoveries, maxStuckRecoveries),
+			}
+			prompt = recoverStuckPrompt(stuck.Detail())
+			continue
+		}
+
+		if err == nil {
+			if turnUsage != nil {
 				ch <- agentUsageMsg{usage: turnUsage, elapsed: time.Since(turnStart)}
 			}
-			if err != nil {
-				fail(err)
+			return
+		}
+
+		// A transient failure with no tool traffic behind it is the "stream
+		// stalled mid-reply" case (#41): the partial text stays as its own
+		// closed block and the turn is replayed from the same prompt, the
+		// way a manual /retry would. Everything else ends the turn through
+		// the ordinary error path — terminal failures (402, quota, auth)
+		// will not clear on a re-send, and replaying a turn whose tools
+		// already ran could execute them twice.
+		if !toolTraffic && retry.IsTransient(err) && midturnAttempts < maxMidTurnAttempts-1 {
+			midturnAttempts++
+			warn := fmt.Sprintf("stream stalled (transient), retrying %d/%d: %v",
+				midturnAttempts+1, maxMidTurnAttempts, err)
+			log.Info(warn)
+			ch <- agentWarningMsg{text: warn}
+			if !sleepContext(ctx, midturnRetryPause) {
+				// The user canceled during the pause (Esc): end the turn
+				// instead of starting another attempt.
+				fail(ctx.Err())
+				return
 			}
-			return
+			continue
 		}
-
-		if attempt >= maxStuckRecoveries {
-			fail(fmt.Errorf("%w (gave up after %d recovery attempt(s))", err, attempt))
-			return
-		}
-
-		log.Info(fmt.Sprintf("agent loop stuck (%s); telling the model and resuming", stuck.Detail()))
-		ch <- agentWarningMsg{
-			text: fmt.Sprintf("Loop detected (%s) — telling the model and resuming (attempt %d of %d).",
-				stuck.Detail(), attempt+1, maxStuckRecoveries),
-		}
-		prompt = recoverStuckPrompt(stuck.Detail())
+		fail(err)
+		return
 	}
 }
 
 // streamTurn runs one streaming turn and forwards its events. It returns a
 // *stuckError when the detectors call the turn dead, any other error when the
 // run failed outright, and nil on a clean finish.
+//
+// toolTraffic is set before returning when the attempt emitted a
+// FunctionCall/FunctionResponse part. The caller replays a turn only while
+// the failed attempt produced none: a fresh run would execute those tools a
+// second time.
 //
 // The stuck detector and the stream deduper are per-turn state and are rebuilt
 // here on every attempt: carrying the previous attempt's output window across a
@@ -1205,6 +1278,7 @@ func (m *model) streamTurn(
 	groundedSeen map[string]bool,
 	truncated *bool,
 	log *logger.Logger,
+	toolTraffic *bool,
 ) (*genai.GenerateContentResponseUsageMetadata, error) {
 	detector := &stuckDetector{}
 	var dedup agent.StreamDedup
@@ -1252,6 +1326,15 @@ func (m *model) streamTurn(
 
 		if ev.Content == nil {
 			continue
+		}
+		// Note tool traffic before forwarding: the forward can abort the
+		// turn (stuck detector), and the abort must not lose the fact that
+		// a tool part was already shown.
+		for _, part := range ev.Content.Parts {
+			if part.FunctionCall != nil || part.FunctionResponse != nil {
+				*toolTraffic = true
+				break
+			}
 		}
 		dedup.BeginEvent(ev)
 		if abortErr := m.emitEventParts(ch, ev, &dedup, detector, log); abortErr != nil {
