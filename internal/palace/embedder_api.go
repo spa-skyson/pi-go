@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -293,9 +294,25 @@ func (a *apiEmbedder) post(ctx context.Context, body []byte) ([]byte, error) {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, &apiStatusError{code: resp.StatusCode, body: truncateForError(data)}
+		return nil, &apiStatusError{code: resp.StatusCode, body: a.redactCredentials(truncateForError(data))}
 	}
 	return data, nil
+}
+
+// bearerRe matches a "Bearer <token>" credential of the usual API-key shape.
+// A compromised gateway can echo the client's Authorization header back in an
+// error body; the body lands in apiStatusError.body and from there in logs
+// and the TUI, so it must be scrubbed before it becomes an error message.
+var bearerRe = regexp.MustCompile(`Bearer\s+[A-Za-z0-9._~+/=-]{8,}`)
+
+// redactCredentials replaces the embedder's own API key with [REDACTED]
+// (exact value first — the primary vector), then any Bearer token pattern,
+// covering keys echoed through a different spelling.
+func (a *apiEmbedder) redactCredentials(s string) string {
+	if a.apiKey != "" {
+		s = strings.ReplaceAll(s, a.apiKey, "[REDACTED]")
+	}
+	return bearerRe.ReplaceAllString(s, "Bearer [REDACTED]")
 }
 
 // truncateForError keeps the first bytes of a response body for an error

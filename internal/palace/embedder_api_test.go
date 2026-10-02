@@ -187,6 +187,72 @@ func TestAPIEmbedder_ServerErrorDegrades(t *testing.T) {
 	}
 }
 
+func TestAPIEmbedder_ErrorBodyRedactsBearerCredentials(t *testing.T) {
+	// A hostile or compromised gateway can echo the client's Authorization
+	// header back in an error body (#44). The body reaches logs and the TUI
+	// through apiStatusError, so both the exact key and the Bearer pattern
+	// must be scrubbed before the body becomes an error message.
+	const key = "sk-emb_k3y-9f2XqL7w"
+	echoBody := `{"error":"invalid token: Bearer ` + key + `"}`
+
+	tests := []struct {
+		name       string
+		body       string
+		wantGone   string // must not appear in the error
+		wantInMsg  string // must appear in the error
+		notInMsg   string // must not appear, even redacted
+		wantRedact bool   // the body carries a credential → [REDACTED] expected
+	}{
+		{
+			name:       "echoed key is redacted",
+			body:       echoBody,
+			wantGone:   key,
+			wantInMsg:  "status 400",
+			notInMsg:   "sk-emb_",
+			wantRedact: true,
+		},
+		{
+			name:      "body without credentials is not distorted",
+			body:      `{"error":{"message":"model overloaded"}}`,
+			wantInMsg: `{"error":{"message":"model overloaded"}}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, tt.body, http.StatusBadRequest)
+			}))
+			t.Cleanup(ts.Close)
+
+			e, err := NewAPIEmbedder(ts.URL, "test-model", key)
+			if err != nil {
+				t.Fatalf("NewAPIEmbedder: %v", err)
+			}
+			// A 400 is not retryable, so Embed fails on the first batch.
+			_, err = e.Embed([]string{"x"})
+			if err == nil {
+				t.Fatal("Embed succeeded against a 400 endpoint, want error")
+			}
+			msg := err.Error()
+			if tt.wantGone != "" && strings.Contains(msg, tt.wantGone) {
+				t.Errorf("error message leaks the credential: %v", err)
+			}
+			if !strings.Contains(msg, tt.wantInMsg) {
+				t.Errorf("error %q does not contain %q", msg, tt.wantInMsg)
+			}
+			if tt.notInMsg != "" && strings.Contains(msg, tt.notInMsg) {
+				t.Errorf("error %q leaks a key prefix %q", msg, tt.notInMsg)
+			}
+			if tt.wantRedact && !strings.Contains(msg, "[REDACTED]") {
+				t.Errorf("error %q does not mark the redaction", msg)
+			}
+			if !tt.wantRedact && strings.Contains(msg, "[REDACTED]") {
+				t.Errorf("clean error body %q was needlessly redacted", msg)
+			}
+		})
+	}
+}
+
 func TestAPIEmbedder_BatchesLargeInputs(t *testing.T) {
 	ts := newAPITestServer(t, http.StatusOK, 4)
 	e, err := NewAPIEmbedder(ts.URL, "test-model", "")
