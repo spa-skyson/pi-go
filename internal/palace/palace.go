@@ -98,11 +98,14 @@ func openEmbedder(cfg PalaceConfig) Embedder {
 // EmbedderAvailability reports whether the configured embedding backend can be
 // reached, and why not when it cannot. It performs the same checks New would,
 // without building a palace, so commands that require embeddings can fail early
-// with an actionable message. The backend priority mirrors openEmbedder.
+// with an actionable message. The backend priority mirrors openEmbedder — with
+// one deliberate difference: for the api backend this probes the endpoint with
+// a minimal request, because the availability path exists precisely to fail
+// before a run starts, and construction alone proves nothing about a remote
+// endpoint. openEmbedder itself stays probe-free, see its fallback semantics.
 func EmbedderAvailability(cfg PalaceConfig) error {
 	if cfg.APIEmbedderURL != "" {
-		_, err := NewAPIEmbedder(cfg.APIEmbedderURL, cfg.APIEmbedderModel, cfg.APIEmbedderKey)
-		return err
+		return ProbeAPIEmbedder(cfg.APIEmbedderURL, cfg.APIEmbedderModel, cfg.APIEmbedderKey)
 	}
 	if !cfg.UseOllama {
 		if cfg.ModelPath == "" {
@@ -289,8 +292,10 @@ func (p *Palace) Status(ctx context.Context) (*PalaceStatus, error) {
 	}, nil
 }
 
-// activeEmbedderName names the backend behind Status.Embedder. Nil means no
-// embedder: semantic search is off and queries degrade to FTS5.
+// activeEmbedderName names the backend behind Status.Embedder. It names the
+// configured backend, not a guarantee: a loaded embedder can still fail per
+// query, and every failure degrades that query to FTS5 keyword search. Nil
+// means nothing was configured and search is keyword-only from the start.
 func activeEmbedderName(e Embedder) string {
 	if e == nil {
 		return "fts5"

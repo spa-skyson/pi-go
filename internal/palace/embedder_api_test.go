@@ -163,6 +163,12 @@ func TestAPIEmbedder_NoKeySendsNoAuthHeader(t *testing.T) {
 }
 
 func TestAPIEmbedder_ServerErrorDegrades(t *testing.T) {
+	// The 500 is retried before it surfaces; shrink the pause so -count=3
+	// stays quick.
+	old := apiEmbedRetryDelay
+	apiEmbedRetryDelay = time.Millisecond
+	t.Cleanup(func() { apiEmbedRetryDelay = old })
+
 	ts := newAPITestServer(t, http.StatusInternalServerError, 4)
 	e, err := NewAPIEmbedder(ts.URL, "test-model", "sk-secret")
 	if err != nil {
@@ -225,15 +231,39 @@ func TestAPIEmbedder_EmptyInput(t *testing.T) {
 	}
 }
 
-func TestAPIEmbedder_ClientTimeoutIsBounded(t *testing.T) {
-	ts := newAPITestServer(t, http.StatusOK, 4)
-	e, err := NewAPIEmbedder(ts.URL, "test-model", "")
+// TestAPIEmbedder_RequestTimeoutIsEnforced replaces the old tautology that
+// only re-read the client field: here the endpoint genuinely never answers and
+// the request must fail on the context deadline within the configured budget.
+func TestAPIEmbedder_RequestTimeoutIsEnforced(t *testing.T) {
+	// The handler blocks until the test releases it, so the only way Embed can
+	// return is the context deadline. (Blocking on r.Context() would deadlock
+	// the cleanup: httptest.Server.Close waits for this handler to return, and
+	// the server does not always notice the client-side cancellation.)
+	release := make(chan struct{})
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		<-release
+	}))
+	t.Cleanup(func() { close(release); slow.Close() })
+
+	old := apiEmbedTimeout
+	apiEmbedTimeout = 150 * time.Millisecond
+	t.Cleanup(func() { apiEmbedTimeout = old })
+
+	e, err := NewAPIEmbedder(slow.URL, "test-model", "")
 	if err != nil {
 		t.Fatalf("NewAPIEmbedder: %v", err)
 	}
-	a := e.(*apiEmbedder)
-	if a.client.Timeout != apiEmbedTimeout || apiEmbedTimeout > 30*time.Second {
-		t.Errorf("client timeout = %v, want the bounded %v", a.client.Timeout, apiEmbedTimeout)
+
+	start := time.Now()
+	_, err = e.Embed([]string{"x"})
+	if err == nil {
+		t.Fatal("Embed returned against a server that never answers, want a timeout error")
+	}
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Errorf("Embed hung %v against a dead endpoint — the deadline is not enforced", elapsed)
+	}
+	if !strings.Contains(err.Error(), "context deadline exceeded") {
+		t.Errorf("error = %v, want the context deadline", err)
 	}
 }
 
@@ -387,17 +417,174 @@ func TestOpenEmbedder_DefaultsUnchanged(t *testing.T) {
 	}
 }
 
-func TestEmbedderAvailability_APIBackend(t *testing.T) {
-	cfg := DefaultConfig()
-	cfg.APIEmbedderURL = "http://llm.internal:8000/v1"
-	if err := EmbedderAvailability(cfg); err != nil {
-		t.Errorf("availability with a valid embeddings_url: %v", err)
+// TestAPIEmbedder_RejectsDegenerateResponses pins the response validation:
+// every malformed payload below must come back as an error, never as a stored
+// nil/zero-dim/non-finite vector — each of those poisons search silently (a
+// nil vector passes the dim filter nowhere, a 1e300 value overflows float32 to
+// +Inf and NaNs the cosine).
+func TestAPIEmbedder_RejectsDegenerateResponses(t *testing.T) {
+	tests := []struct {
+		name   string
+		body   string
+		inputs int
+		want   string
+	}{
+		{
+			name:   "duplicate index",
+			body:   `{"data":[{"index":0,"embedding":[0.1,0.1]},{"index":0,"embedding":[0.2,0.2]}]}`,
+			inputs: 2,
+			want:   "repeats index 0",
+		},
+		{
+			name:   "empty embedding",
+			body:   `{"data":[{"index":0,"embedding":[]}]}`,
+			inputs: 1,
+			want:   "missing embedding",
+		},
+		{
+			name:   "null embedding",
+			body:   `{"data":[{"index":0,"embedding":null}]}`,
+			inputs: 1,
+			want:   "missing embedding",
+		},
+		{
+			name:   "1e300 overflows float32 to +Inf",
+			body:   `{"data":[{"index":0,"embedding":[1e300,0.5,0.5,0.5]}]}`,
+			inputs: 1,
+			want:   "non-finite",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			t.Cleanup(ts.Close)
+
+			e, err := NewAPIEmbedder(ts.URL, "test-model", "")
+			if err != nil {
+				t.Fatalf("NewAPIEmbedder: %v", err)
+			}
+			inputs := make([]string, tt.inputs)
+			vecs, err := e.Embed(inputs)
+			if err == nil {
+				t.Fatalf("Embed accepted %s, want error", tt.name)
+			}
+			if vecs != nil {
+				t.Errorf("Embed returned vectors %v alongside the error, want nil", vecs)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %v, want it to mention %q", err, tt.want)
+			}
+		})
+	}
+}
+
+// TestAPIEmbedder_RetriesThrottledBatch pins the retry contract: one 429 is
+// ridden out and the batch succeeds on the second attempt; a 401 is
+// configuration and fails on the first attempt without retries.
+func TestAPIEmbedder_RetriesThrottledBatch(t *testing.T) {
+	old := apiEmbedRetryDelay
+	apiEmbedRetryDelay = time.Millisecond
+	t.Cleanup(func() { apiEmbedRetryDelay = old })
+
+	newCountingServer := func(t *testing.T, failFirst int, code int) (*httptest.Server, func() int) {
+		t.Helper()
+		var mu sync.Mutex
+		calls := 0
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			calls++
+			attempt := calls
+			mu.Unlock()
+			if attempt <= failFirst {
+				http.Error(w, `{"error":{"message":"come back later"}}`, code)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[0.5,0.5,0.5,0.5]}]}`))
+		}))
+		t.Cleanup(ts.Close)
+		return ts, func() int {
+			mu.Lock()
+			defer mu.Unlock()
+			return calls
+		}
 	}
 
-	// The ollama branch must not be consulted while api is selected.
-	cfg.UseOllama = false
-	if err := EmbedderAvailability(cfg); err != nil {
-		t.Errorf("api selection should not require the local model: %v", err)
+	t.Run("429 then success", func(t *testing.T) {
+		ts, calls := newCountingServer(t, 1, http.StatusTooManyRequests)
+		e, err := NewAPIEmbedder(ts.URL, "test-model", "")
+		if err != nil {
+			t.Fatalf("NewAPIEmbedder: %v", err)
+		}
+		vecs, err := e.Embed([]string{"x"})
+		if err != nil {
+			t.Fatalf("Embed after one 429: %v", err)
+		}
+		if len(vecs) != 1 || len(vecs[0]) != 4 {
+			t.Errorf("vecs = %v, want one 4-dim vector", vecs)
+		}
+		if got := calls(); got != 2 {
+			t.Errorf("endpoint saw %d requests, want 2 (one 429, one retry)", got)
+		}
+	})
+
+	t.Run("401 is not retried", func(t *testing.T) {
+		ts, calls := newCountingServer(t, 10, http.StatusUnauthorized)
+		e, err := NewAPIEmbedder(ts.URL, "test-model", "sk-secret")
+		if err != nil {
+			t.Fatalf("NewAPIEmbedder: %v", err)
+		}
+		_, err = e.Embed([]string{"x"})
+		if err == nil || !strings.Contains(err.Error(), "status 401") {
+			t.Fatalf("err = %v, want status 401", err)
+		}
+		if got := calls(); got != 1 {
+			t.Errorf("endpoint saw %d requests, want 1 — an auth failure is not transient", got)
+		}
+	})
+}
+
+// TestEmbedderAvailability_APIBackend exercises the mining gate end to end: a
+// live endpoint passes, and each common failure names its fix — unreachable,
+// rejected key, wrong URL shape or model. openEmbedder is deliberately not
+// probed (its fallback semantics are construction-only); this path is where
+// the failure must be actionable.
+func TestEmbedderAvailability_APIBackend(t *testing.T) {
+	live := newAPITestServer(t, http.StatusOK, 4)
+	badKey := newAPITestServer(t, http.StatusUnauthorized, 4)
+	missing := newAPITestServer(t, http.StatusNotFound, 4)
+
+	tests := []struct {
+		name string
+		url  string
+		want string // empty = must succeed
+	}{
+		{name: "live endpoint", url: live.URL},
+		{name: "unreachable endpoint", url: "http://127.0.0.1:1/v1", want: "unreachable"},
+		{name: "rejected key", url: badKey.URL, want: "rejected the API key"},
+		{name: "wrong url shape or model", url: missing.URL, want: "404"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			cfg.APIEmbedderURL = tt.url
+			cfg.APIEmbedderModel = "bge-m3"
+			cfg.UseOllama = true // the api choice must preempt ollama entirely
+
+			err := EmbedderAvailability(cfg)
+			if tt.want == "" {
+				if err != nil {
+					t.Fatalf("availability with a live endpoint: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("err = %v, want it to mention %q", err, tt.want)
+			}
+		})
 	}
 }
 

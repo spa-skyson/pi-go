@@ -143,9 +143,10 @@ type PalaceStatus struct {
 	RoomCount   int      `json:"room_count"`
 	KG          *KGStats `json:"kg,omitempty"`
 	ModelLoaded bool     `json:"model_loaded"`
-	// Embedder names the active embedding backend: "api/<model>",
-	// "ollama/<model>", the compiled-in local backend, or "fts5" when no
-	// embedder is loaded and search degrades to keyword matching.
+	// Embedder names the configured embedding backend: "api/<model>",
+	// "ollama/<model>", the compiled-in local backend, or "fts5" when none is
+	// configured. It is a configuration report, not a guarantee — embed
+	// errors at query time degrade that query to FTS5.
 	Embedder string `json:"embedder,omitempty"`
 }
 
