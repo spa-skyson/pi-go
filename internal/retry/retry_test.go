@@ -127,13 +127,19 @@ func TestIsTransientTerminalBeatsInterface(t *testing.T) {
 
 // 402 Payment Required is money, not load: it must read as terminal so the
 // fallback-model chain (issue #34) treats the provider as exhausted rather
-// than retrying, and never as transient.
+// than retrying, and never as transient. The code is matched as a status
+// token, not a substring: a "402" inside a request id or a model revision is
+// arbitrary text, not a payment wall.
 func TestIsTerminal402(t *testing.T) {
 	tests := []string{
 		"402 Payment Required",
 		"402",
 		`402 {"error":"payment required: add credits"}`,
 		"provider says: payment required, balance exhausted",
+		`POST "https://api.example.com/v1": HTTP 402`,
+		`{"status": 402, "message": "no balance"}`,
+		`{"code":402}`,
+		"status=402",
 	}
 	for _, msg := range tests {
 		err := providerErr(msg)
@@ -142,6 +148,19 @@ func TestIsTerminal402(t *testing.T) {
 		}
 		if IsTransient(err) {
 			t.Errorf("IsTransient(%q) = true, want false", msg)
+		}
+	}
+
+	// A 402 embedded in a longer identifier is arbitrary text: the matcher's
+	// boundaries must not classify it terminal.
+	for _, msg := range []string{
+		"request 14025 failed",
+		"model gpt-402 unavailable",
+		"trace x402y ended",
+		"req_4023 dropped by upstream",
+	} {
+		if IsTerminal(providerErr(msg)) {
+			t.Errorf("IsTerminal(%q) = true, want false: not a payment wall", msg)
 		}
 	}
 
