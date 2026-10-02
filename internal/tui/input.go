@@ -230,22 +230,43 @@ func (im *InputModel) CursorOnLastVisualRow() bool {
 	return im.input.Line() == im.input.LineCount()-1 && li.RowOffset >= li.Height-1
 }
 
-// View renders the input area.
+// inputBoxStyle returns the chrome around the prompt: a thin rounded border
+// (borderSubtle at rest, borderActive while the engine has focus) over the
+// backgroundPanel fill. totalWidth is the box's full row width — lipgloss
+// counts the border columns inside it — so callers pass the columns the whole
+// box should occupy.
+func inputBoxStyle(p Palette, focused bool, totalWidth int) lipgloss.Style {
+	border := p.BorderSubtle
+	if focused {
+		border = p.BorderActive
+	}
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(border).
+		Background(p.BackgroundPanel).
+		Width(totalWidth)
+}
+
+// View renders the input area: the prompt inside a thin bordered box that
+// spans the editable columns the root model budgeted via SetWidth, plus the
+// prompt column and the two border columns.
 func (im *InputModel) View(running bool) string {
 	im.ensureInput()
+	p := paletteOrDark(im.Palette)
+	total := im.input.Width() + inputPromptWidth + 2
 	if running {
-		p := paletteOrDark(im.Palette)
 		prefix := lipgloss.NewStyle().
 			Foreground(p.Primary).
 			Bold(true).
 			Render("> ")
 		dim := lipgloss.NewStyle().Foreground(p.Dim)
-		return prefix + dim.Render("(waiting for response...)")
+		return inputBoxStyle(p, false, total).Render(prefix + dim.Render("(waiting for response...)"))
 	}
 	view := im.input.View()
 	// Collapsed pastes: swap marker runes for their styled labels. Zero cost
 	// while no paste is collapsed; the full text never shows in the input.
-	return renderPastePlaceholders(im, view)
+	view = renderPastePlaceholders(im, view)
+	return inputBoxStyle(p, im.input.Focused(), total).Render(view)
 }
 
 // InsertText inserts pasted or programmatic text at cursor position. Text
@@ -332,9 +353,18 @@ func (im *InputModel) AllCommandNames() []string {
 }
 
 // Cursor returns the real Bubble Tea cursor for the input's current position.
+// The returned cell accounts for the box View draws around the prompt: the
+// border insets the editable area by one row on top and one column on the
+// left, so the terminal caret must land one row and one column further in.
 func (im *InputModel) Cursor() *tea.Cursor {
 	im.ensureInput()
-	return im.input.Cursor()
+	c := im.input.Cursor()
+	if c == nil {
+		return nil
+	}
+	c.X++
+	c.Y++
+	return c
 }
 
 // applyPaletteStyles paints the text input's prompt and cursor from the current

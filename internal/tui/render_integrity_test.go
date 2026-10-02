@@ -81,7 +81,11 @@ func runeAtCol(plain string, col int) string {
 // panel with blank rows and left a gap below the prompt while the sidebar's
 // filler dots carried on past it.
 func TestFrameHeightFitsTerminal(t *testing.T) {
-	for _, dim := range [][2]int{{172, 48}, {120, 40}, {100, 24}, {80, 20}, {60, 16}, {200, 60}} {
+	// 60x18 is the floor with the sea scene visible: 8 rows of scene plus
+	// rules, a 1-row message viewport floor, and the 6-row bottom section
+	// (status bar, rule, the 3-row bordered prompt, context rule) — anything
+	// shorter physically cannot hold the chrome.
+	for _, dim := range [][2]int{{172, 48}, {120, 40}, {100, 24}, {80, 20}, {60, 18}, {200, 60}} {
 		width, height := dim[0], dim[1]
 		for _, scroll := range []int{0, 9, 40} {
 			m := historyModel(t, "first")

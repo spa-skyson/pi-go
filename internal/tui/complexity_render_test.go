@@ -738,7 +738,7 @@ func TestRenderMessagesBlocksRender(t *testing.T) {
 		{
 			desc: "assistant reply gets the bullet", width: 40,
 			msgs: []message{{role: "assistant", content: "hello"}},
-			want: "\n◉ hello\n",
+			want: "\n╭──────────────────────────────────────╮\n│◉ assistant                           │\n│hello                                 │\n╰──────────────────────────────────────╯\n",
 		},
 		{
 			desc: "empty assistant renders nothing", width: 40,
@@ -748,7 +748,7 @@ func TestRenderMessagesBlocksRender(t *testing.T) {
 		{
 			desc: "empty assistant streams an ellipsis", width: 40, running: true,
 			msgs: []message{{role: "assistant", content: ""}},
-			want: "\n◉ ...\n",
+			want: "\n╭──────────────────────────────────────╮\n│◉ assistant                           │\n│...                                   │\n╰──────────────────────────────────────╯\n",
 		},
 		{
 			desc: "error reply gets the cross and wraps", width: 24,

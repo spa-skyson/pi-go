@@ -131,8 +131,10 @@ func TestPasteRender_LabelInPlaceOfMarker(t *testing.T) {
 	if !strings.Contains(view, want) {
 		t.Errorf("rendered input should contain label %q, got %q", want, ansi.Strip(view))
 	}
-	if strings.Contains(view, "\n") {
-		t.Error("input render must stay a single line")
+	// The prompt box contributes exactly two border rows; the single-line
+	// value must stay a single content row between them.
+	if rows := strings.Count(view, "\n") + 1; rows != 3 {
+		t.Errorf("input render = %d rows, want 3 (1 content + 2 border)", rows)
 	}
 	if !strings.Contains(view, "[вставка:") {
 		t.Errorf("label should be human-readable, got %q", ansi.Strip(view))

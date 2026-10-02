@@ -902,6 +902,9 @@ func (m *model) syncPalette() {
 		m.palette = paletteFor(m.themeManager.Current())
 	}
 	m.chatModel.Palette = m.palette
+	// The framed reply headers name the session model; read fresh so a
+	// /model switch shows up without extra plumbing.
+	m.chatModel.ModelLabel = m.cfg.ModelName
 	m.chatModel.ToolDisplay.Palette = m.palette
 	m.inputModel.Palette = m.palette
 	m.sea.palette = m.palette
@@ -2178,7 +2181,10 @@ func (m *model) View() tea.View {
 	showSidebar := sideW > 0
 
 	// Render components.
-	m.inputModel.SetWidth(max(0, m.width-3))
+	// The editable width shrinks by the box chrome (two border columns) plus
+	// the two prompt columns and one column of slack, so the bordered prompt
+	// occupies exactly the row width the unbordered one did.
+	m.inputModel.SetWidth(max(0, m.width-5))
 	// The input grows with its content up to a third of the terminal and
 	// scrolls internally past that; the message viewport yields the rows.
 	m.inputModel.SetMaxHeight(max(1, m.height/3))
@@ -2407,6 +2413,17 @@ func clipMessagesToViewport(messagesView string, availableHeight, scroll int) (v
 	}
 
 	visible = strings.Join(msgLines[startLine:endLine], "\n")
+
+	// A visible window whose last line is the empty string ends in a bare
+	// newline — the row is open. The blank-row bookkeeping in View assumes a
+	// terminated last row (its "blank row below" newline then closes the
+	// open row instead of adding one), which silently dropped a row and left
+	// the frame one line shorter than the terminal whenever an exact-fit
+	// clip landed on a blank line. Materialize the row with a space, the
+	// same cell the pad rows below use.
+	if strings.HasSuffix(visible, "\n") {
+		visible += " "
+	}
 
 	// Pad to fill the viewport. availableHeight is message rows only — the blank
 	// rows that inset the block from the rules are budgeted separately.

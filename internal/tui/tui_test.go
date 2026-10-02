@@ -971,7 +971,9 @@ func TestTabOnSlash_ShowsCommandList(t *testing.T) {
 }
 
 func TestRenderSlashCommandPopup_AllCommands(t *testing.T) {
-	m := &model{inputModel: NewInputModel(nil, nil, nil, ""), width: 80, height: 24}
+	// Height 26 leaves the popup room for all 28 commands after the two
+	// border rows the prompt box spends.
+	m := &model{inputModel: NewInputModel(nil, nil, nil, ""), width: 80, height: 26}
 	m.inputModel.SetText("/")
 
 	// The unified search popup renders when searchPopup is active.

@@ -430,6 +430,10 @@ func TestChatModel_RenderMessages_RunningEmptyAssistant(t *testing.T) {
 
 func TestChatModel_RenderMessages_RunningDoesNotUseStaleCache(t *testing.T) {
 	cm := NewChatModel(nil)
+	// Wide enough that the framed reply wraps nothing: the assertion matches
+	// on the whole sentence, and the box wraps at the 20-column floor when
+	// Width is left zero.
+	cm.Width = 80
 	cm.Messages = append(cm.Messages,
 		message{role: "assistant", content: "This"},
 		message{role: "tool", tool: "tree", content: "58 dirs"},

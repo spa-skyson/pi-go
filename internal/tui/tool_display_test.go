@@ -454,12 +454,12 @@ func TestRenderRegularTool_PendingBlink(t *testing.T) {
 // bullet at one phase.
 func TestRenderKey_BlinkPhaseDistinct(t *testing.T) {
 	pending := message{role: "tool", tool: "bash", toolIn: "ls"}
-	if pending.renderKey(80, false, false, false, 0, true) == pending.renderKey(80, false, false, false, 0, false) {
+	if pending.renderKey(80, false, false, false, 0, true, "") == pending.renderKey(80, false, false, false, 0, false, "") {
 		t.Fatal("renderKey collides across blink phases -- cached render would freeze the bullet")
 	}
 	// Finished cards do not blink, so their key must not depend on the phase.
 	done := message{role: "tool", tool: "bash", toolIn: "ls", content: "done"}
-	if done.renderKey(80, false, false, false, 0, true) != done.renderKey(80, false, false, false, 0, false) {
+	if done.renderKey(80, false, false, false, 0, true, "") != done.renderKey(80, false, false, false, 0, false, "") {
 		t.Fatal("finished card key depends on blink phase -- it would re-render needlessly")
 	}
 }

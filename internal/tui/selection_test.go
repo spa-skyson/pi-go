@@ -30,7 +30,10 @@ func drag(t *testing.T, m *model, x1, y1, x2, y2 int) *model {
 func selectionModel(t *testing.T) *model {
 	t.Helper()
 	m := historyModel(t, "first")
-	m.width, m.height = 100, 24
+	// Tall enough that both messages stay inside the viewport now that the
+	// assistant reply renders as a 5-row bordered block: 24 rows clipped the
+	// user message out of the window.
+	m.width, m.height = 100, 28
 	m.applyResize()
 	m.chatModel.Messages = append(m.chatModel.Messages,
 		message{role: "user", content: "SELECT-ME-ONE"},
