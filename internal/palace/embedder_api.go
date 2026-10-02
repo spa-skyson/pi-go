@@ -131,7 +131,10 @@ func ProbeAPIEmbedder(baseURL, model, apiKey string) error {
 	if err != nil {
 		return err
 	}
-	a := e.(*apiEmbedder)
+	a, ok := e.(*apiEmbedder)
+	if !ok {
+		return fmt.Errorf("palace: api embedder constructor returned %T", e)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), apiProbeTimeout)
 	defer cancel()
