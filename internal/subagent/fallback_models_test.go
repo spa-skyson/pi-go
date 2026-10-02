@@ -72,6 +72,35 @@ func TestAgentFallbackModels(t *testing.T) {
 			agent: AgentConfig{Role: "smol", FallbackModels: []string{"gpt-5.6-sol"}},
 			want:  []string{"corp/gpt-5.6-sol"},
 		},
+		{
+			name: "bare name rides the primary model's provider, not the default one",
+			cfg: func() *config.Config {
+				cfg := fallbackConfig()
+				cfg.DefaultProvider = "openai"
+				cfg.Roles["smol"] = config.RoleConfig{
+					Model:          "gpt-5.6-sol",
+					Provider:       "corp",
+					FallbackModels: []string{"gpt-5.6-mini"},
+				}
+				return cfg
+			}(),
+			agent: AgentConfig{Role: "smol"},
+			want:  []string{"corp/gpt-5.6-mini"},
+		},
+		{
+			name: "bare name falls back to the default provider when the primary has none",
+			cfg: func() *config.Config {
+				cfg := fallbackConfig()
+				cfg.DefaultProvider = "corp"
+				cfg.Roles["smol"] = config.RoleConfig{
+					Model:          "plain-model",
+					FallbackModels: []string{"gpt-5.6-mini"},
+				}
+				return cfg
+			}(),
+			agent: AgentConfig{Role: "smol"},
+			want:  []string{"corp/gpt-5.6-mini"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

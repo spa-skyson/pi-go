@@ -843,10 +843,17 @@ func agentFallbackModels(cfg *config.Config, agent AgentConfig) []string {
 	if len(models) > maxAgentFallbacks {
 		models = models[:maxAgentFallbacks]
 	}
-	// A bare fallback name has no provider of its own; cfg.DefaultProvider is
-	// the best-effort prefix. The result is a fresh slice: models may alias
-	// the parsed agent config, which is shared.
+	// A bare fallback name has no provider of its own; it rides the provider
+	// of the model it is a fallback FOR — same account, same endpoint. Only
+	// when the primary model itself carries no declared-provider prefix does
+	// cfg.DefaultProvider step in as a best effort. The result is a fresh
+	// slice: models may alias the parsed agent config, which is shared.
 	prov := cfg.DefaultProvider
+	if primary, err := agentSpawnModel(cfg, agent); err == nil {
+		if name, _, ok := cfg.NamedProviderPrefix(primary); ok {
+			prov = name
+		}
+	}
 	out := make([]string, len(models))
 	for i, m := range models {
 		out[i] = normalizeSpawnModelName(cfg, prov, m)
