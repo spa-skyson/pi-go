@@ -11,10 +11,23 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spa-skyson/pi-rate/internal/notice"
 	"github.com/spa-skyson/pi-rate/internal/permission"
 )
+
+// DefaultStreamIdleTimeout is the stream-silence budget a session runs with
+// when neither config.json nor PI_STREAM_IDLE_TIMEOUT_MS says otherwise. 90s
+// sits between the observed normal inter-chunk cadence (well under 1s) and
+// the 5-minute subagent inactivity watchdog, so a stalled gateway call is
+// aborted and retried long before the child is killed for it (issue #37).
+const DefaultStreamIdleTimeout = 90 * time.Second
+
+// EnvStreamIdleTimeoutMS overrides streamIdleTimeout from the environment, in
+// milliseconds. A subagent parent uses it to hand an agent's frontmatter
+// `streamIdleTimeout:` to the child process; "0" disables the idle abort.
+const EnvStreamIdleTimeoutMS = "PI_STREAM_IDLE_TIMEOUT_MS"
 
 // HookConfig defines a shell command hook for tool call events.
 type HookConfig struct {
@@ -165,6 +178,14 @@ type Config struct {
 	// whose models stop below that and reject the request rather than
 	// clamping it. This is an output cap, not a context window.
 	MaxOutputTokens int64 `json:"maxOutputTokens,omitempty"`
+	// StreamIdleTimeout aborts a streaming LLM request that has delivered no
+	// chunks for this many milliseconds (issue #37). Nil keeps the default
+	// (DefaultStreamIdleTimeout, 90s); 0 disables the abort — a pointer
+	// because "unset" and "explicitly off" must stay distinguishable. A
+	// gateway that sits minutes before the first token is aborted and left
+	// to the retry budgets instead of out-waiting the subagent watchdog.
+	// PI_STREAM_IDLE_TIMEOUT_MS overrides it per process.
+	StreamIdleTimeout *int `json:"streamIdleTimeout,omitempty"`
 	// CACertPath is a PEM bundle trusted in addition to the system roots, for
 	// TLS-intercepting corporate proxies. Prefer it over insecureSkipTLS,
 	// which turns verification off for every endpoint.

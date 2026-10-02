@@ -59,6 +59,11 @@ func TestIsTransient(t *testing.T) {
 		{"truncated sse", errors.New("unexpected EOF"), true},
 		{"truncated json", errors.New("unexpected end of JSON input"), true},
 
+		// Retryable: the provider-side idle timeout aborting a stream that
+		// went silent (issue #37). The wording is what the classifier keys on,
+		// so it is pinned here verbatim.
+		{"llm stream idle", errors.New("llm stream idle: no stream data for 1m30s"), true},
+
 		// Terminal: a 429 that is quota exhaustion, not rate limiting. These
 		// are the majority of 429s in the session corpus, and retrying them
 		// only delays a failure the user has to fix by upgrading.
@@ -122,6 +127,33 @@ func TestIsTransientTerminalBeatsInterface(t *testing.T) {
 	}
 	if !IsTerminal(err) {
 		t.Error("IsTerminal should report quota exhaustion")
+	}
+}
+
+// llm stream idle must classify cleanly: retryable, never terminal, and never
+// mistaken for a server-supplied retry window (a delay extracted from it would
+// override the backoff schedule). It carries no "retry in"/"retry-after"
+// phrase by construction — this pins that.
+func TestStreamIdleClassifiesRetryable(t *testing.T) {
+	err := errors.New("llm stream idle: no stream data for 1m30s")
+	if !IsTransient(err) {
+		t.Error("IsTransient(llm stream idle) = false, want true")
+	}
+	if IsTerminal(err) {
+		t.Error("IsTerminal(llm stream idle) = true, want false")
+	}
+	if d, ok := ServerDelay(err); ok {
+		t.Errorf("ServerDelay(llm stream idle) = %v, want none", d)
+	}
+	// The same wording wrapped by the retry budgets (mid-turn pass-through,
+	// exhausted budget) must stay retryable — downstream classifiers see the
+	// wrapped text.
+	wrapped := fmt.Errorf("transient error after partial response (not retrying): %w", err)
+	if IsTerminal(wrapped) {
+		t.Error("IsTerminal(wrapped llm stream idle) = true, want false")
+	}
+	if !IsTransient(wrapped) {
+		t.Error("IsTransient(wrapped llm stream idle) = false, want true")
 	}
 }
 

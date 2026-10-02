@@ -760,10 +760,34 @@ type LLMOptions struct {
 	// built-in providers and the --url path keep the /v1-normalizing
 	// behavior of normalizeOpenAIBaseURL.
 	OpenAICompatBaseURL bool
+	// StreamIdleTimeout aborts a streaming LLM request that has delivered no
+	// chunks for this long, reporting "llm stream idle" — a transient the
+	// retry budgets classify and consume (issue #37). Zero disables the
+	// abort. Resolved from config (and PI_STREAM_IDLE_TIMEOUT_MS) by
+	// config.Config.ResolveStreamIdleTimeout; a caller that leaves it zero
+	// gets no idle protection, not a default.
+	StreamIdleTimeout time.Duration
 }
 
 // NewLLM creates a model.LLM for the given provider info, API key, optional base URL, thinking level, and options.
+//
+// Every constructed model is wrapped in idleStreamModel, which watches
+// streaming calls for silence (abort) and ticks the keep-alive hook from the
+// context (heartbeat) — see stream_idle.go.
 func NewLLM(ctx context.Context, info Info, apiKey, baseURL, thinkingLevel string, opts *LLMOptions) (model.LLM, error) {
+	inner, err := newLLM(ctx, info, apiKey, baseURL, thinkingLevel, opts)
+	if err != nil {
+		return nil, err
+	}
+	if opts == nil {
+		opts = &LLMOptions{}
+	}
+	return idleStreamModel{inner: inner, timeout: opts.StreamIdleTimeout, tick: heartbeatIntervalFor(opts.StreamIdleTimeout)}, nil
+}
+
+// newLLM constructs the provider-specific model.LLM — the whole former body
+// of NewLLM, which now wraps the result with the stream-idle watch.
+func newLLM(ctx context.Context, info Info, apiKey, baseURL, thinkingLevel string, opts *LLMOptions) (model.LLM, error) {
 	if opts == nil {
 		opts = &LLMOptions{}
 	}

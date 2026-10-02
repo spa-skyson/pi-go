@@ -66,6 +66,15 @@ func (e *jsonEmitter) emit(ev jsonEvent) {
 	_ = e.enc.Encode(ev)
 }
 
+// keepalive writes one keep-alive line. The provider's stream watch calls it
+// while a turn waits on the LLM (issue #37); the parent spawner resets its
+// inactivity watchdog on every line it reads, so a child parked on a slow
+// gateway reads as alive. Swallowed by the spawner's parser — it never
+// reaches the parent's event stream.
+func (e *jsonEmitter) keepalive() {
+	e.emit(jsonEvent{Type: "keepalive"})
+}
+
 // text records streamed text or reasoning.
 //
 // In grouped mode the text is buffered until it can be cut at a sentence

@@ -135,10 +135,18 @@ done
 	if !strings.Contains(err.Error(), "time limit") {
 		t.Errorf("error %q does not name the absolute limit", err)
 	}
+	// The absolute branch keeps pointing at the absolute-cap knobs.
+	if !strings.Contains(err.Error(), "PI_SUBAGENT_TIMEOUT_MS") {
+		t.Errorf("absolute-cap error %q does not mention PI_SUBAGENT_TIMEOUT_MS", err)
+	}
 }
 
 // TestSpawn_TimeoutErrorNamesTheKnobs checks the message is actionable. The
 // whole failure mode this fixes was an error that said only "signal: killed".
+// This child goes silent, so the inactivity limit fires — and the hint must
+// name the knob that governs *that* limit (PI_SUBAGENT_INACTIVITY_MS), not
+// the absolute-cap knobs whose raising cannot help here (issue #37, comment
+// note_2879: the old text sent users to PI_SUBAGENT_TIMEOUT_MS).
 func TestSpawn_TimeoutErrorNamesTheKnobs(t *testing.T) {
 	t.Setenv("PI_SUBAGENT_TIMEOUT_MS", "20000")
 	t.Setenv("PI_SUBAGENT_INACTIVITY_MS", "250")
@@ -157,9 +165,15 @@ func TestSpawn_TimeoutErrorNamesTheKnobs(t *testing.T) {
 	if strings.Contains(msg, "signal: killed") {
 		t.Errorf("timeout still reported as a bare signal kill: %q", msg)
 	}
-	for _, want := range []string{"PI_SUBAGENT_TIMEOUT_MS", "timeout:"} {
-		if !strings.Contains(msg, want) {
-			t.Errorf("error %q does not mention %q", msg, want)
+	if !strings.Contains(msg, "PI_SUBAGENT_INACTIVITY_MS") {
+		t.Errorf("inactivity error %q does not mention PI_SUBAGENT_INACTIVITY_MS", msg)
+	}
+	// The absolute-cap knobs are the wrong dial for an inactivity kill; the
+	// old message named them and sent users raising a limit that changes
+	// nothing.
+	for _, wrong := range []string{"PI_SUBAGENT_TIMEOUT_MS", "timeout:"} {
+		if strings.Contains(msg, wrong) {
+			t.Errorf("inactivity error %q points at %q, which governs the absolute cap only", msg, wrong)
 		}
 	}
 }
@@ -277,5 +291,71 @@ func TestDefaultAbsoluteTimeoutIsGenerous(t *testing.T) {
 	// inactivity timer is the working limit; this one is only a backstop.
 	if DefaultAbsoluteTimeout < 10*time.Minute {
 		t.Errorf("DefaultAbsoluteTimeout = %v, want at least 10m", DefaultAbsoluteTimeout)
+	}
+}
+
+// TestSpawn_KeepAliveSurvivesInactivityWindow is the parent half of the
+// issue #37 heartbeat: a child emitting keep-alive lines while it waits on
+// the LLM must survive an inactivity window many times the longest silence,
+// and the keep-alive itself must never surface in the event stream — the
+// parent's watchdog resets on the bare line; nobody else sees it.
+//
+// Ratios mirror the production shape (child in LLM wait far past the 5m
+// window) at test speed: 1.2s of keep-alive output against a 400ms window.
+// The child half — that a real LLM wait emits those lines — is covered by
+// TestStreamHeartbeatTicksWhileWaiting in internal/provider and the
+// WithStreamHeartbeat wiring in runJSONTurn.
+func TestSpawn_KeepAliveSurvivesInactivityWindow(t *testing.T) {
+	t.Setenv("PI_SUBAGENT_TIMEOUT_MS", "20000") // generous absolute backstop
+	t.Setenv("PI_SUBAGENT_INACTIVITY_MS", "400")
+
+	s := &Spawner{PiBinary: fakePi(t, `
+for i in $(seq 1 12); do
+  printf '{"type":"keepalive"}\n'
+  sleep 0.1
+done
+`)}
+
+	proc, err := s.Spawn(context.Background(), SpawnOpts{Prompt: "go"})
+	if err != nil {
+		t.Fatalf("Spawn: %v", err)
+	}
+
+	var events []Event
+	for ev := range proc.Events() {
+		events = append(events, ev)
+	}
+	result, err := proc.Wait()
+	if err != nil {
+		t.Fatalf("a keep-alive child was killed: %v", err)
+	}
+	if result != "" {
+		t.Errorf("keep-alive lines leaked into the result text: %q", result)
+	}
+	for _, ev := range events {
+		if ev.Type == "keepalive" {
+			t.Error("keep-alive events reached the event stream; the spawner must swallow them")
+			break
+		}
+	}
+}
+
+// A silent child — no keep-alive, no output — must still die on the
+// inactivity limit: the heartbeat covers a live child in LLM wait, not a
+// wedged one. The wedge may sit inside the LLM read where the provider watch
+// cannot tick; five minutes of nothing is still the end.
+func TestSpawn_DeadChildStillKilledDespiteHeartbeatMechanism(t *testing.T) {
+	t.Setenv("PI_SUBAGENT_TIMEOUT_MS", "20000")
+	t.Setenv("PI_SUBAGENT_INACTIVITY_MS", "300")
+
+	s := &Spawner{PiBinary: fakePi(t, `sleep 20`)}
+	proc, err := s.Spawn(context.Background(), SpawnOpts{Prompt: "go"})
+	if err != nil {
+		t.Fatalf("Spawn: %v", err)
+	}
+
+	_, err = drain(t, proc)
+	if err == nil || !errors.Is(err, ErrSubagentTimeout) {
+		t.Fatalf("a silent child survived: err=%v, want ErrSubagentTimeout", err)
 	}
 }

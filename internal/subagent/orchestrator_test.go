@@ -729,3 +729,27 @@ func TestGet_ReturnsSeededStatus(t *testing.T) {
 		t.Errorf("status = %q, want failed", st2.Status)
 	}
 }
+
+// The frontmatter `streamIdleTimeout:` must reach the child as
+// PI_STREAM_IDLE_TIMEOUT_MS, in the same spelling the config resolver reads;
+// absence must render as no env at all, so the child inherits.
+func TestStreamIdleEnv(t *testing.T) {
+	inherit := AgentConfig{Name: "a"}
+	if got := streamIdleEnv(inherit); got != nil {
+		t.Errorf("streamIdleEnv(unset) = %v, want nil (inherit)", got)
+	}
+
+	off := AgentConfig{Name: "a", StreamIdleTimeout: intPtr(0)}
+	want := config.EnvStreamIdleTimeoutMS + "=0"
+	if got := streamIdleEnv(off); len(got) != 1 || got[0] != want {
+		t.Errorf("streamIdleEnv(0) = %v, want [%s]", got, want)
+	}
+
+	budget := AgentConfig{Name: "a", StreamIdleTimeout: intPtr(45000)}
+	want = config.EnvStreamIdleTimeoutMS + "=45000"
+	if got := streamIdleEnv(budget); len(got) != 1 || got[0] != want {
+		t.Errorf("streamIdleEnv(45000) = %v, want [%s]", got, want)
+	}
+}
+
+func intPtr(v int) *int { return &v }

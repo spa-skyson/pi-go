@@ -84,6 +84,13 @@ type AgentConfig struct {
 	// (trimmed, lowercased). It is normalized to a thinking level at spawn
 	// time by NormalizeReasoningEffort; empty means inherit.
 	ReasoningEffort string
+	// StreamIdleTimeout is the frontmatter `streamIdleTimeout:` value in
+	// milliseconds, handed to the child as PI_STREAM_IDLE_TIMEOUT_MS (issue
+	// #37). Nil inherits — the child uses its own config.json value or the
+	// 90s default; 0 disables the idle abort for this agent; a positive value
+	// is the silence budget. A pointer because "unset" and "explicitly 0"
+	// must reach the child differently.
+	StreamIdleTimeout *int
 	// Steps caps the child's tool-call iterations (0 = no limit).
 	Steps int
 	// Permission holds the agent's frontmatter `permission:` rules. They gate
@@ -128,6 +135,7 @@ type AgentDiscoveryResult struct {
 // tools: read, write, edit
 // temperature: 0.3
 // reasoningEffort: high
+// streamIdleTimeout: 90s
 // steps: 150
 // timeout: 30m
 // mode: primary
@@ -143,7 +151,9 @@ type AgentDiscoveryResult struct {
 // leave the field at its zero value (= inherit / unlimited). `timeout:` is
 // milliseconds by default and also takes unit suffixes — 30m, 1h, 90s,
 // 500ms; a value resolving to under a second warns and falls back to the
-// default.
+// default. `streamIdleTimeout:` takes the same spellings and rides to the
+// child as PI_STREAM_IDLE_TIMEOUT_MS; a bare `0` disables the child's
+// stream-idle abort, any other unusable value inherits.
 func ParseAgentFile(path string) (AgentConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -248,6 +258,10 @@ func applyAgentFrontmatterKey(cfg *AgentConfig, key, value string) {
 		}
 	case "reasoningEffort":
 		cfg.ReasoningEffort = strings.ToLower(strings.TrimSpace(value))
+	case "streamIdleTimeout":
+		if ms, ok := parseAgentStreamIdleTimeout(cfg.Name, value); ok {
+			cfg.StreamIdleTimeout = &ms
+		}
 	case "mode":
 		switch v := strings.ToLower(strings.TrimSpace(value)); v {
 		case "":
@@ -414,6 +428,22 @@ func parseAgentTimeout(agentName, value string) (int, bool) {
 		return 0, false
 	}
 	return ms, true
+}
+
+// parseAgentStreamIdleTimeout reads a frontmatter `streamIdleTimeout:` value,
+// reporting ok=false when it is unusable and the child should inherit.
+//
+// Same spellings as `timeout:` (milliseconds or one unit suffix — "90s",
+// "2m"), with one difference: a bare "0" is meaningful here, it disables the
+// idle abort for this agent, so it is accepted rather than rejected. Values
+// under a second are still refused — a stream-silence budget that short
+// aborts healthy streams, and it is the same unit mistake `timeout:` guards
+// against.
+func parseAgentStreamIdleTimeout(agentName, value string) (int, bool) {
+	if strings.TrimSpace(value) == "0" {
+		return 0, true
+	}
+	return parseAgentTimeout(agentName, value)
 }
 
 // timeoutUnitMs maps a `timeout:` unit suffix to its length in milliseconds.
