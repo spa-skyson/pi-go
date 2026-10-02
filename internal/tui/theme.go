@@ -18,8 +18,14 @@ import (
 //go:embed themes.json
 var themesJSON []byte
 
-// ThemeColors holds the 13 color roles used throughout the TUI.
+// ThemeColors holds the color roles used throughout the TUI.
 // Colors are stored as hex strings and converted to color.Color via lipgloss.Color().
+//
+// The first thirteen roles are the original set every theme declares. The
+// extended roles below them (#38) are optional: they carry the surface,
+// border, muted-text and diff-detail colors the opencode-style rendering
+// consumes. A theme that declares none of them is a legacy theme — it
+// renders exactly as before, with the palette's own neutral surfaces.
 type ThemeColors struct {
 	Text            string `json:"text"`
 	Base            string `json:"base"`
@@ -34,6 +40,39 @@ type ThemeColors struct {
 	DiffRemoved     string `json:"diffRemoved"`
 	DiffAddedText   string `json:"diffAddedText"`
 	DiffRemovedText string `json:"diffRemovedText"`
+
+	// Extended roles (#38). Filled in for custom themes by merged() (panel
+	// and element from base, borders and muted text from secondary, cursor
+	// from primary); embedded legacy themes leave them empty and keep the
+	// fixed palette surfaces.
+	BackgroundPanel   string `json:"backgroundPanel,omitempty"`
+	BackgroundElement string `json:"backgroundElement,omitempty"`
+	BorderSubtle      string `json:"borderSubtle,omitempty"`
+	BorderBase        string `json:"borderBase,omitempty"`
+	BorderActive      string `json:"borderActive,omitempty"`
+	Accent            string `json:"accent,omitempty"`
+	TextMuted         string `json:"textMuted,omitempty"`
+	DiffContext       string `json:"diffContext,omitempty"`
+	DiffHunkHeader    string `json:"diffHunkHeader,omitempty"`
+	DiffLineNumber    string `json:"diffLineNumber,omitempty"`
+	EditorCursor      string `json:"editorCursor,omitempty"`
+}
+
+// hasExtendedTokens reports whether the palette declares at least one of the
+// extended surface roles. This is the marker of a theme written for the
+// extended rendering: only such themes drive the palette's surfaces and core
+// colors; legacy themes keep the fixed dark/light palettes.
+func (c ThemeColors) hasExtendedTokens() bool {
+	for _, s := range []string{
+		c.BackgroundPanel, c.BackgroundElement, c.BorderSubtle, c.BorderBase,
+		c.BorderActive, c.Accent, c.TextMuted, c.DiffContext, c.DiffHunkHeader,
+		c.DiffLineNumber, c.EditorCursor,
+	} {
+		if strings.TrimSpace(s) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // Color helpers that return color.Color for use with lipgloss styles.
@@ -52,6 +91,18 @@ func (c ThemeColors) DiffRemovedColor() color.Color     { return lipgloss.Color(
 func (c ThemeColors) DiffAddedTextColor() color.Color   { return lipgloss.Color(c.DiffAddedText) }
 func (c ThemeColors) DiffRemovedTextColor() color.Color { return lipgloss.Color(c.DiffRemovedText) }
 
+func (c ThemeColors) BackgroundPanelColor() color.Color   { return lipgloss.Color(c.BackgroundPanel) }
+func (c ThemeColors) BackgroundElementColor() color.Color { return lipgloss.Color(c.BackgroundElement) }
+func (c ThemeColors) BorderSubtleColor() color.Color      { return lipgloss.Color(c.BorderSubtle) }
+func (c ThemeColors) BorderBaseColor() color.Color        { return lipgloss.Color(c.BorderBase) }
+func (c ThemeColors) BorderActiveColor() color.Color      { return lipgloss.Color(c.BorderActive) }
+func (c ThemeColors) AccentColor() color.Color            { return lipgloss.Color(c.Accent) }
+func (c ThemeColors) TextMutedColor() color.Color         { return lipgloss.Color(c.TextMuted) }
+func (c ThemeColors) DiffContextColor() color.Color       { return lipgloss.Color(c.DiffContext) }
+func (c ThemeColors) DiffHunkHeaderColor() color.Color    { return lipgloss.Color(c.DiffHunkHeader) }
+func (c ThemeColors) DiffLineNumberColor() color.Color    { return lipgloss.Color(c.DiffLineNumber) }
+func (c ThemeColors) EditorCursorColor() color.Color      { return lipgloss.Color(c.EditorCursor) }
+
 // Theme represents a loaded color theme.
 type Theme struct {
 	Name        string      `json:"name"`
@@ -61,6 +112,14 @@ type Theme struct {
 	// Custom marks a theme loaded from a themes directory rather than the
 	// embedded set; used only for the "(custom)" tag in the /theme list.
 	Custom bool `json:"-"`
+	// Extended marks a theme whose file declared at least one extended
+	// surface role (#38). Only extended themes drive the palette's surfaces
+	// and core colors; a legacy theme — embedded or custom — keeps the fixed
+	// dark/light palette so its rendering is unchanged apart from the neutral
+	// borders the new chrome draws. Set at load time, before merged() fills
+	// the extended roles in, because the fill would otherwise make every
+	// custom theme look extended.
+	Extended bool `json:"-"`
 }
 
 // ThemeManager manages theme loading, selection, and color access.
@@ -132,6 +191,7 @@ func (tm *ThemeManager) loadFromJSON(data []byte) error {
 		return fmt.Errorf("parse themes: %w", err)
 	}
 	for name, theme := range raw {
+		theme.Extended = theme.Colors.hasExtendedTokens()
 		tm.themes[name] = theme
 	}
 	return nil

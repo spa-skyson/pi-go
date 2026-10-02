@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"os"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -71,6 +72,23 @@ type Palette struct {
 	White       color.Color // deliberately outside the gauge vocabulary
 	Control     color.Color // controls that must sit outside a gauge's color vocabulary
 	Transparent color.Color
+
+	// Extended surfaces and borders (#38). The dark/light defaults mirror the
+	// legacy roles one-to-one, so a theme without the extended tokens renders
+	// the new chrome in exactly the colors the old chrome used — the palette
+	// key is unchanged and existing output stays byte-for-byte identical.
+	// Themes that declare the tokens (the embedded opencode theme, custom
+	// themes written for them) override them in paletteFor.
+	BackgroundPanel   color.Color // editor and status-line fill
+	BackgroundElement color.Color // insets: popups, inputs on a panel
+	BorderSubtle      color.Color // resting borders: editor, message blocks
+	BorderBase        color.Color // mid-weight borders and separators
+	BorderActive      color.Color // focused border: the editor under input
+	TextMuted         color.Color // compact message headers, status-line text
+	DiffContext       color.Color // diff context lines
+	DiffHunkHeader    color.Color // @@ hunk headers
+	DiffLineNumber    color.Color // diff gutters
+	EditorCursor      color.Color // the input caret
 }
 
 // darkPalette is the Catppuccin Mocha palette the renderers used before theming
@@ -111,6 +129,19 @@ var darkPalette = Palette{
 	White:       lipgloss.Color("#ffffff"),
 	Control:     lipgloss.Color("#ffffff"),
 	Transparent: lipgloss.Color("#00000000"),
+
+	// Extended surfaces default to their legacy equivalents, so the extended
+	// chrome draws in exactly the old colors until a theme overrides it.
+	BackgroundPanel:   lipgloss.Color("#1e1e2e"),
+	BackgroundElement: lipgloss.Color("#313244"),
+	BorderSubtle:      lipgloss.Color("#45475a"),
+	BorderBase:        lipgloss.Color("#585b70"),
+	BorderActive:      lipgloss.Color("#89b4fa"),
+	TextMuted:         lipgloss.Color("#a6adc8"),
+	DiffContext:       lipgloss.Color("#a6adc8"),
+	DiffHunkHeader:    lipgloss.Color("#a6adc8"),
+	DiffLineNumber:    lipgloss.Color("#7f849c"),
+	EditorCursor:      lipgloss.Color("#89b4fa"),
 }
 
 // lightPalette is a high-contrast light palette, chosen so every role stays
@@ -158,6 +189,18 @@ var lightPalette = Palette{
 	White:       lipgloss.Color("#ffffff"),
 	Control:     lipgloss.Color("#1c1e26"),
 	Transparent: lipgloss.Color("#00000000"),
+
+	// Extended surfaces default to their legacy equivalents (see darkPalette).
+	BackgroundPanel:   lipgloss.Color("#eff1f5"),
+	BackgroundElement: lipgloss.Color("#ccd0da"),
+	BorderSubtle:      lipgloss.Color("#bcc0cc"),
+	BorderBase:        lipgloss.Color("#9ca0b0"),
+	BorderActive:      lipgloss.Color("#1a4fd8"),
+	TextMuted:         lipgloss.Color("#5c5f73"),
+	DiffContext:       lipgloss.Color("#5c5f73"),
+	DiffHunkHeader:    lipgloss.Color("#5c5f73"),
+	DiffLineNumber:    lipgloss.Color("#7c7f93"),
+	EditorCursor:      lipgloss.Color("#1a4fd8"),
 }
 
 // paletteFor resolves a Palette from a Theme. Dark themes keep the Mocha
@@ -165,11 +208,68 @@ var lightPalette = Palette{
 // byte-for-byte unchanged; light themes get the Catppuccin Latte palette, which
 // is legible on a light terminal background. This is what makes a light theme
 // actually render instead of drawing dark-theme foregrounds on a light screen.
+//
+// A theme that declared extended surface tokens (#38) — the embedded opencode
+// theme, or a custom theme file that sets them — additionally drives the
+// palette from its own colors: the extended surfaces and borders verbatim, and
+// the core roles (text, accents, semantics) from the legacy roles it declared.
+// Legacy themes skip this branch entirely, which is what keeps their rendering
+// unchanged apart from the neutral borders the new chrome draws.
 func paletteFor(t Theme) Palette {
+	p := darkPalette
 	if t.ThemeType == "light" {
-		return lightPalette
+		p = lightPalette
 	}
-	return darkPalette
+	if !t.Extended {
+		return p
+	}
+
+	c := t.Colors
+	set := func(dst *color.Color, token string, def color.Color) {
+		if s := strings.TrimSpace(token); s != "" {
+			*dst = lipgloss.Color(s)
+			return
+		}
+		*dst = def
+	}
+
+	// Core roles from the theme's declared colors, with the palette's own
+	// values as the fallback for anything left empty.
+	set(&p.Text, c.Text, p.Text)
+	set(&p.Subtext, c.TextMuted, p.Subtext)
+	set(&p.Dim, c.TextMuted, p.Dim)
+	set(&p.Faint, c.TextMuted, p.Faint)
+	set(&p.TextMuted, c.TextMuted, p.TextMuted)
+	set(&p.Primary, c.Primary, p.Primary)
+	set(&p.Blue, c.Primary, p.Blue)
+	set(&p.Accent, c.Accent, p.Accent)
+	set(&p.Mauve, c.Accent, p.Mauve)
+	set(&p.Tool, c.Tool, p.Tool)
+	set(&p.Green, c.Tool, p.Green)
+	set(&p.Success, c.Success, p.Success)
+	set(&p.Error, c.Error, p.Error)
+	set(&p.Red, c.Error, p.Red)
+	set(&p.Warning, c.Warning, p.Warning)
+	set(&p.Yellow, c.Warning, p.Yellow)
+	set(&p.Cyan, c.Info, p.Cyan)
+	set(&p.Sky, c.Secondary, p.Sky)
+	set(&p.Sapphire, c.Secondary, p.Sapphire)
+	set(&p.Background, c.Base, p.Background)
+	set(&p.Surface, c.BorderBase, p.Surface)
+	set(&p.Surface1, c.BorderSubtle, p.Surface1)
+	set(&p.Surface0, c.BackgroundElement, p.Surface0)
+
+	// Extended surfaces verbatim.
+	set(&p.BackgroundPanel, c.BackgroundPanel, p.BackgroundPanel)
+	set(&p.BackgroundElement, c.BackgroundElement, p.BackgroundElement)
+	set(&p.BorderSubtle, c.BorderSubtle, p.BorderSubtle)
+	set(&p.BorderBase, c.BorderBase, p.BorderBase)
+	set(&p.BorderActive, c.BorderActive, p.BorderActive)
+	set(&p.DiffContext, c.DiffContext, p.DiffContext)
+	set(&p.DiffHunkHeader, c.DiffHunkHeader, p.DiffHunkHeader)
+	set(&p.DiffLineNumber, c.DiffLineNumber, p.DiffLineNumber)
+	set(&p.EditorCursor, c.EditorCursor, p.EditorCursor)
+	return p
 }
 
 // paletteOrDark returns p when it is a real palette, otherwise the dark
@@ -203,12 +303,15 @@ func SetupProgramOptions() []tea.ProgramOption {
 
 // paletteKey fingerprints a palette so the chat render cache can invalidate
 // when the theme changes. It folds the palette's distinguishing colors into a
-// single uint64; two palettes that render identically share a key.
+// single uint64; two palettes that render identically share a key. The
+// extended surfaces are folded too: a theme switch that only moves the borders
+// and fills must still repaint the transcript.
 func paletteKey(p Palette) uint64 {
 	h := fnvOffset64
 	for _, c := range []color.Color{
 		p.Text, p.Primary, p.Accent, p.Tool, p.Success, p.Error,
 		p.Warning, p.Dim, p.Faint, p.Surface, p.Background,
+		p.BackgroundPanel, p.BorderSubtle, p.BorderActive, p.TextMuted,
 	} {
 		if c == nil {
 			continue

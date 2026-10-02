@@ -15,6 +15,17 @@
     "diffAdded": "#1d3327",
     "diffRemoved": "#3a1f26",
     "diffAddedText": "#69c98a",
-    "diffRemovedText": "#e06c75"
+    "diffRemovedText": "#e06c75",
+    "backgroundPanel": "#1d222c",
+    "backgroundElement": "#242a36",
+    "borderSubtle": "#333b4a",
+    "borderBase": "#454f61",
+    "borderActive": "#5b8def",
+    "accent": "#c678dd",
+    "textMuted": "#8a919e",
+    "diffContext": "#8a919e",
+    "diffHunkHeader": "#61afef",
+    "diffLineNumber": "#565e6c",
+    "editorCursor": "#5b8def"
   }
 }

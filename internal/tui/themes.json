@@ -798,5 +798,36 @@
       "diffAddedText": "#5faf5f",
       "diffRemovedText": "#ff5f5f"
     }
+  },
+  "opencode": {
+    "name": "opencode",
+    "displayName": "OpenCode",
+    "themeType": "dark",
+    "colors": {
+      "text": "#eeeeee",
+      "base": "#0a0a0a",
+      "primary": "#fab283",
+      "tool": "#56b6c2",
+      "success": "#7fd88f",
+      "error": "#e06c75",
+      "secondary": "#5c9cf5",
+      "info": "#56b6c2",
+      "warning": "#f5a742",
+      "diffAdded": "#20303b",
+      "diffRemoved": "#37222c",
+      "diffAddedText": "#4fd6be",
+      "diffRemovedText": "#c53b53",
+      "backgroundPanel": "#141414",
+      "backgroundElement": "#1e1e1e",
+      "borderSubtle": "#323232",
+      "borderBase": "#484848",
+      "borderActive": "#606060",
+      "accent": "#9d7cd8",
+      "textMuted": "#808080",
+      "diffContext": "#828bb8",
+      "diffHunkHeader": "#828bb8",
+      "diffLineNumber": "#505050",
+      "editorCursor": "#fab283"
+    }
   }
 }

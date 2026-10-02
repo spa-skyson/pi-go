@@ -161,8 +161,11 @@ func TestLoadCustomThemesPartialUnknownFilledFromDefault(t *testing.T) {
 		t.Errorf("partial theme not filled from default: got base=%q primary=%q error=%q, want %q/%q/%q",
 			colors.Base, colors.Primary, colors.Error, want.Base, want.Primary, want.Error)
 	}
-	if n := colors.colorRoleCount(); n != 13 {
-		t.Errorf("colorRoleCount() = %d, want 13 after merge", n)
+	// 13 legacy roles are always filled; the extended roles fill from the
+	// theme's own colors, except accent, which has no legacy carrier and
+	// stays empty (the palette default applies) — 13 + 10 = 23.
+	if n := colors.colorRoleCount(); n != 23 {
+		t.Errorf("colorRoleCount() = %d, want 23 after merge", n)
 	}
 }
 
@@ -292,7 +295,7 @@ func TestRepoExampleThemeParses(t *testing.T) {
 	if err := json.Unmarshal(raw, &theme); err != nil {
 		t.Fatalf("themes/example.json does not parse into Theme: %v", err)
 	}
-	if n := theme.Colors.colorRoleCount(); n != 13 {
-		t.Errorf("themes/example.json declares %d color roles, want 13", n)
+	if n := theme.Colors.colorRoleCount(); n != 24 {
+		t.Errorf("themes/example.json declares %d color roles, want 24", n)
 	}
 }

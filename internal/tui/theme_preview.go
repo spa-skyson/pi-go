@@ -116,6 +116,16 @@ func formatPalettePreview(p Palette) string {
 		{"Overlay", p.Overlay, "gauge track"},
 		{"Background", p.Background, "sidebar background"},
 		{"Control", p.Control, "gauge clear button"},
+		{"BackgroundPanel", p.BackgroundPanel, "editor, status line"},
+		{"BackgroundElement", p.BackgroundElement, "element fill"},
+		{"BorderSubtle", p.BorderSubtle, "editor, message blocks"},
+		{"BorderBase", p.BorderBase, "mid borders"},
+		{"BorderActive", p.BorderActive, "focused editor"},
+		{"TextMuted", p.TextMuted, "headers, status text"},
+		{"DiffContext", p.DiffContext, "diff context"},
+		{"DiffHunkHeader", p.DiffHunkHeader, "diff @@ lines"},
+		{"DiffLineNumber", p.DiffLineNumber, "diff gutters"},
+		{"EditorCursor", p.EditorCursor, "input caret"},
 	}
 
 	var b strings.Builder
