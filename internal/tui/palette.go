@@ -139,7 +139,7 @@ var darkPalette = Palette{
 	BorderActive:      lipgloss.Color("#89b4fa"),
 	TextMuted:         lipgloss.Color("#a6adc8"),
 	DiffContext:       lipgloss.Color("#a6adc8"),
-	DiffHunkHeader:    lipgloss.Color("#a6adc8"),
+	DiffHunkHeader:    lipgloss.Color("#7f849c"),
 	DiffLineNumber:    lipgloss.Color("#7f849c"),
 	EditorCursor:      lipgloss.Color("#89b4fa"),
 }
@@ -198,7 +198,7 @@ var lightPalette = Palette{
 	BorderActive:      lipgloss.Color("#1a4fd8"),
 	TextMuted:         lipgloss.Color("#5c5f73"),
 	DiffContext:       lipgloss.Color("#5c5f73"),
-	DiffHunkHeader:    lipgloss.Color("#5c5f73"),
+	DiffHunkHeader:    lipgloss.Color("#7c7f93"),
 	DiffLineNumber:    lipgloss.Color("#7c7f93"),
 	EditorCursor:      lipgloss.Color("#1a4fd8"),
 }

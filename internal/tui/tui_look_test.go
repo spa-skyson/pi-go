@@ -133,3 +133,121 @@ func TestCursorAccountsForPromptBox(t *testing.T) {
 		t.Errorf("cursor = (%d,%d), want (3,1): column 1 for the border + 2 prompt cells, row 1 for the top border", c.X, c.Y)
 	}
 }
+
+// --- bottom status line -----------------------------------------------------
+
+// TestBottomStatusLineIdlePinsContent pins the idle line: the provider/model
+// identity on the left, the run status, and the mode's key hints on the
+// right, all padded to exactly the terminal width over the panel background.
+func TestBottomStatusLineIdlePinsContent(t *testing.T) {
+	m := historyModel(t, "first")
+	m.cfg.ModelName = "gpt-5"
+	m.cfg.ProviderName = "openai"
+	m.palette = darkPalette
+	width := 100
+
+	line := m.bottomStatusLine(width)
+	plain := ansi.Strip(line)
+	if ansi.StringWidth(plain) != width {
+		t.Fatalf("status line is %d wide, want %d", ansi.StringWidth(plain), width)
+	}
+	for _, want := range []string{"openai/gpt-5", "idle", "shift+tab agent", "ctrl+h history", "ctrl+c quit"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("status line missing %q: %q", want, plain)
+		}
+	}
+	// The panel background is painted, not just implied.
+	if !strings.Contains(line, "\x1b[48;2;30;30;46m") {
+		t.Errorf("status line does not carry the backgroundPanel fill: %q", line)
+	}
+}
+
+// TestBottomStatusLineRunningPinsHints pins the running state: the status
+// word switches and the hints trade agent-cycling for cancellation.
+func TestBottomStatusLineRunningPinsHints(t *testing.T) {
+	m := historyModel(t, "first")
+	m.running = true
+	m.palette = darkPalette
+
+	plain := ansi.Strip(m.bottomStatusLine(100))
+	if !strings.Contains(plain, "running") {
+		t.Errorf("running line missing the status word: %q", plain)
+	}
+	if strings.Contains(plain, "idle") {
+		t.Errorf("running line still says idle: %q", plain)
+	}
+	for _, want := range []string{"esc cancel", "ctrl+t agents"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("running hints missing %q: %q", want, plain)
+		}
+	}
+}
+
+// TestBottomStatusLinePlanModePinsHints pins the plan-mode hint swap: the
+// first hint points at /run instead of agent cycling.
+func TestBottomStatusLinePlanModePinsHints(t *testing.T) {
+	m := historyModel(t, "first")
+	m.mode = "plan"
+	m.palette = darkPalette
+
+	plain := ansi.Strip(m.bottomStatusLine(100))
+	if !strings.Contains(plain, "/run execute") {
+		t.Errorf("plan-mode line missing the /run hint: %q", plain)
+	}
+}
+
+// TestBottomStatusLineWithoutModel keeps a bare model (tests, no config)
+// renderable: the identity vanishes, the status and hints stay.
+func TestBottomStatusLineWithoutModel(t *testing.T) {
+	m := historyModel(t, "first")
+	m.palette = darkPalette
+
+	plain := ansi.Strip(m.bottomStatusLine(100))
+	if !strings.Contains(plain, "idle") || !strings.Contains(plain, "ctrl+c quit") {
+		t.Errorf("bare-model line lost status or hints: %q", plain)
+	}
+	// No identity pair is drawn without a configured model.
+	if strings.Contains(plain, "/") {
+		t.Errorf("bare-model line draws an identity pair: %q", plain)
+	}
+}
+
+// TestBottomStatusLineNarrowTruncatesHints pins the narrow-terminal behavior:
+// the hints yield first (truncated with an ellipsis) and the row still
+// measures exactly the terminal width.
+func TestBottomStatusLineNarrowTruncatesHints(t *testing.T) {
+	m := historyModel(t, "first")
+	m.cfg.ModelName = "gpt-5"
+	m.cfg.ProviderName = "openai"
+	m.palette = darkPalette
+
+	line := m.bottomStatusLine(60)
+	plain := ansi.Strip(line)
+	if ansi.StringWidth(plain) != 60 {
+		t.Fatalf("narrow status line is %d wide, want 60", ansi.StringWidth(plain))
+	}
+	if !strings.Contains(plain, "openai/gpt-5") || !strings.Contains(plain, "idle") {
+		t.Errorf("narrow line lost the left half: %q", plain)
+	}
+	if !strings.Contains(plain, "…") {
+		t.Errorf("narrow line should truncate the hints with an ellipsis: %q", plain)
+	}
+}
+
+// TestViewCarriesBottomStatusLine runs the line end to end: the composed
+// frame carries the status and the hints below the prompt.
+func TestViewCarriesBottomStatusLine(t *testing.T) {
+	m := historyModel(t, "first")
+	m.width, m.height = 120, 40
+	m.applyResize()
+	m.cfg.ModelName = "gpt-5"
+	m.cfg.ProviderName = "openai"
+
+	plain := ansi.Strip(m.View().Content)
+	if !strings.Contains(plain, "openai/gpt-5") || !strings.Contains(plain, "idle") {
+		t.Errorf("frame does not carry the bottom status line identity")
+	}
+	if !strings.Contains(plain, "ctrl+c quit") {
+		t.Errorf("frame does not carry the bottom status line hints")
+	}
+}

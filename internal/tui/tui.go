@@ -2314,6 +2314,10 @@ func (m *model) View() tea.View {
 	inputCursorY := strings.Count(topSection, "\n") + 1 + strings.Count(bottom.String(), "\n")
 	bottom.WriteString(inputArea)
 	bottom.WriteString("\n")
+	// The opencode-style line under the prompt: session identity and run
+	// status on the left, mode key hints on the right.
+	bottom.WriteString(m.bottomStatusLine(m.width))
+	bottom.WriteString("\n")
 	// The closing rule doubles as the session context gauge — same row, same
 	// width, now carrying a reading instead of only closing the frame.
 	bottom.WriteString(renderContextRule(m.contextRuleFor(m.width), m.palette))
@@ -2772,14 +2776,17 @@ func (m *model) messageViewportHeight() int {
 	}
 	statusBar := m.statusModel.Render(m.statusRenderInput())
 	inputArea := m.inputModel.View(m.loading)
+	bottomLine := m.bottomStatusLine(m.width)
 	statusLines := strings.Count(statusBar, "\n") + 1
 	inputLines := strings.Count(inputArea, "\n") + 1
+	bottomLines := strings.Count(bottomLine, "\n") + 1
 	// The chrome around the messages: the panel's closing rule plus the two rules
-	// that frame the input below it. The two blank rows that inset the messages
-	// from those rules are not message rows either. Counting them as such made
-	// the panel one row taller than the terminal, so the terminal scrolled the
-	// frame and tore the panel away from the sidebar.
-	availableHeight := m.height - statusLines - inputLines - 3 - 2
+	// that frame the input below it, and the status line under the prompt. The
+	// two blank rows that inset the messages from those rules are not message
+	// rows either. Counting them as such made the panel one row taller than the
+	// terminal, so the terminal scrolled the frame and tore the panel away from
+	// the sidebar.
+	availableHeight := m.height - statusLines - inputLines - bottomLines - 3 - 2
 	if m.sea.visible() {
 		// The sea scene adds its rows plus two framing rules above the messages.
 		// visible() answers the same question as render() != "" without

@@ -1008,7 +1008,7 @@ func TestSlashCommandPopup_UsesHistoryWindowHeight(t *testing.T) {
 		cfg:        Config{Skills: skills},
 		inputModel: NewInputModel(nil, nil, nil, ""),
 		width:      80,
-		height:     40,
+		height:     42,
 	}
 	m.inputModel.SetText("/")
 	m.newSearchPopup(searchModeCommands)

@@ -44,7 +44,11 @@ type ThemeColors struct {
 	// Extended roles (#38). Filled in for custom themes by merged() (panel
 	// and element from base, borders and muted text from secondary, cursor
 	// from primary); embedded legacy themes leave them empty and keep the
-	// fixed palette surfaces.
+	// fixed palette surfaces. DiffLineNumber is declared for theme authors
+	// ahead of a consumer: the /diff viewer trims its marker column rather
+	// than rendering a gutter, so no row currently draws it — the /theme
+	// palette preview shows it so a theme can still express the full
+	// opencode palette.
 	BackgroundPanel   string `json:"backgroundPanel,omitempty"`
 	BackgroundElement string `json:"backgroundElement,omitempty"`
 	BorderSubtle      string `json:"borderSubtle,omitempty"`

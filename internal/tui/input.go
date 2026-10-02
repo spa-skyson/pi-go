@@ -397,7 +397,7 @@ func (im *InputModel) applyPaletteStyles() {
 	styles.Blurred.CursorLineNumber = zero
 	styles.Focused.Selection = zero
 	styles.Blurred.Selection = zero
-	styles.Cursor.Color = p.Primary
+	styles.Cursor.Color = p.EditorCursor
 	styles.Cursor.Shape = tea.CursorBar
 	im.input.SetStyles(styles)
 	im.stylePaletteKey = paletteKey(p)

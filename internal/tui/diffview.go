@@ -302,8 +302,8 @@ func (m *model) renderDiffViewer(width, viewport int) string {
 	}
 	addStyle := lipgloss.NewStyle().Foreground(addedC)
 	delStyle := lipgloss.NewStyle().Foreground(removedC)
-	ctxStyle := lipgloss.NewStyle().Foreground(p.Dim)
-	metaStyle := lipgloss.NewStyle().Foreground(p.Faint)
+	ctxStyle := lipgloss.NewStyle().Foreground(p.DiffContext)
+	metaStyle := lipgloss.NewStyle().Foreground(p.DiffHunkHeader)
 	hdrStyle := lipgloss.NewStyle().Foreground(p.Primary)
 
 	// Header: scope, file count, current file with status, add/remove totals.
