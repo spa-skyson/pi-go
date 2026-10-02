@@ -17,6 +17,7 @@ import (
 	"google.golang.org/genai"
 
 	"github.com/spa-skyson/pi-rate/internal/agent"
+	"github.com/spa-skyson/pi-rate/internal/config"
 	"github.com/spa-skyson/pi-rate/internal/extension"
 	"github.com/spa-skyson/pi-rate/internal/logger"
 	"github.com/spa-skyson/pi-rate/internal/otel"
@@ -102,20 +103,6 @@ const (
 	// Deliberately small: repetition that survives being named is not going to
 	// be fixed by naming it a third time, and each attempt costs a whole turn.
 	maxStuckRecoveries = 2
-
-	// maxMidTurnAttempts is how many times a turn may run in total when a
-	// transient failure cuts it short mid-reply (issue #41). A stalled stream
-	// usually clears on a fresh connection, so the turn is replayed from its
-	// prompt instead of dying and waiting for a manual /retry — but only
-	// while the failed attempt produced no tool traffic, which a replay
-	// would execute twice (see streamTurn's toolTraffic flag). The budget
-	// counts every request of the turn: the retries the turn's own layers
-	// announce through the retry notifier (provider re-sends, WithRetry
-	// replays) spend the same budget, so no layer can multiply the total
-	// past it. The first replay warns "retrying 2/3", and a third straight
-	// failure ends the turn through the ordinary error path, where
-	// handleAgentDone offers /retry.
-	maxMidTurnAttempts = 3
 )
 
 // extractAgentType returns a label for the subagent tool call by inspecting
@@ -1171,6 +1158,23 @@ func (m *model) runAgentLoop(ctx context.Context, prompt string, ch chan agentMs
 		otel.AttributeInt("prompt.length", len(prompt)),
 	)
 
+	// The mid-turn replay budget comes from the session config — env →
+	// config.json → default, resolved once at startup by the CLI (issue #43).
+	// Nil, the shape every directly-built test Config carries, runs at the
+	// default. The budget counts every request of the turn: the retries the
+	// turn's own layers announce through the notifier below spend the same
+	// budget, so no layer can multiply the total past it. A stalled stream
+	// usually clears on a fresh connection, so the turn is replayed from its
+	// prompt instead of dying — but only while the failed attempt produced
+	// no tool traffic, which a replay would execute twice (streamTurn's
+	// toolTraffic flag). The first replay warns "retrying 2/N", and the
+	// attempt past the budget ends the turn through the ordinary error path,
+	// where handleAgentDone offers /retry.
+	midTurnMax := config.DefaultMidTurnAttempts
+	if m.cfg.MidTurnAttempts != nil {
+		midTurnMax = *m.cfg.MidTurnAttempts
+	}
+
 	// Surface every retry — the provider re-sending a request that died under
 	// it, or WithRetry replaying a run that produced nothing — as a warning in
 	// the transcript. Without this the pause reads as the model thinking, and
@@ -1178,7 +1182,7 @@ func (m *model) runAgentLoop(ctx context.Context, prompt string, ch chan agentMs
 	// The same notices are the tally for the mid-turn budget below: each
 	// announced retry is one more request against this turn, and without
 	// counting them a gateway that fails every request costs
-	// maxMidTurnAttempts × (MaxRetries+1) requests instead of one budget.
+	// midTurnMax × (MaxRetries+1) requests instead of one budget.
 	innerRetries := 0
 	ctx = retry.WithNotifier(ctx, func(a retry.Attempt) {
 		innerRetries++
@@ -1250,10 +1254,10 @@ func (m *model) runAgentLoop(ctx context.Context, prompt string, ch chan agentMs
 		// the ordinary error path — terminal failures (402, quota, auth)
 		// will not clear on a re-send, and replaying a turn whose tools
 		// already ran could execute them twice.
-		if !toolTraffic && retry.IsTransient(err) && midturnAttempts+innerRetries < maxMidTurnAttempts-1 {
+		if !toolTraffic && retry.IsTransient(err) && midturnAttempts+innerRetries < midTurnMax-1 {
 			midturnAttempts++
 			warn := fmt.Sprintf("stream stalled (transient), retrying %d/%d: %v",
-				midturnAttempts+1, maxMidTurnAttempts, rootCause(err))
+				midturnAttempts+1, midTurnMax, rootCause(err))
 			log.Info(warn)
 			ch <- agentWarningMsg{text: warn}
 			if !sleepContext(ctx, midturnRetryPause) {

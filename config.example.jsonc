@@ -126,6 +126,12 @@
   // and hand the failure to the retry budget. Default 90000 (90s); 0 turns
   // the abort off. PI_STREAM_IDLE_TIMEOUT_MS overrides per process.
   // "streamIdleTimeout": 60000,
+  // How many times a turn may run in total when a transient failure cuts it
+  // short mid-reply (the "stream stalled, retrying" budget). Default 3 — the
+  // first attempt plus two replays; 0 or 1 turns the replays off. Values
+  // outside 0..10 fall back to the default. PI_MIDTURN_ATTEMPTS overrides
+  // per process.
+  // "midTurnAttempts": 3,
   "insecureSkipTLS": false,
   // "caCertPath": "/etc/ssl/company-proxy.pem",
   "traceHTTP": false

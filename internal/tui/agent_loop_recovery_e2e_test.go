@@ -16,7 +16,15 @@ import (
 // how a recovery announces itself to the user.
 func driveRunLoopWithWarnings(t *testing.T, a *agent.Agent, sid, prompt string) (runResult, []string) {
 	t.Helper()
-	m := &model{cfg: Config{Agent: a, SessionID: sid}, ctx: context.Background()}
+	return driveRunLoopConfig(t, Config{Agent: a, SessionID: sid}, prompt)
+}
+
+// driveRunLoopConfig runs the loop for a caller-built Config and drains the
+// warning stream. It is the seam tests that vary a Config field — the
+// mid-turn budget wiring, for one (issue #43) — drive the loop through.
+func driveRunLoopConfig(t *testing.T, cfg Config, prompt string) (runResult, []string) {
+	t.Helper()
+	m := &model{cfg: cfg, ctx: context.Background()}
 	m.agentCh = make(chan agentMsg, 4096)
 
 	var res runResult

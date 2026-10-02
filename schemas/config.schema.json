@@ -75,6 +75,12 @@
       "minimum": 0,
       "description": "Abort a streaming LLM request that has delivered no chunks for this many milliseconds; the failure is classified retryable and handed to the retry budget. Default 90000 (90s); 0 disables the abort. PI_STREAM_IDLE_TIMEOUT_MS overrides per process."
     },
+    "midTurnAttempts": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10,
+      "description": "How many times a turn may run in total when a transient failure cuts it short mid-reply (the 'stream stalled, retrying' budget). Default 3 — the first attempt plus two replays; 0 or 1 turns the replays off. Values outside 0..10 fall back to the default with a warning. PI_MIDTURN_ATTEMPTS overrides per process."
+    },
     "caCertPath": {
       "type": "string",
       "description": "PEM bundle trusted in addition to the system roots, for TLS-intercepting corporate proxies."

@@ -10,6 +10,8 @@ import (
 	"time"
 
 	llmmodel "google.golang.org/adk/v2/model"
+
+	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
 // seqLLM scripts each GenerateContent call as an ordered sequence of
@@ -446,11 +448,62 @@ func TestRunAgentLoop_MidturnReplayAfterStuckRecovery(t *testing.T) {
 	}
 }
 
+// intPtr returns a pointer to n — the shape an explicit config value takes.
+func intPtr(n int) *int { return &n }
+
+// TestRunAgentLoop_MidturnBudgetFromConfig pins the wiring (issue #43): the
+// replay budget is read from the session config, not a compiled constant. A
+// turn that stalls on every attempt runs exactly MidTurnAttempts times —
+// 2 means one replay, 0 and 1 mean the first transient failure ends the turn
+// (the pre-#41 behavior) — and an unset field runs at the default.
+func TestRunAgentLoop_MidturnBudgetFromConfig(t *testing.T) {
+	restore := stubMidturnRetryPause(time.Millisecond)
+	defer restore()
+
+	tests := []struct {
+		name      string
+		attempts  *int
+		wantCalls int
+		wantStall int // "stream stalled" warnings, one per replay
+	}{
+		{name: "config 2 → one replay", attempts: intPtr(2), wantCalls: 2, wantStall: 1},
+		{name: "config 1 → replays off", attempts: intPtr(1), wantCalls: 1, wantStall: 0},
+		{name: "config 0 → replays off", attempts: intPtr(0), wantCalls: 1, wantStall: 0},
+		{name: "unset → default 3", attempts: nil, wantCalls: 3, wantStall: 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			llm := &seqLLM{name: "always-stall", gen: func(int) []*llmmodel.LLMResponse {
+				return []*llmmodel.LLMResponse{textResp("partial"), streamErrResp(stallReason)}
+			}}
+			a, sid := newRunTestAgent(t, llm)
+
+			cfg := Config{Agent: a, SessionID: sid, MidTurnAttempts: tt.attempts}
+			res, warnings := driveRunLoopConfig(t, cfg, "explain something")
+
+			if got := llm.calls(); got != tt.wantCalls {
+				t.Fatalf("model was called %d times, want %d (attempts = %v)",
+					got, tt.wantCalls, tt.attempts)
+			}
+			got := stallWarnings(warnings)
+			if len(got) != tt.wantStall {
+				t.Fatalf("got %d stall warnings, want %d:\n%s",
+					len(got), tt.wantStall, strings.Join(warnings, "\n"))
+			}
+			// A budget with nothing to replay with ends through the
+			// ordinary error path, whose handler offers /retry.
+			if tt.wantStall == 0 && (res.doneErr == nil || !strings.Contains(res.doneErr.Error(), stallReason)) {
+				t.Fatalf("error = %v, want the stall surfaced without a replay", res.doneErr)
+			}
+		})
+	}
+}
+
 // TestRunAgentLoop_MidturnBudgetCoversInnerRetries pins the shared budget:
 // a Go-level transient (a request dying under the provider) is retried by
 // WithRetryContext inside a single run, and each of those retries is one more
 // request against the same turn the mid-turn replay draws from. The combined
-// count stays at maxMidTurnAttempts: two inner retries plus one stalled run
+// count stays at the default budget: two inner retries plus one stalled run
 // spend the whole budget, and the turn ends without a mid-turn replay.
 // Counting only the mid-turn layer here costs nine requests — the inner
 // retries re-run inside every one of the three mid-turn runs.
@@ -487,9 +540,9 @@ func TestRunAgentLoop_MidturnBudgetCoversInnerRetries(t *testing.T) {
 	if res.doneErr == nil || !strings.Contains(res.doneErr.Error(), stallReason) {
 		t.Fatalf("final error = %v, want it to carry the stall reason", res.doneErr)
 	}
-	if got := llm.calls(); got != maxMidTurnAttempts {
+	if got := llm.calls(); got != config.DefaultMidTurnAttempts {
 		t.Fatalf("model was called %d times, want %d (2 inner retries + 1 stalled run = the whole budget)",
-			got, maxMidTurnAttempts)
+			got, config.DefaultMidTurnAttempts)
 	}
 	// No mid-turn replay happened, so nothing announced one; the only
 	// warnings are the inner retries the notifier surfaced.
