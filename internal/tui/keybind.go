@@ -119,7 +119,7 @@ var keyRegistry = []keyBinding{
 	{ID: "key.agent-cycle", Key: "shift+tab", Description: "Cycle the session agent", Category: catKeys, Kind: kindHotkey},
 	{ID: "key.history", Key: "ctrl+h", Description: "Open history search", Category: catKeys, Kind: kindHotkey},
 	{ID: "key.monitor", Key: "ctrl+t", Description: "Toggle the subagent monitor", Category: catKeys, Kind: kindHotkey},
-	{ID: "key.cancel", Key: "esc", Description: "Dismiss an overlay or cancel the running turn", Category: catKeys, Kind: kindHotkey},
+	{ID: "key.cancel", Key: "esc", Description: "Dismiss an overlay, or cancel the running turn (press twice)", Category: catKeys, Kind: kindHotkey},
 	{ID: "key.quit", Key: "ctrl+c", Description: "Cancel the running turn; press twice to quit", Category: catKeys, Kind: kindHotkey},
 	{ID: "key.suspend", Key: "ctrl+z", Description: "Suspend the process", Category: catKeys, Kind: kindHotkey},
 	{ID: "key.history-window", Key: "up", Description: "Open the prompt history window, or scroll the chat up", Category: catKeys, Kind: kindHotkey},

@@ -584,9 +584,17 @@ func TestHandleKey_Esc_CancelRunning(t *testing.T) {
 	m := newTestModel(t)
 	m.running = true
 	m.agentCh = make(chan agentMsg, 1)
+	// First Esc only warns; a second within the window cancels the turn.
+	m.handleKey(makeKey(tea.KeyEsc))
+	if !m.running {
+		t.Fatal("expected running=true after a single Esc")
+	}
+	if m.escCancelCount != 1 {
+		t.Fatalf("escCancelCount = %d, want 1", m.escCancelCount)
+	}
 	m.handleKey(makeKey(tea.KeyEsc))
 	if m.running {
-		t.Error("expected running=false after Esc")
+		t.Error("expected running=false after a second Esc")
 	}
 }
 

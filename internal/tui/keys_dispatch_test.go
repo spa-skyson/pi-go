@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -216,6 +217,155 @@ func TestHandleInterruptKeyCtrlCQuitsOnSecondPress(t *testing.T) {
 	}
 	if _, _, _ = m.handleInterruptKey(ctrlC); !m.quitting {
 		t.Error("a second Ctrl+C should quit")
+	}
+}
+
+// TestHandleInterruptKeyEscWarnsBeforeCancelTurn guards the double-Esc
+// confirmation on a running turn: the first Esc warns and keeps the turn
+// alive, the second within the window cancels and resets the counter.
+func TestHandleInterruptKeyEscWarnsBeforeCancelTurn(t *testing.T) {
+	t.Parallel()
+	m := newTestModel(t)
+	m.running = true
+	esc := tea.Key{Code: tea.KeyEsc}
+
+	model, cmd, handled := m.handleInterruptKey(esc)
+	if !handled {
+		t.Fatal("esc should be handled while running")
+	}
+	if model != m {
+		t.Fatal("handleInterruptKey should return the same model")
+	}
+	if !m.running {
+		t.Fatal("the first Esc must not cancel the running turn")
+	}
+	if m.escCancelCount != 1 {
+		t.Fatalf("escCancelCount = %d, want 1 after the first Esc", m.escCancelCount)
+	}
+	if cmd == nil {
+		t.Fatal("the first Esc must arm the reset timer")
+	}
+	if got := m.chatModel.Messages; len(got) == 0 {
+		t.Fatal("the first Esc must append a warning")
+	}
+	if !strings.Contains(m.chatModel.Messages[len(m.chatModel.Messages)-1].content, "Esc again") {
+		t.Errorf("last message = %q, want an \"Esc again\" warning",
+			m.chatModel.Messages[len(m.chatModel.Messages)-1].content)
+	}
+
+	if _, _, _ = m.handleInterruptKey(esc); m.running {
+		t.Error("the second Esc must cancel the running turn")
+	}
+	if m.escCancelCount != 0 {
+		t.Errorf("escCancelCount = %d, want 0 after the cancel", m.escCancelCount)
+	}
+}
+
+// TestHandleInterruptKeyEscTimerReset: the resetEscCancelCountMsg delivery
+// clears the counter, so after it a single Esc warns again instead of
+// canceling.
+func TestHandleInterruptKeyEscTimerReset(t *testing.T) {
+	t.Parallel()
+	m := newTestModel(t)
+	m.running = true
+	esc := tea.Key{Code: tea.KeyEsc}
+
+	if _, _, _ = m.handleInterruptKey(esc); m.escCancelCount != 1 {
+		t.Fatalf("escCancelCount = %d, want 1 after the first Esc", m.escCancelCount)
+	}
+
+	m.Update(resetEscCancelCountMsg{seq: m.escResetSeq})
+	if m.escCancelCount != 0 {
+		t.Fatalf("escCancelCount = %d, want 0 after the reset msg", m.escCancelCount)
+	}
+
+	// A timer from a superseded window must not clear a freshly armed one:
+	// Esc armed window 1, the count was reset by cancelAgent/beginTurn, a new
+	// Esc armed window 2, and the stale window-1 timer fires.
+	m.escCancelCount = 1
+	seq2 := m.escResetSeq
+	m.Update(resetEscCancelCountMsg{seq: seq2 - 1})
+	if m.escCancelCount != 1 {
+		t.Fatalf("escCancelCount = %d, want 1 — a stale timer must not clear the current window", m.escCancelCount)
+	}
+	m.Update(resetEscCancelCountMsg{seq: seq2})
+	if m.escCancelCount != 0 {
+		t.Fatalf("escCancelCount = %d, want 0 after the current-window timer", m.escCancelCount)
+	}
+
+	if _, _, _ = m.handleInterruptKey(esc); m.escCancelCount != 1 {
+		t.Fatalf("escCancelCount = %d, want 1 after a fresh single Esc", m.escCancelCount)
+	}
+	if !m.running {
+		t.Error("a single Esc after the reset must warn, not cancel")
+	}
+}
+
+// TestHandleInterruptKeyEscOverlaysInstant: Esc over an open overlay closes
+// it immediately and never feeds the double-Esc counter, even mid-turn.
+func TestHandleInterruptKeyEscOverlaysInstant(t *testing.T) {
+	t.Parallel()
+
+	t.Run("search popup", func(t *testing.T) {
+		t.Parallel()
+		m := newTestModel(t)
+		m.running = true
+		m.newSearchPopup(searchModeCommands)
+		if m.searchPopup == nil {
+			t.Skip("search popup could not be opened in this fixture")
+		}
+
+		if _, _, _ = m.handleInterruptKey(tea.Key{Code: tea.KeyEsc}); m.searchPopup != nil {
+			t.Error("esc should dismiss the search popup")
+		}
+		if !m.running {
+			t.Error("dismissing the popup must not cancel the turn")
+		}
+		if m.escCancelCount != 0 {
+			t.Errorf("escCancelCount = %d, want 0 — overlays must not feed the counter", m.escCancelCount)
+		}
+	})
+
+	t.Run("steer input", func(t *testing.T) {
+		t.Parallel()
+		m := newTestModel(t)
+		m.running = true
+		m.steerInput = &subagentSteerState{agentID: "a1", label: "explore"}
+
+		if _, _, _ = m.handleInterruptKey(tea.Key{Code: tea.KeyEsc}); m.steerInput != nil {
+			t.Error("esc should dismiss the steer input")
+		}
+		if !m.running {
+			t.Error("dismissing the steer input must not cancel the turn")
+		}
+		if m.escCancelCount != 0 {
+			t.Errorf("escCancelCount = %d, want 0 — overlays must not feed the counter", m.escCancelCount)
+		}
+	})
+}
+
+// TestHandleInterruptKeyEscNoTurnNoWarning: with no running turn Esc stays a
+// swallow — no warning, no cancel, no counter movement.
+func TestHandleInterruptKeyEscNoTurnNoWarning(t *testing.T) {
+	t.Parallel()
+	m := newTestModel(t)
+	esc := tea.Key{Code: tea.KeyEsc}
+
+	model, cmd, handled := m.handleInterruptKey(esc)
+	if !handled {
+		t.Fatal("esc should still be handled (swallowed) when idle")
+	}
+	if model != m {
+		t.Fatal("handleInterruptKey should return the same model")
+	}
+	if cmd != nil {
+		t.Error("an idle Esc must not arm a reset timer")
+	}
+	if m.escCancelCount != 0 {
+		t.Errorf("escCancelCount = %d, want 0 when idle", m.escCancelCount)
+	}
+	if len(m.chatModel.Messages) != 0 {
+		t.Errorf("an idle Esc must not warn, got %d messages", len(m.chatModel.Messages))
 	}
 }
 
