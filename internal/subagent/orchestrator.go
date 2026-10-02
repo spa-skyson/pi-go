@@ -328,51 +328,109 @@ func (o *Orchestrator) AgentModel(name string) string {
 	return model
 }
 
-// SpawnWithRetry spawns a subagent with automatic retry on crash (up to maxRetries).
-// It monitors the subagent and re-spawns if the subagent crashes with status "failed" or "killed".
-// Returns the final events channel, agentID, and error (nil on success).
+// SpawnWithRetry spawns a subagent with automatic retry on crash (up to
+// maxRetries) and, when an attempt ends in a fatal provider error (a terminal
+// error event with text - the child WithRetry has already exhausted the
+// transient ones), restarts it on the next model of the agent fallback chain:
+// frontmatter fallback-models, else the role fallbackModels, capped at
+// maxAgentFallbacks. Each fallback restart buys one extra attempt on top of
+// the crash budget; crash retries never change the model. The chain shares
+// one timeout budget, taken when the first fallback starts, so every restart
+// inherits the remainder. ACP and codex agents are exempt: their runners
+// deliberately ignore SpawnOpts.Model (spawner_acp.go, spawner_codex.go), so
+// a fallback restart could not reach them. Returns the final events channel,
+// agentID, and error (nil on success).
+// chainBudget is the lazily created chain-wide timeout budget for fallback
+// restarts in one SpawnWithRetry call: one WithTimeout per chain, the
+// restarts that follow inherit whatever is left of it.
+type chainBudget struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+// start replaces the budget with a fresh context derived from parent. It may
+// run at most once per chain; later fallback restarts must not call it.
+func (b *chainBudget) start(parent context.Context, agentTimeoutMs int) {
+	b.ctx, b.cancel = context.WithTimeout(parent, ResolveTimeout(agentTimeoutMs).Absolute)
+}
+
 func (o *Orchestrator) SpawnWithRetry(ctx context.Context, input SpawnInput) (<-chan Event, string, error) {
 	maxRetries := clampRetries(input.MaxRetries)
 
-	var lastErr error
+	// Fallback state, resolved lazily on the first provider error: agents
+	// that never hit one pay nothing for the chain.
+	var fallbacks []string
+	fallbacksResolved := false
+	fallbackUsed := 0
+	chain := &chainBudget{ctx: ctx}
+	defer func() {
+		if chain.cancel != nil {
+			chain.cancel()
+		}
+	}()
+
 	var finalAgentID string
 	var finalEvents <-chan Event
 
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// The first try is attempt 0, so the last one is attempt == maxRetries
-		// and the count reported in errors is attempt+1.
-		lastAttempt := attempt == maxRetries
-
-		events, agentID, err := o.Spawn(ctx, input)
-		switch {
-		case err != nil && lastAttempt:
-			return nil, "", fmt.Errorf("spawn failed after %d attempts: %w", attempt+1, err)
-		case err != nil:
-			// On spawn error, retry if we have attempts left.
-			lastErr = err
+	for attempt := 0; ; attempt++ {
+		events, agentID, err := o.Spawn(chain.ctx, input)
+		if err != nil {
+			if attempt >= maxRetries {
+				return nil, "", fmt.Errorf("spawn failed after %d attempts: %w", attempt+1, err)
+			}
 			continue
 		}
 
 		finalAgentID = agentID
 		finalEvents = events
 
-		// If no retries configured, return immediately — the caller gets the
-		// stream undrained.
+		// If no retries configured, return immediately - the caller gets
+		// the stream undrained.
 		if maxRetries == 0 {
 			return finalEvents, finalAgentID, nil
 		}
 
+		outcome, errText := o.awaitAttemptOutcome(events, agentID)
+		if outcome == attemptProviderError && isExternalRunnerAgent(input.Agent.Name) {
+			// External runners (ACP, codex) cannot take a fallback model, so
+			// an error event falls back to the pre-fallback classification:
+			// by tracked process state, exactly as before this path existed.
+			if o.agentCrashed(agentID) {
+				outcome = attemptCrashed
+			} else {
+				outcome = attemptHealthy
+			}
+		}
+		if outcome == attemptProviderError {
+			if !fallbacksResolved {
+				fallbacks = agentFallbackModels(o.cfg, input.Agent)
+				fallbacksResolved = true
+			}
+			if fallbackUsed < len(fallbacks) {
+				next := fallbacks[fallbackUsed]
+				fallbackUsed++
+				if chain.cancel == nil {
+					chain.start(ctx, input.Timeout)
+				}
+				slog.Info("subagent: fatal provider error, restarting on fallback model",
+					"agent", input.Agent.Name, "error", errText, "fallback", next)
+				input.ModelOverride = next
+				continue
+			}
+			// Chain exhausted or none configured: the provider error is
+			// final. Crash retries must not burn attempts on a dead account.
+			return nil, agentID, fmt.Errorf("subagent %s failed: %s", agentID, errText)
+		}
+
 		// Wait for the subagent to reach a terminal event and check status.
-		switch outcome := o.awaitAttemptOutcome(events, agentID); {
-		case outcome == attemptHealthy, outcome == attemptSilent && lastAttempt:
+		switch {
+		case outcome == attemptHealthy, outcome == attemptSilent && attempt >= maxRetries:
 			return finalEvents, finalAgentID, nil
-		case lastAttempt:
+		case attempt >= maxRetries:
 			return nil, agentID, fmt.Errorf("subagent %s crashed after %d attempts", agentID, attempt+1)
 		}
-		// Crashed or silent with attempts left: re-spawn.
+		// Crashed or silent with attempts left: re-spawn on the same model.
 	}
-
-	return finalEvents, finalAgentID, lastErr
 }
 
 // clampRetries pins a requested retry budget to the supported range: never
@@ -400,23 +458,37 @@ const (
 	attemptCrashed
 	// attemptSilent: the stream closed without ever producing a terminal event.
 	attemptSilent
+
+	// attemptProviderError: the child emitted a terminal error event with
+	// text - its provider failed fatally (transient retries were already
+	// exhausted inside the child). Distinct from a crash: classified from
+	// the event, not from process state.
+	attemptProviderError
 )
 
 // awaitAttemptOutcome consumes events until the first terminal one
 // ("message_end" or "error") and reports how the attempt ended. Events before
 // that are dropped, which is why the maxRetries==0 shortcut in SpawnWithRetry
-// skips this entirely.
-func (o *Orchestrator) awaitAttemptOutcome(events <-chan Event, agentID string) attemptOutcome {
+// skips this entirely. The second return value is the provider error text
+// when the outcome is attemptProviderError, empty otherwise.
+func (o *Orchestrator) awaitAttemptOutcome(events <-chan Event, agentID string) (attemptOutcome, string) {
 	for ev := range events {
 		if ev.Type != "message_end" && ev.Type != "error" {
 			continue
 		}
-		if o.agentCrashed(agentID) {
-			return attemptCrashed
+		// A provider error is classified from the event text itself, before
+		// any process-state check: the status write races the event
+		// forwarding, but the event is authoritative. An error event without
+		// text keeps the old crash/healthy classification.
+		if ev.Type == "error" && ev.Error != "" {
+			return attemptProviderError, ev.Error
 		}
-		return attemptHealthy
+		if o.agentCrashed(agentID) {
+			return attemptCrashed, ""
+		}
+		return attemptHealthy, ""
 	}
-	return attemptSilent
+	return attemptSilent, ""
 }
 
 // agentCrashed reports whether the tracked agent is in a state worth
@@ -456,6 +528,12 @@ func (o *Orchestrator) Spawn(ctx context.Context, input SpawnInput) (<-chan Even
 	model, err := agentSpawnModel(o.cfg, agent)
 	if err != nil {
 		return nil, "", err
+	}
+
+	// A fallback restart (SpawnWithRetry) overrides the resolved model: the
+	// frontmatter model/role chain decided only the first attempt.
+	if input.ModelOverride != "" {
+		model = input.ModelOverride
 	}
 
 	// Acquire a pool slot.
@@ -554,6 +632,11 @@ func (o *Orchestrator) Spawn(ctx context.Context, input SpawnInput) (<-chan Even
 	return events, agentID, nil
 }
 
+// maxAgentFallbacks caps how many fallback models a subagent may try. It
+// mirrors the TUI's own maxModelFallbacks; the two are intentionally not
+// shared to avoid a tui→subagent dependency.
+const maxAgentFallbacks = 3
+
 // agentSpawnModel resolves the model a subagent runs on. A frontmatter
 // `model:` on the agent wins outright — the name is forwarded as is and the
 // child validates it. Otherwise the agent's role is resolved; when that
@@ -568,10 +651,50 @@ func agentSpawnModel(cfg *config.Config, agent AgentConfig) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolving role %q for agent %q: %w", agent.Role, agent.Name, err)
 	}
-	if _, declared := cfg.Providers[prov]; declared && !strings.Contains(model, "/") {
-		return prov + "/" + model, nil
+	return normalizeSpawnModelName(cfg, prov, model), nil
+}
+
+// normalizeSpawnModelName prefixes a bare model name (no "/") with prov when
+// that provider is declared, so the child can route the request from the
+// model name alone. It is also applied to fallback-model names, where the
+// provider is unknown: a bare fallback gets cfg.DefaultProvider as a best
+// effort, and names that already carry a "/" or have no declared default
+// provider pass through unchanged.
+func normalizeSpawnModelName(cfg *config.Config, prov, model string) string {
+	if strings.Contains(model, "/") {
+		return model
 	}
-	return model, nil
+	if _, declared := cfg.Providers[prov]; declared {
+		return prov + "/" + model
+	}
+	return model
+}
+
+// agentFallbackModels returns the fallback chain for a subagent: the agent's
+// own frontmatter `fallback-models:` when set, otherwise the ones configured
+// on the agent's role, falling back to the default role's. The chain is
+// capped at maxAgentFallbacks; an empty result is returned as nil so callers
+// can treat "no fallbacks" uniformly.
+func agentFallbackModels(cfg *config.Config, agent AgentConfig) []string {
+	models := agent.FallbackModels
+	if len(models) == 0 {
+		models = cfg.ResolveFallbackModels(agent.Role)
+	}
+	if len(models) == 0 {
+		return nil
+	}
+	if len(models) > maxAgentFallbacks {
+		models = models[:maxAgentFallbacks]
+	}
+	// A bare fallback name has no provider of its own; cfg.DefaultProvider is
+	// the best-effort prefix. The result is a fresh slice: models may alias
+	// the parsed agent config, which is shared.
+	prov := cfg.DefaultProvider
+	out := make([]string, len(models))
+	for i, m := range models {
+		out[i] = normalizeSpawnModelName(cfg, prov, m)
+	}
+	return out
 }
 
 // agentSpawnBaseURL decides which --url the child gets. A named-provider
@@ -641,6 +764,14 @@ func (o *Orchestrator) spawnEnv(env []string, workDir string, attribution *sessi
 	// grouping sessions by working directory and guessing at roles.
 	out = append(out, attribution.Env()...)
 	return out
+}
+
+// isExternalRunnerAgent reports whether the named agent runs through an
+// external runner (an ACP adapter or the codex app-server). Those runners
+// deliberately ignore SpawnOpts.Model (spawner_acp.go, spawner_codex.go), so
+// a model fallback restart could not reach them.
+func isExternalRunnerAgent(name string) bool {
+	return isACPAgent(name) || isCodexAgent(name)
 }
 
 // dispatchSpawn launches the agent through the right runner. ACP-bundled agents

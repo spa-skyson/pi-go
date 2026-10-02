@@ -2021,6 +2021,115 @@ func (m *model) handleAgentSubEvent(msg agentSubEventMsg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(waitForSubEvent(m.cfg.AgentEventCh), m.armCardTick())
 }
 
+// maxModelFallbacks caps the fallback chain consumed per session, matching
+// the cap the orchestration stage applies to per-agent chains.
+const maxModelFallbacks = 3
+
+// shortReason condenses a provider error to the first line of its message:
+// quota exhaustion arrives as multi-line provider payloads and a transcript
+// notice quoting all of it wraps for screens.
+func shortReason(err error) string {
+	if err == nil {
+		return ""
+	}
+	if i := strings.IndexByte(err.Error(), '\n'); i >= 0 {
+		return err.Error()[:i]
+	}
+	return err.Error()
+}
+
+// maybeFallbackModel reacts to a terminal provider error by switching the
+// session to the next unused fallback model, so the user keeps working instead
+// of hand-editing /model after every quota wall. The chain latches on the
+// first terminal error of a session: the active agent's frontmatter
+// fallback-models, else the active role's fallbackModels (its own, else the
+// "default" role's), capped at maxModelFallbacks entries. Transient failures
+// (network, 5xx) never reach this path — they exhaust their retries below and
+// arrive as non-terminal errors, and a canceled or stuck-detector turn is not
+// IsTerminal either.
+//
+// Side effects on a switch: agent-scoped when a primary agent is active (the
+// override re-applies on every switch back to the agent, exactly like a manual
+// /model), names updated in cfg, a "switching to" notice in the chat, and a
+// trace entry. Deliberately no persistence to config.json and no automatic
+// retry — the user re-sends with Ctrl+R (/retry), and the existing
+// lastPromptFailed hint stays on screen after the switch.
+//
+// Returns true when a switch happened.
+func (m *model) maybeFallbackModel(msg agentDoneMsg) bool {
+	if msg.err == nil || !retry.IsTerminal(msg.err) {
+		return false
+	}
+
+	// Latch the chain on the first terminal error; a later terminal error on
+	// the same chain reuses it instead of re-resolving (the config may have
+	// changed mid-session, and a half-drained chain must not restart).
+	if m.modelFallbacks == nil {
+		var chain []string
+		if ac, ok := m.agentConfig(m.activeAgent); ok {
+			chain = ac.FallbackModels
+		}
+		if len(chain) == 0 && m.cfg.ActiveRole != "" {
+			chain = m.cfg.Roles[m.cfg.ActiveRole].FallbackModels
+		}
+		if len(chain) == 0 {
+			chain = m.cfg.Roles["default"].FallbackModels
+		}
+		if len(chain) > maxModelFallbacks {
+			chain = chain[:maxModelFallbacks]
+		}
+		m.modelFallbacks = chain
+	}
+
+	if m.cfg.ModelSwitcher == nil {
+		// The chain is latched so a later manual /model that arms the
+		// switcher finds the position; without a switcher there is
+		// nothing to do this turn. Current behavior otherwise.
+		return false
+	}
+	if m.modelFallbackUsed >= len(m.modelFallbacks) {
+		// Chain exhausted: surface the error as before.
+		return false
+	}
+
+	next := m.modelFallbacks[m.modelFallbackUsed]
+	failed := m.cfg.ModelName
+	newLLM, newName, newProvider, err := m.cfg.ModelSwitcher(m.ctx, next)
+	if err != nil {
+		m.chatModel.AppendNotice(fmt.Sprintf("Model fallback failed: %v", err))
+		return false
+	}
+	if m.cfg.Agent != nil {
+		if err := m.cfg.Agent.RebuildWithModel(newLLM); err != nil {
+			m.chatModel.AppendNotice(fmt.Sprintf("Model fallback failed: %v", err))
+			return false
+		}
+	}
+
+	m.cfg.LLM = newLLM
+	m.cfg.ModelName = newName
+	m.cfg.ProviderName = newProvider
+	m.modelFallbackUsed++
+
+	if m.activeAgent != "" {
+		// Session-only override scoped to the active agent, mirroring what a
+		// manual /model does for it: no persistence, and the choice
+		// re-applies on every switch back to the agent.
+		m.setAgentModelOverride(m.activeAgent, newName)
+	} else {
+		m.cfg.ActiveRole = "default"
+	}
+
+	m.chatModel.AppendNotice(fmt.Sprintf(
+		"Model %s unavailable (%s), switching to %s.",
+		failed, shortReason(msg.err), next))
+	m.chatModel.TraceLog = append(m.chatModel.TraceLog, traceEntry{
+		time: time.Now(), kind: "error",
+		summary: "model fallback", detail: failed + " -> " + next,
+	})
+	return true
+}
+
 // handleAgentDone processes an agentDoneMsg.
 func (m *model) handleAgentDone(msg agentDoneMsg) (tea.Model, tea.Cmd) {
 	m.invalidatePlanPhases()
@@ -2051,6 +2160,11 @@ func (m *model) handleAgentDone(msg agentDoneMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	if msg.err != nil {
+		// A terminal provider failure (quota, 402, auth) on a configured
+		// fallback chain switches the session to the next unused fallback
+		// before the error renders; the switch happens while the transcript
+		// is being written, so the notice lands right above the error.
+		m.maybeFallbackModel(msg)
 		if m.face != nil {
 			m.face.SetMood(MoodSad)
 		}
@@ -2066,6 +2180,12 @@ func (m *model) handleAgentDone(msg agentDoneMsg) (tea.Model, tea.Cmd) {
 			time: time.Now(), kind: "error", summary: "Error", detail: msg.err.Error(),
 		})
 	} else {
+		// A completed turn proves the current model works again: a chain
+		// half-consumed by earlier walls no longer describes this model, so
+		// a later wall must re-resolve against the current configuration
+		// rather than continue draining stale entries.
+		m.modelFallbacks = nil
+		m.modelFallbackUsed = 0
 		if m.face != nil {
 			m.face.SetMood(MoodHappy)
 		}

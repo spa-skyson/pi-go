@@ -52,6 +52,43 @@ func TestAgentConfigModelFrontmatter(t *testing.T) {
 	}
 }
 
+func TestAgentConfigFallbackModelsFrontmatter(t *testing.T) {
+	tests := []struct {
+		name        string
+		frontmatter string
+		want        []string
+	}{
+		{"absent", "", nil},
+		{"two models", "fallback-models: openai/gpt-5.6-sol, anthropic/claude-sonnet-4-6\n",
+			[]string{"openai/gpt-5.6-sol", "anthropic/claude-sonnet-4-6"}},
+		{"one model", "fallback-models: corp-codex/gpt-5.6-sol\n",
+			[]string{"corp-codex/gpt-5.6-sol"}},
+		{"spaces and empty entries", "fallback-models:  a/b , , c/d\n",
+			[]string{"a/b", "c/d"}},
+		{"alongside model and role", "role: smol\nmodel: corp-codex/gpt-5.6-sol\nfallback-models: a/b,c/d\n",
+			[]string{"a/b", "c/d"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := writeAgent(t, dir, "router", tt.frontmatter)
+
+			cfg, err := ParseAgentFile(path)
+			if err != nil {
+				t.Fatalf("ParseAgentFile: %v", err)
+			}
+			if len(cfg.FallbackModels) != len(tt.want) {
+				t.Fatalf("FallbackModels = %v, want %v", cfg.FallbackModels, tt.want)
+			}
+			for i := range tt.want {
+				if cfg.FallbackModels[i] != tt.want[i] {
+					t.Errorf("FallbackModels[%d] = %q, want %q", i, cfg.FallbackModels[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestAgentSpawnModel(t *testing.T) {
 	tests := []struct {
 		name    string

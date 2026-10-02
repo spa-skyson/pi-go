@@ -96,6 +96,19 @@ type model struct {
 	// sends FocusMsg almost immediately, so the unfocused window is brief.
 	focused bool
 
+	// modelFallbacks is the fallback chain of the current session, latched on
+	// the first terminal provider error and drained one entry per switch:
+	// frontmatter fallback-models of the active agent, else the role's
+	// fallbackModels (its own, else "default"). Nil when no terminal error has
+	// happened or nothing is configured. In-memory, session-only — the same
+	// scope as agentModelOverrides.
+	modelFallbacks []string
+
+	// modelFallbackUsed counts how many entries of modelFallbacks have been
+	// consumed; index of the next entry is modelFallbackUsed. Reset on a
+	// successful turn, a manual /model, and a rebuild on the same chain.
+	modelFallbackUsed int
+
 	// activeAgent names the primary agent the main session runs on
 	// ("" = the built-in default). Set by /agent, Shift+Tab, and startup
 	// defaultAgent; shown in the sidebar next to the model.

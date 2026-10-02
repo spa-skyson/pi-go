@@ -74,6 +74,14 @@ var terminalPatterns = []string{
 	// Responses streams also send as a terminal error event.
 	"credit_balance_exhausted",
 
+	// HTTP 402 Payment Required. Providers use it for an exhausted balance or
+	// an unpaid plan — money, not load — so no wait clears it. Matched before
+	// the transient list, and a message carrying a retry window still wins
+	// (see IsTransient): nothing matching only these patterns can carry one,
+	// but the guard costs nothing.
+	"402",
+	"payment required",
+
 	// Authentication and authorization.
 	"unauthorized",
 	"forbidden",

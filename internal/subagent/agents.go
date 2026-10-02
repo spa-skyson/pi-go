@@ -57,11 +57,18 @@ type AgentConfig struct {
 	// ("openai/gpt-5.6") or a declared provider's name from the config.json
 	// `providers` section ("corp-codex/gpt-5.6-sol"). Empty means `role:`
 	// decides.
-	Model       string
-	Worktree    bool     // Whether this agent runs in an isolated git worktree
-	Timeout     int      // Absolute timeout in milliseconds (0 = use default)
-	Instruction string   // System prompt (markdown body)
-	Tools       []string // Allowed tool names (empty = all tools)
+	Model string
+	// FallbackModels lists the models tried in order when the agent's
+	// primary model (frontmatter `model:`, else its role) is unavailable —
+	// quota exhausted, auth failure, or repeated 5xx. Set via frontmatter
+	// `fallback-models:` as a comma-separated list of the same
+	// "provider/model" spellings `model:` takes. The consumer caps the list;
+	// parsing keeps every entry.
+	FallbackModels []string
+	Worktree       bool     // Whether this agent runs in an isolated git worktree
+	Timeout        int      // Absolute timeout in milliseconds (0 = use default)
+	Instruction    string   // System prompt (markdown body)
+	Tools          []string // Allowed tool names (empty = all tools)
 	// LSP selects this agent's language-server surface: "off", "min" or
 	// "full". Empty means inherit the child process default (min). Set it in
 	// frontmatter on agents that navigate code, so the wide LSP surface is
@@ -116,6 +123,7 @@ type AgentDiscoveryResult struct {
 // description: One-line description
 // role: smol
 // model: corp-codex/gpt-5.6-sol
+// fallback-models: openai/gpt-5.6-sol, anthropic/claude-sonnet-4-6
 // worktree: false
 // tools: read, write, edit
 // temperature: 0.3
@@ -128,7 +136,9 @@ type AgentDiscoveryResult struct {
 //
 // `model:` overrides `role:` when both are set; it may name a built-in
 // provider's model or a declared one ("provider/model", see the `providers`
-// section of config.json). `temperature:`, `reasoningEffort:` and `steps:`
+// section of config.json). `fallback-models:` is a comma-separated list of
+// models tried in order when the primary one is unavailable. `temperature:`,
+// `reasoningEffort:` and `steps:`
 // tune the child's sampling and iteration budget; unusable values warn and
 // leave the field at its zero value (= inherit / unlimited). `timeout:` is
 // milliseconds by default and also takes unit suffixes — 30m, 1h, 90s,
@@ -220,6 +230,8 @@ func applyAgentFrontmatterKey(cfg *AgentConfig, key, value string) {
 		cfg.Role = value
 	case "model":
 		cfg.Model = strings.TrimSpace(value)
+	case "fallback-models":
+		cfg.FallbackModels = parseAgentToolList(value)
 	case "worktree":
 		cfg.Worktree = strings.ToLower(value) == "true"
 	case "timeout":
