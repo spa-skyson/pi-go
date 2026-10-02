@@ -253,6 +253,16 @@ type model struct {
 	// Ctrl+C handling: show warning on first press, quit on second.
 	ctrlCCount int
 
+	// Esc handling: warn on the first press, cancel a running turn on the
+	// second within 2 seconds. Reset by the resetEscCancelCountMsg timer and
+	// at turn boundaries.
+	escCancelCount int
+
+	// escResetSeq invalidates the timer of a previous warn window, the same
+	// trick flashSeq plays for flashes: a timer fired for an old window must
+	// not clear the counter of a freshly armed one.
+	escResetSeq int
+
 	// Memory palace status for sidebar (nil if no palace DB).
 	memoryStatus *palace.PalaceStatus
 
@@ -1132,6 +1142,10 @@ func (m *model) updateTerminal(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		model, cmd := m.handleResetCtrlCCount()
 		return model, cmd, true
 
+	case resetEscCancelCountMsg:
+		model, cmd := m.handleResetEscCancelCount(msg)
+		return model, cmd, true
+
 	case resizeDrainDoneMsg:
 		if msg.resizeAt.Equal(m.resizeAt) {
 			m.resizeAt = time.Time{}
@@ -1733,7 +1747,17 @@ func (m *model) handleInterruptKey(key tea.Key) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 		if m.running {
-			return m, m.cancelAgent(), true
+			// First Esc only warns; the second within 2 seconds cancels
+			// the turn. The timer resets the counter, and cancelAgent
+			// plus beginTurn cover the turn boundaries, so a stale count
+			// cannot survive into an unrelated turn.
+			m.escCancelCount++
+			if m.escCancelCount >= 2 {
+				m.escCancelCount = 0
+				return m, m.cancelAgent(), true
+			}
+			m.chatModel.AppendWarning("\nEsc again to cancel...")
+			return m, resetEscCancelCount(m), true
 		}
 		return m, nil, true
 
@@ -2991,6 +3015,31 @@ type loadingTickMsg struct{}
 
 func (m *model) handleResetCtrlCCount() (tea.Model, tea.Cmd) {
 	m.ctrlCCount = 0
+	return m, nil
+}
+
+// resetEscCancelCount is a tea.Cmd that resets the double-Esc counter after a
+// delay. It is deliberately a separate msg type from resetCtrlCCountMsg: the
+// two counters guard different actions, and a shared type would reset both.
+func resetEscCancelCount(m *model) tea.Cmd {
+	m.escResetSeq++
+	seq := m.escResetSeq
+	return func() tea.Msg {
+		time.Sleep(2 * time.Second)
+		return resetEscCancelCountMsg{seq: seq}
+	}
+}
+
+// resetEscCancelCountMsg resets the double-Esc cancel counter. It carries the
+// sequence number of the warn window it belongs to, so a timer fired for a
+// superseded window is ignored.
+type resetEscCancelCountMsg struct{ seq int }
+
+func (m *model) handleResetEscCancelCount(msg resetEscCancelCountMsg) (tea.Model, tea.Cmd) {
+	// Ignore a timer whose warn window has already been superseded.
+	if msg.seq == m.escResetSeq {
+		m.escCancelCount = 0
+	}
 	return m, nil
 }
 

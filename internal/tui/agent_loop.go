@@ -848,6 +848,9 @@ func waitForSubEvent(ch <-chan AgentSubEvent) tea.Cmd {
 func (m *model) beginTurn() {
 	m.running = true
 	m.turnStarted = time.Now()
+	// A fresh turn never inherits a half-counted double-Esc from the
+	// previous one.
+	m.escCancelCount = 0
 }
 
 // cancelAgent stops a running agent and drains its channel.
@@ -862,6 +865,7 @@ func (m *model) cancelAgent() tea.Cmd {
 		m.agentCancel()
 		m.agentCancel = nil
 	}
+	m.escCancelCount = 0
 	m.running = false
 	m.statusModel.ActiveTool = ""
 	m.statusModel.ActiveTools = nil

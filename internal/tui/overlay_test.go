@@ -54,8 +54,9 @@ func TestOverlayStack_TopEntryGetsKeyFirst(t *testing.T) {
 
 // TestOverlayStack_EscChain_ViewerMonitorThenCancelTurn walks the Esc ladder
 // end to end: the viewer steps back to the monitor, the monitor closes, and
-// only an empty stack lets Esc cancel the running turn — the exact order the
-// old fixed chain held by position.
+// only an empty stack reaches the running turn — where the first Esc warns
+// and a second within the window cancels — the exact order the old fixed
+// chain held by position.
 func TestOverlayStack_EscChain_ViewerMonitorThenCancelTurn(t *testing.T) {
 	m := monitorTestModel(t)
 	m = submit(t, m, "/subagents")
@@ -86,8 +87,19 @@ func TestOverlayStack_EscChain_ViewerMonitorThenCancelTurn(t *testing.T) {
 	}
 
 	m = pressKey(t, m, tea.Key{Code: tea.KeyEsc})
+	if !m.running {
+		t.Fatal("third Esc, with the stack empty, must only warn about the running turn")
+	}
+	if m.escCancelCount != 1 {
+		t.Fatalf("escCancelCount = %d, want 1 after the warning Esc", m.escCancelCount)
+	}
+
+	m = pressKey(t, m, tea.Key{Code: tea.KeyEsc})
 	if m.running {
-		t.Fatal("third Esc, with the stack empty, must cancel the running turn")
+		t.Fatal("fourth Esc must cancel the running turn")
+	}
+	if m.escCancelCount != 0 {
+		t.Fatalf("escCancelCount = %d, want 0 after the cancel", m.escCancelCount)
 	}
 }
 
@@ -265,8 +277,18 @@ func TestOverlayStack_ApprovalGatesLiveTurn(t *testing.T) {
 		t.Fatal("Esc denied the dialog but canceled the running turn with it")
 	}
 
+	// With the dialog gone, Esc reaches the interrupt layer — where a running
+	// turn needs the double press: the first warns, the second cancels.
+	pressRune(t, m, tea.KeyEsc)
+	if !m.running {
+		t.Fatal("a single Esc with the dialog gone must only warn, not cancel")
+	}
+	if m.escCancelCount != 1 {
+		t.Fatalf("escCancelCount = %d, want 1 after the warning Esc", m.escCancelCount)
+	}
+
 	pressRune(t, m, tea.KeyEsc)
 	if m.running {
-		t.Fatal("Esc with the dialog gone must cancel the running turn")
+		t.Fatal("a second Esc with the dialog gone must cancel the running turn")
 	}
 }
