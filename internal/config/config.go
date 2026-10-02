@@ -29,6 +29,14 @@ const DefaultStreamIdleTimeout = 90 * time.Second
 // `streamIdleTimeout:` to the child process; "0" disables the idle abort.
 const EnvStreamIdleTimeoutMS = "PI_STREAM_IDLE_TIMEOUT_MS"
 
+// DefaultMidTurnAttempts is the total number of times a turn may run when a
+// transient failure cuts it short mid-reply: the first attempt plus two
+// replays, the behavior #41 shipped with.
+const DefaultMidTurnAttempts = 3
+
+// EnvMidTurnAttempts overrides midTurnAttempts from the environment.
+const EnvMidTurnAttempts = "PI_MIDTURN_ATTEMPTS"
+
 // HookConfig defines a shell command hook for tool call events.
 type HookConfig struct {
 	Event   string   `json:"event"`
@@ -186,6 +194,14 @@ type Config struct {
 	// to the retry budgets instead of out-waiting the subagent watchdog.
 	// PI_STREAM_IDLE_TIMEOUT_MS overrides it per process.
 	StreamIdleTimeout *int `json:"streamIdleTimeout,omitempty"`
+	// MidTurnAttempts is how many times a turn may run in total when a
+	// transient failure cuts it short mid-reply (issues #41, #43). Nil keeps
+	// the default (DefaultMidTurnAttempts, 3); 0 or 1 turns the mid-turn
+	// replays off — the pre-#41 behavior where the first transient failure
+	// ends the turn. A pointer so "unset" stays distinguishable from an
+	// explicit 0. Values over 10 fall back to the default with a warning.
+	// PI_MIDTURN_ATTEMPTS overrides it per process.
+	MidTurnAttempts *int `json:"midTurnAttempts,omitempty"`
 	// CACertPath is a PEM bundle trusted in addition to the system roots, for
 	// TLS-intercepting corporate proxies. Prefer it over insecureSkipTLS,
 	// which turns verification off for every endpoint.

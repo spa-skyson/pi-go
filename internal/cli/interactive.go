@@ -212,19 +212,24 @@ func runInteractive(
 	// therefore runs only after Run has returned and the terminal state is
 	// restored. printSessionEpilogue takes its writer as a parameter precisely
 	// so this invariant is unit-testable.
+	// The mid-turn replay budget resolves once here so the TUI reads a plain
+	// value; env override and out-of-range handling live in the resolver
+	// (issue #43).
+	midTurnAttempts := cfg.ResolveMidTurnAttempts()
 	tuiErr := tui.Run(ctx, tui.Config{
-		PlanAutoFix:    planAutoFixEnabled(cfg),
-		LLM:            llm,
-		AppVersion:     versionString(),
-		ModelName:      llm.Name(),
-		ProviderName:   info.Provider,
-		ThinkingLevel:  effectiveThinkingLevel(cfg),
-		ActiveRole:     activeRole,
-		Roles:          cfg.Roles,
-		WorkDir:        cwd,
-		ThemeName:      cfg.Theme,
-		TokenTracker:   tokenTracker,
-		LifecycleHooks: convertHooks(cfg.Hooks),
+		PlanAutoFix:     planAutoFixEnabled(cfg),
+		MidTurnAttempts: &midTurnAttempts,
+		LLM:             llm,
+		AppVersion:      versionString(),
+		ModelName:       llm.Name(),
+		ProviderName:    info.Provider,
+		ThinkingLevel:   effectiveThinkingLevel(cfg),
+		ActiveRole:      activeRole,
+		Roles:           cfg.Roles,
+		WorkDir:         cwd,
+		ThemeName:       cfg.Theme,
+		TokenTracker:    tokenTracker,
+		LifecycleHooks:  convertHooks(cfg.Hooks),
 		// Attention carries the resolved config section (nil pointers inside mean
 		// "on"); nil section means the signals stay off. Consumed by
 		// internal/tui/attention.go.

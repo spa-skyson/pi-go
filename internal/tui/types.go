@@ -85,6 +85,12 @@ type Config struct {
 	// fed back to the planner as its next prompt instead of waiting for a human
 	// turn. Bounded by maxPlanFixCycles.
 	PlanAutoFix bool
+	// MidTurnAttempts is the resolved mid-turn replay budget (issues #41,
+	// #43): how many times a turn may run in total when a transient failure
+	// cuts it short mid-reply. The CLI resolves it once at startup (env →
+	// config.json → default, config.ResolveMidTurnAttempts); nil runs the
+	// default, which is what Configs built directly in tests get.
+	MidTurnAttempts *int
 	// LifecycleHooks are shell-command hooks fired on agent lifecycle events
 	// (turn_complete, user_input_required). Each carries the event name and a
 	// small data payload as JSON on stdin. Nil disables lifecycle hooks.
