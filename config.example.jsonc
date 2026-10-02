@@ -120,6 +120,14 @@
     "excluded_tools": ["read", "ls"]
   },
 
+  // MemPalace embedding backend. Leaving the whole block out uses the defaults:
+  // Ollama at localhost:11434, then the in-process model, then keyword search.
+  // "palace": {
+  //   "embeddings_url": "http://llm.internal:8000/v1",
+  //   "embeddings_model": "bge-m3",
+  //   "embeddings_api_key": "${PALACE_EMBEDDINGS_KEY}"
+  // },
+
   // Budgets and guards.
   "maxDailyTokens": 50000000,
   // Abort an LLM stream that delivers no chunks for this many milliseconds

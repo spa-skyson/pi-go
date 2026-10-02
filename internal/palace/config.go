@@ -24,6 +24,19 @@ type PalaceConfig struct {
 	OllamaURL string
 	// OllamaModel is the embedding model; empty means DefaultOllamaEmbedModel.
 	OllamaModel string
+
+	// APIEmbedderURL points at an external OpenAI-compatible embeddings
+	// endpoint (root up to /embeddings, e.g. "http://llm.internal:8000/v1").
+	// Non-empty selects the api backend ahead of Ollama and the in-process
+	// model — see openEmbedder. Changing it (or switching away) swaps vector
+	// spaces, so stored vectors must be re-mined, exactly like OllamaModel.
+	APIEmbedderURL string
+	// APIEmbedderModel is the model name sent to the endpoint; empty means
+	// DefaultAPIEmbedModel. Changing it invalidates every stored vector.
+	APIEmbedderModel string
+	// APIEmbedderKey is the Bearer token for the endpoint; empty sends no
+	// Authorization header. It is a secret: never log it.
+	APIEmbedderKey string
 }
 
 // DefaultConfig returns a PalaceConfig with sensible defaults.
@@ -78,8 +91,33 @@ func WithOllamaEmbedder(baseURL, model string) Option {
 	}
 }
 
+// WithAPIEmbedder points the palace at an external OpenAI-compatible
+// embeddings endpoint. An empty url selects nothing; empty model and key fall
+// back to DefaultAPIEmbedModel and no Authorization header.
+func WithAPIEmbedder(url, model, key string) Option {
+	return func(c *PalaceConfig) {
+		if url != "" {
+			c.APIEmbedderURL = url
+		}
+		if model != "" {
+			c.APIEmbedderModel = model
+		}
+		c.APIEmbedderKey = key
+	}
+}
+
 // WithLocalEmbedder forces the in-process model, bypassing Ollama. Used when no
 // daemon is available and the caller would rather be slow than fail.
 func WithLocalEmbedder() Option {
 	return func(c *PalaceConfig) { c.UseOllama = false }
+}
+
+// WithConfig adopts a fully resolved config — what the CLI's
+// palaceConfigFromCLI builds: defaults overlaid with the user's palace
+// section, embedder decision (api / ollama / local) included. Every command
+// that opens a palace goes through it so the backend configured once is the
+// backend everywhere; a site that needs different paths can pass
+// WithDBPath/WithModelPath after it.
+func WithConfig(resolved PalaceConfig) Option {
+	return func(c *PalaceConfig) { *c = resolved }
 }

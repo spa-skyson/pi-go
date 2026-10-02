@@ -39,7 +39,7 @@ func palaceStatusHandler(ctx context.Context, p *Palace) (StatusOutput, error) {
 	fmt.Fprintf(&sb, "| Drawers | %d |\n", st.DrawerCount)
 	fmt.Fprintf(&sb, "| Wings | %d |\n", st.WingCount)
 	fmt.Fprintf(&sb, "| Rooms | %d |\n", st.RoomCount)
-	fmt.Fprintf(&sb, "| Model loaded | %v |\n", st.ModelLoaded)
+	fmt.Fprintf(&sb, "| Embedder | %s |\n", st.Embedder)
 
 	if st.KG != nil {
 		fmt.Fprintf(&sb, "\n### Knowledge Graph\n\n")

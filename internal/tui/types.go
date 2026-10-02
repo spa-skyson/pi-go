@@ -7,6 +7,7 @@ import (
 	"github.com/spa-skyson/pi-rate/internal/config"
 	"github.com/spa-skyson/pi-rate/internal/extension"
 	"github.com/spa-skyson/pi-rate/internal/logger"
+	"github.com/spa-skyson/pi-rate/internal/palace"
 	"github.com/spa-skyson/pi-rate/internal/permission"
 	pisession "github.com/spa-skyson/pi-rate/internal/session"
 	"github.com/spa-skyson/pi-rate/internal/subagent"
@@ -95,6 +96,12 @@ type Config struct {
 	// (turn_complete, user_input_required). Each carries the event name and a
 	// small data payload as JSON on stdin. Nil disables lifecycle hooks.
 	LifecycleHooks []extension.HookConfig
+	// Palace is the resolved palace config (paths plus embedder choice) the
+	// CLI computes once via palaceConfigFromCLI. The sidebar status tick opens
+	// the palace with it, so the embedder it reports is the configured backend
+	// rather than a default the user never asked for. Nil keeps the defaults —
+	// what Configs built directly in tests get.
+	Palace *palace.PalaceConfig
 
 	// DeferredInit, if non-nil, is a channel of InitEvent messages.
 	// When set, the TUI starts immediately in loading state and receives

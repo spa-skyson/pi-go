@@ -90,10 +90,7 @@ func openPalaceDB(dbPath string) (*palace.Palace, error) {
 	if dbPath == "" {
 		dbPath = filepath.Join(config.ProjectDirName, "palace.db")
 	}
-	return palace.New(
-		palace.WithDBPath(dbPath),
-		palace.WithModelPath(defaultPalaceModelPath()),
-	)
+	return palace.New(palace.WithConfig(resolvePalaceConfig(dbPath, defaultPalaceModelPath())))
 }
 
 func runMemoryKGQuery(entity, dbPath, asOf, direction string) error {

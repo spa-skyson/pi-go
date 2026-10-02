@@ -49,12 +49,29 @@ func New(opts ...Option) (*Palace, error) {
 
 // openEmbedder resolves the configured embedding backend.
 //
-// Ollama is tried first when enabled, then the in-process model. Both are
-// optional: a palace with no embedder still serves FTS5 keyword search, which is
-// why every failure here is a warning rather than an error. Callers that cannot
-// work without embeddings — mining — must check availability themselves and say
+// Priority: an explicitly configured external OpenAI-compatible endpoint, then
+// Ollama when enabled, then the in-process model. All are optional: a palace
+// with no embedder still serves FTS5 keyword search, which is why every
+// failure here is a warning rather than an error. Callers that cannot work
+// without embeddings — mining — must check availability themselves and say
 // something useful; see EmbedderAvailability.
+//
+// A backend mismatch (api vs ollama vs local, or a changed model name) puts
+// new vectors in a different space than stored ones. Search defends against
+// that by dropping candidates of a foreign dimension — see RankBySimilarity —
+// and the fix for stale coverage is re-running `pi memory mine`, the same
+// contract an ollama_model change has always had.
 func openEmbedder(cfg PalaceConfig) Embedder {
+	if cfg.APIEmbedderURL != "" {
+		e, err := NewAPIEmbedder(cfg.APIEmbedderURL, cfg.APIEmbedderModel, cfg.APIEmbedderKey)
+		if err == nil {
+			return e
+		}
+		// Never log the key; the URL and model are enough to act on.
+		slog.Warn("palace: api embedder misconfigured, falling back",
+			"error", err, "url", cfg.APIEmbedderURL, "model", cfg.APIEmbedderModel)
+	}
+
 	if cfg.UseOllama {
 		e, err := NewOllamaEmbedder(cfg.OllamaURL, cfg.OllamaModel)
 		if err == nil {
@@ -81,8 +98,15 @@ func openEmbedder(cfg PalaceConfig) Embedder {
 // EmbedderAvailability reports whether the configured embedding backend can be
 // reached, and why not when it cannot. It performs the same checks New would,
 // without building a palace, so commands that require embeddings can fail early
-// with an actionable message.
+// with an actionable message. The backend priority mirrors openEmbedder — with
+// one deliberate difference: for the api backend this probes the endpoint with
+// a minimal request, because the availability path exists precisely to fail
+// before a run starts, and construction alone proves nothing about a remote
+// endpoint. openEmbedder itself stays probe-free, see its fallback semantics.
 func EmbedderAvailability(cfg PalaceConfig) error {
+	if cfg.APIEmbedderURL != "" {
+		return ProbeAPIEmbedder(cfg.APIEmbedderURL, cfg.APIEmbedderModel, cfg.APIEmbedderKey)
+	}
 	if !cfg.UseOllama {
 		if cfg.ModelPath == "" {
 			return fmt.Errorf("no embedding model configured")
@@ -264,7 +288,19 @@ func (p *Palace) Status(ctx context.Context) (*PalaceStatus, error) {
 		RoomCount:   totalRooms,
 		KG:          kgStats,
 		ModelLoaded: p.embedder != nil,
+		Embedder:    activeEmbedderName(p.embedder),
 	}, nil
+}
+
+// activeEmbedderName names the backend behind Status.Embedder. It names the
+// configured backend, not a guarantee: a loaded embedder can still fail per
+// query, and every failure degrades that query to FTS5 keyword search. Nil
+// means nothing was configured and search is keyword-only from the start.
+func activeEmbedderName(e Embedder) string {
+	if e == nil {
+		return "fts5"
+	}
+	return embedderName(e)
 }
 
 // --- Lifecycle ---

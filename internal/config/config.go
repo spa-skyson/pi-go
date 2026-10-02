@@ -282,6 +282,19 @@ type PalaceConfig struct {
 	OllamaModel string `json:"ollama_model,omitempty"`
 	// LocalEmbedder forces the slower in-process model instead of Ollama.
 	LocalEmbedder bool `json:"local_embedder,omitempty"`
+
+	// EmbeddingsURL selects an external OpenAI-compatible embeddings endpoint
+	// (root up to /embeddings, e.g. "http://llm.internal:8000/v1") ahead of
+	// Ollama and the in-process model. Empty keeps the previous behavior —
+	// Ollama first, in-process fallback.
+	EmbeddingsURL string `json:"embeddings_url,omitempty"`
+	// EmbeddingsModel is the model name sent to that endpoint; empty uses the
+	// palace default (bge-m3). Changing it — or the backend above — invalidates
+	// every stored vector, same as ollama_model: re-run `pi memory mine`.
+	EmbeddingsModel string `json:"embeddings_model,omitempty"`
+	// EmbeddingsAPIKey is the Bearer token for the endpoint; empty sends no
+	// Authorization header. It is a secret: never write it to logs or notices.
+	EmbeddingsAPIKey string `json:"embeddings_api_key,omitempty"`
 }
 
 // CompactorConfig holds user-overridable compaction settings.
@@ -531,6 +544,22 @@ func LoadFrom(cwd string) (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// ResolveEnvValue expands ${VAR} patterns in s from the .env files pi reads
+// (~/.pirate/.env and the nearest project .pirate/.env), falling back to the
+// process environment. It exists so configured secrets expand at the point of
+// use — where the embedder or request is built — and never inside Load: a
+// value expanded at load time lives on in the in-memory config and the next
+// Save() would write the expanded key back into config.json, which is exactly
+// the leak the ${VAR} placeholder exists to prevent. palace.embeddings_* uses
+// this from the CLI code that builds the embedder; MCP headers keep their own
+// equivalent because those values never ride on Config.
+func ResolveEnvValue(s string) string {
+	if !strings.Contains(s, "${") {
+		return s
+	}
+	return substituteEnv(loadEnvFileFrom("."), s)
 }
 
 // loadConfigFiles overlays the nearest project .pirate/config.json onto the

@@ -1390,7 +1390,7 @@ func TestPrintMineFileList(t *testing.T) {
 
 func TestMinePalaceConfig(t *testing.T) {
 	testenv.SetHome(t, t.TempDir())
-	cfg := minePalaceConfig("/tmp/db.sqlite", "/tmp/model")
+	cfg := resolvePalaceConfig("/tmp/db.sqlite", "/tmp/model")
 	if cfg.DBPath != "/tmp/db.sqlite" || cfg.ModelPath != "/tmp/model" {
 		t.Errorf("paths not carried through: %+v", cfg)
 	}
@@ -1424,31 +1424,46 @@ func TestPrintMineBanner(t *testing.T) {
 
 func TestMinePalaceOptions(t *testing.T) {
 	t.Parallel()
-	// Both variants add exactly one embedder option to the two path options.
-	if got := len(minePalaceOptions(palace.PalaceConfig{UseOllama: true}, "/db", "/model")); got != 3 {
-		t.Errorf("ollama options = %d, want 3", got)
-	}
-	if got := len(minePalaceOptions(palace.PalaceConfig{UseOllama: false}, "/db", "/model")); got != 3 {
-		t.Errorf("local options = %d, want 3", got)
+	// The resolved config travels as one option: WithConfig carries the whole
+	// embedder decision, paths included, so there is nothing left to re-derive
+	// (and nothing to forget) at the mining call site.
+	if got := len(minePalaceOptions(palace.PalaceConfig{UseOllama: true})); got != 1 {
+		t.Errorf("options = %d, want 1 (WithConfig)", got)
 	}
 
-	// The options have to actually configure the embedder they name.
+	// The option has to actually configure the embedder it names.
 	ollamaCfg := palace.DefaultConfig()
 	for _, opt := range minePalaceOptions(palace.PalaceConfig{
+		DBPath: "/db", ModelPath: "/model",
 		UseOllama: true, OllamaURL: "http://d:1", OllamaModel: "embed-m",
-	}, "/db", "/model") {
+	}) {
 		opt(&ollamaCfg)
 	}
 	if !ollamaCfg.UseOllama || ollamaCfg.OllamaURL != "http://d:1" || ollamaCfg.OllamaModel != "embed-m" {
-		t.Errorf("ollama options did not apply: %+v", ollamaCfg)
+		t.Errorf("options did not apply: %+v", ollamaCfg)
+	}
+	if ollamaCfg.DBPath != "/db" || ollamaCfg.ModelPath != "/model" {
+		t.Errorf("paths not carried: %+v", ollamaCfg)
 	}
 
 	localCfg := palace.DefaultConfig()
-	for _, opt := range minePalaceOptions(palace.PalaceConfig{UseOllama: false}, "/db", "/model") {
+	for _, opt := range minePalaceOptions(palace.PalaceConfig{UseOllama: false}) {
 		opt(&localCfg)
 	}
 	if localCfg.UseOllama {
 		t.Error("local options must turn the ollama embedder off")
+	}
+
+	// An api selection must survive the trip too — this is the field the dim
+	// filter and the status line read.
+	apiCfg := palace.DefaultConfig()
+	for _, opt := range minePalaceOptions(palace.PalaceConfig{
+		APIEmbedderURL: "http://api:1/v1", APIEmbedderModel: "bge-m3", APIEmbedderKey: "sk-x",
+	}) {
+		opt(&apiCfg)
+	}
+	if apiCfg.APIEmbedderURL != "http://api:1/v1" || apiCfg.APIEmbedderModel != "bge-m3" || apiCfg.APIEmbedderKey != "sk-x" {
+		t.Errorf("api fields not carried: %+v", apiCfg)
 	}
 }
 
@@ -1461,7 +1476,7 @@ func TestEnsureMineModelDirectoryFailure(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	err := ensureMineModel(filepath.Join(blocker, "sub", "palace.db"), filepath.Join(dir, "model", "m.onnx"))
+	err := ensureMineModel(filepath.Join(blocker, "sub", "palace.db"), filepath.Join(dir, "model", "m.onnx"), palace.PalaceConfig{UseOllama: false})
 	if err == nil || !strings.Contains(err.Error(), "creating palace directory") {
 		t.Fatalf("err = %v, want a palace-directory failure", err)
 	}
