@@ -198,7 +198,7 @@ var lightPalette = Palette{
 	BorderActive:      lipgloss.Color("#1a4fd8"),
 	TextMuted:         lipgloss.Color("#5c5f73"),
 	DiffContext:       lipgloss.Color("#5c5f73"),
-	DiffHunkHeader:    lipgloss.Color("#7c7f93"),
+	DiffHunkHeader:    lipgloss.Color("#63667c"),
 	DiffLineNumber:    lipgloss.Color("#7c7f93"),
 	EditorCursor:      lipgloss.Color("#1a4fd8"),
 }

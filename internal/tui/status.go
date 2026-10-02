@@ -330,7 +330,8 @@ func (m *model) bottomStatusLine(width int) string {
 	rightW := lipgloss.Width(right)
 
 	// Two blank cells between the halves; the hints yield first on a narrow
-	// terminal, then the left half truncates.
+	// terminal, then the left half truncates; if that still collides the
+	// hints drop entirely, so the row never wraps.
 	gap := width - leftW - rightW - 2
 	if gap < 1 {
 		if avail := width - leftW - 2; avail > 0 && rightW > 0 {
@@ -342,6 +343,11 @@ func (m *model) bottomStatusLine(width int) string {
 		if gap < 1 {
 			left = ansi.Truncate(ansi.Strip(left), max(1, width-1), "…")
 			leftW = lipgloss.Width(left)
+			// Halves still collide (the terminal is at most as wide as the
+			// left half): drop the hints entirely so the row never wraps.
+			if leftW+rightW > width {
+				right, rightW = "", 0
+			}
 			gap = max(0, width-leftW-rightW)
 		}
 	}
@@ -367,12 +373,14 @@ func providerModelLabel(provider, model string) string {
 	return provider + "/" + model
 }
 
-// bottomKeyHints returns the hints for the current mode, all sourced from the
-// key registry: esc cancels a running turn (key.cancel), shift+tab cycles the
-// session agent (key.agent-cycle), ctrl+h opens history (key.history), ctrl+o
-// toggles compact tool output (key.compact-tools), ctrl+t the subagent
-// monitor (key.monitor), ctrl+c quits (key.quit), and /run executes the plan
-// in plan mode.
+// bottomKeyHints returns the hints for the current mode. The bindings are
+// literals pinned to the key registry defaults, not resolved from it — the
+// registry has no lookup for a label's key yet. Revisit when Phase 2 user
+// key overrides land: esc cancels a running turn (key.cancel), shift+tab
+// cycles the session agent (key.agent-cycle), ctrl+h opens history
+// (key.history), ctrl+o toggles compact tool output (key.compact-tools),
+// ctrl+t the subagent monitor (key.monitor), ctrl+c quits (key.quit), and
+// /run executes the plan in plan mode.
 func bottomKeyHints(mode string, running bool) []string {
 	if running {
 		return []string{"esc cancel", "ctrl+t agents", "ctrl+o compact"}

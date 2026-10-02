@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -231,6 +232,52 @@ func TestBottomStatusLineNarrowTruncatesHints(t *testing.T) {
 	}
 	if !strings.Contains(plain, "…") {
 		t.Errorf("narrow line should truncate the hints with an ellipsis: %q", plain)
+	}
+}
+
+// TestBottomStatusLineVeryNarrowStaysSingleRow pins the degenerate narrow
+// case: once the identity alone consumes the row (width ≤ leftW+2) there is
+// no room even for truncated hints — they drop entirely, and the line stays
+// exactly one row of the terminal width instead of hard-wrapping.
+func TestBottomStatusLineVeryNarrowStaysSingleRow(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		width int
+	}{
+		{"one past the left half", 38},
+		{"identity truncated too", 20},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := historyModel(t, "first")
+			m.cfg.ModelName = "claude-sonnet-4-5"
+			m.cfg.ProviderName = "anthropic"
+			m.running = true
+			m.palette = darkPalette
+
+			line := m.bottomStatusLine(tc.width)
+			if strings.Contains(line, "\n") {
+				t.Fatalf("status line wrapped into multiple rows at width %d:\n%q", tc.width, line)
+			}
+			plain := ansi.Strip(line)
+			if w := ansi.StringWidth(plain); w != tc.width {
+				t.Errorf("status line is %d wide, want %d", w, tc.width)
+			}
+			if strings.Contains(plain, "cancel") {
+				t.Errorf("status line kept the hints at width %d: %q", tc.width, plain)
+			}
+		})
+	}
+}
+
+// TestPaletteDiffHunkHeaderMatchesFaint pins byte-compatibility with main:
+// a theme without the diffHunkHeader token renders @@ headers in the
+// palette's Faint role — what main used — so both fixed palettes must carry
+// the same color for the two roles.
+func TestPaletteDiffHunkHeaderMatchesFaint(t *testing.T) {
+	for name, p := range map[string]Palette{"dark": darkPalette, "light": lightPalette} {
+		if got, want := fmt.Sprint(p.DiffHunkHeader), fmt.Sprint(p.Faint); got != want {
+			t.Errorf("%s palette: DiffHunkHeader = %s, want parity with Faint = %s (light themes must render @@ headers as on main)", name, got, want)
+		}
 	}
 }
 

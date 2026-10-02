@@ -95,18 +95,6 @@ func (c ThemeColors) DiffRemovedColor() color.Color     { return lipgloss.Color(
 func (c ThemeColors) DiffAddedTextColor() color.Color   { return lipgloss.Color(c.DiffAddedText) }
 func (c ThemeColors) DiffRemovedTextColor() color.Color { return lipgloss.Color(c.DiffRemovedText) }
 
-func (c ThemeColors) BackgroundPanelColor() color.Color   { return lipgloss.Color(c.BackgroundPanel) }
-func (c ThemeColors) BackgroundElementColor() color.Color { return lipgloss.Color(c.BackgroundElement) }
-func (c ThemeColors) BorderSubtleColor() color.Color      { return lipgloss.Color(c.BorderSubtle) }
-func (c ThemeColors) BorderBaseColor() color.Color        { return lipgloss.Color(c.BorderBase) }
-func (c ThemeColors) BorderActiveColor() color.Color      { return lipgloss.Color(c.BorderActive) }
-func (c ThemeColors) AccentColor() color.Color            { return lipgloss.Color(c.Accent) }
-func (c ThemeColors) TextMutedColor() color.Color         { return lipgloss.Color(c.TextMuted) }
-func (c ThemeColors) DiffContextColor() color.Color       { return lipgloss.Color(c.DiffContext) }
-func (c ThemeColors) DiffHunkHeaderColor() color.Color    { return lipgloss.Color(c.DiffHunkHeader) }
-func (c ThemeColors) DiffLineNumberColor() color.Color    { return lipgloss.Color(c.DiffLineNumber) }
-func (c ThemeColors) EditorCursorColor() color.Color      { return lipgloss.Color(c.EditorCursor) }
-
 // Theme represents a loaded color theme.
 type Theme struct {
 	Name        string      `json:"name"`
