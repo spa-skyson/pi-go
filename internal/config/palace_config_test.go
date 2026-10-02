@@ -58,12 +58,19 @@ func TestPalace_EmbeddingsAPIParse(t *testing.T) {
 	}
 }
 
-// TestPalace_EmbeddingsAPIKeyEnvSubstitution checks ${VAR} in
-// embeddings_api_key expands from the project .env, so the token can live
-// outside config.json — the same contract the MCP headers have.
-func TestPalace_EmbeddingsAPIKeyEnvSubstitution(t *testing.T) {
-	dir := t.TempDir()
-	pirateDir := filepath.Join(dir, ProjectDirName)
+// TestPalace_EmbeddingsAPIKeyStaysPlaceholderThroughSave pins the security
+// contract for ${VAR} in palace settings: Load keeps the placeholder in the
+// in-memory config — so a later Save() writes the placeholder back, never the
+// expanded key — while ResolveEnvValue still hands the consumer the expanded
+// value at the point of use. Expanding at load time instead would round-trip
+// the secret into ~/.pirate/config.json on the next Save (role switches do
+// exactly that), which is the leak this replaces.
+func TestPalace_EmbeddingsAPIKeyStaysPlaceholderThroughSave(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("PIRATE_HOME", home)
+	project := t.TempDir()
+	t.Chdir(project)
+	pirateDir := filepath.Join(project, ProjectDirName)
 	if err := os.MkdirAll(pirateDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -76,14 +83,66 @@ func TestPalace_EmbeddingsAPIKeyEnvSubstitution(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := LoadFrom(dir)
+	cfg, err := LoadFrom(project)
 	if err != nil {
 		t.Fatalf("LoadFrom: %v", err)
 	}
 	if cfg.Palace == nil {
 		t.Fatal("palace section lost")
 	}
-	if cfg.Palace.EmbeddingsAPIKey != "from-dotenv-secret" {
-		t.Errorf("key = %q, want the .env value", cfg.Palace.EmbeddingsAPIKey)
+	if got := cfg.Palace.EmbeddingsAPIKey; got != "${PALACE_TEST_KEY}" {
+		t.Errorf("in-memory key = %q, want the literal ${VAR} placeholder (secrets must not enter Config)", got)
+	}
+
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	saved, err := os.ReadFile(filepath.Join(home, "config.json"))
+	if err != nil {
+		t.Fatalf("read saved config: %v", err)
+	}
+	if !strings.Contains(string(saved), "${PALACE_TEST_KEY}") {
+		t.Errorf("saved config lost the placeholder: %s", saved)
+	}
+	if strings.Contains(string(saved), "from-dotenv-secret") {
+		t.Error("Save wrote the expanded key to config.json — the placeholder leaked")
+	}
+
+	// The consumer — the code building the embedder — still resolves it.
+	if got := ResolveEnvValue(cfg.Palace.EmbeddingsAPIKey); got != "from-dotenv-secret" {
+		t.Errorf("ResolveEnvValue = %q, want the .env value", got)
+	}
+}
+
+// TestResolveEnvValue_ExpandsFromDotEnv checks the ${VAR} contract the palace
+// settings rely on: project .env overrides home .env, and a missing variable
+// expands to empty — the caller decides what an empty value means.
+func TestResolveEnvValue_ExpandsFromDotEnv(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("PIRATE_HOME", home)
+	project := t.TempDir()
+	t.Chdir(project)
+	pirateDir := filepath.Join(project, ProjectDirName)
+	if err := os.MkdirAll(pirateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".env"), []byte("PALACE_URL_VAR=home-value\nPALACE_BOTH=home\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pirateDir, ".env"), []byte("PALACE_BOTH=project\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := ResolveEnvValue("http://${PALACE_URL_VAR}:8000/v1"); got != "http://home-value:8000/v1" {
+		t.Errorf("home .env expansion = %q", got)
+	}
+	if got := ResolveEnvValue("${PALACE_BOTH}"); got != "project" {
+		t.Errorf("project .env must override home: got %q", got)
+	}
+	if got := ResolveEnvValue("${PALACE_MISSING_VAR}"); got != "" {
+		t.Errorf("missing variable = %q, want empty", got)
+	}
+	if got := ResolveEnvValue("no-placeholder"); got != "no-placeholder" {
+		t.Errorf("plain value = %q, want unchanged", got)
 	}
 }

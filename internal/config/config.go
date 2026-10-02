@@ -543,20 +543,23 @@ func LoadFrom(cwd string) (Config, error) {
 		return cfg, err
 	}
 
-	substitutePalaceEnv(&cfg, cwd)
-
 	return cfg, nil
 }
 
-// substitutePalaceEnv expands ${VAR} in palace.embeddings_api_key from
-// ~/.pirate/.env (or the project .pirate/.env), so the endpoint token lives
-// beside the other provider secrets instead of inside config.json. It reuses
-// the exact mechanism the MCP headers use.
-func substitutePalaceEnv(cfg *Config, cwd string) {
-	if cfg.Palace == nil || cfg.Palace.EmbeddingsAPIKey == "" {
-		return
+// ResolveEnvValue expands ${VAR} patterns in s from the .env files pi reads
+// (~/.pirate/.env and the nearest project .pirate/.env), falling back to the
+// process environment. It exists so configured secrets expand at the point of
+// use — where the embedder or request is built — and never inside Load: a
+// value expanded at load time lives on in the in-memory config and the next
+// Save() would write the expanded key back into config.json, which is exactly
+// the leak the ${VAR} placeholder exists to prevent. palace.embeddings_* uses
+// this from the CLI code that builds the embedder; MCP headers keep their own
+// equivalent because those values never ride on Config.
+func ResolveEnvValue(s string) string {
+	if !strings.Contains(s, "${") {
+		return s
 	}
-	cfg.Palace.EmbeddingsAPIKey = substituteEnv(loadEnvFileFrom(cwd), cfg.Palace.EmbeddingsAPIKey)
+	return substituteEnv(loadEnvFileFrom("."), s)
 }
 
 // loadConfigFiles overlays the nearest project .pirate/config.json onto the
