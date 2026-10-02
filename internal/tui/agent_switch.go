@@ -91,6 +91,20 @@ func (m *model) setAgentModelOverride(name, modelName string) {
 	m.agentModelOverrides[name] = modelName
 }
 
+// agentConfig looks up a primary agent's config by name. ok is false for the
+// default agent ("") and names that are not in PrimaryAgents.
+func (m *model) agentConfig(name string) (subagent.AgentConfig, bool) {
+	if name == "" {
+		return subagent.AgentConfig{}, false
+	}
+	for _, ac := range m.cfg.PrimaryAgents {
+		if ac.Name == name {
+			return ac, true
+		}
+	}
+	return subagent.AgentConfig{}, false
+}
+
 // primaryAgentNames returns the switchable agents' names, sorted for a
 // stable cycle and listing.
 func primaryAgentNames(agents []subagent.AgentConfig) []string {

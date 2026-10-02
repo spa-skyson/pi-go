@@ -371,8 +371,11 @@ func singleModeHandler(ctx agent.Context, orch *subagent.Orchestrator, input Sub
 		}, nil
 	}
 
-	// Spawn the agent.
-	events, agentID, err := orch.SpawnWithInput(resolveContext(ctx), subagent.AgentInput{
+	// Spawn the agent. The fallback-capable spawn keeps the stream whole
+	// across a model restart: a fatal provider error on the primary model
+	// surfaces as its error event, then a fallback notice, then the restart's
+	// events — nothing is lost between attempts.
+	events, agentID, err := orch.SpawnWithInputFallback(resolveContext(ctx), subagent.AgentInput{
 		Type:         input.Agent,
 		Prompt:       input.Task,
 		WorktreeBase: input.Base,
@@ -444,8 +447,10 @@ func singleModeBackgroundHandler(ctx agent.Context, orch *subagent.Orchestrator,
 		}, nil
 	}
 
-	// Spawn the agent.
-	events, agentID, err := orch.SpawnWithInput(resolveContext(ctx), subagent.AgentInput{
+	// Spawn the agent; see singleModeHandler for why the fallback-capable
+	// spawn. The background reader below consumes the merged stream, so a
+	// restart is transparent to agent_result.
+	events, agentID, err := orch.SpawnWithInputFallback(resolveContext(ctx), subagent.AgentInput{
 		Type:         input.Agent,
 		Prompt:       input.Task,
 		WorktreeBase: input.Base,
@@ -580,6 +585,12 @@ func forwardSingleModeEvents(events <-chan subagent.Event, onEvent SubagentEvent
 		case "error":
 			status = "failed"
 			errMsg = ev.Error
+		case subagent.EventFallback:
+			// The restart notice means the previous attempt's failure was
+			// recovered by a model switch: a fresh attempt owns the outcome
+			// now, so an earlier attempt's error must not fail the result.
+			status = "completed"
+			errMsg = ""
 		case "message_start":
 			if ev.SessionID != "" {
 				sessID = ev.SessionID
@@ -665,7 +676,10 @@ func checkSubagentPipeline(orch *subagent.Orchestrator, spec subagentPipelineSpe
 func runSubagentStep(ctx context.Context, orch *subagent.Orchestrator, onEvent SubagentEventCallback, meta subagentStepMeta, agentName, prompt string) AgentResult {
 	stepStart := time.Now()
 
-	events, agentID, err := orch.SpawnWithInput(ctx, subagent.AgentInput{
+	// Spawn with the fallback-capable path: the merged stream carries a
+	// restart as [failed attempt events, fallback notice, retry events], so
+	// parallel and chain steps survive a provider wall mid-pipeline.
+	events, agentID, err := orch.SpawnWithInputFallback(ctx, subagent.AgentInput{
 		Type:   agentName,
 		Prompt: prompt,
 	})
@@ -738,6 +752,11 @@ func forwardSubagentEvents(events <-chan subagent.Event, onEvent SubagentEventCa
 		case "error":
 			status = "failed"
 			errMsg = ev.Error
+		case subagent.EventFallback:
+			// A restart recovered the previous attempt's failure; see
+			// forwardSubagentEvents.
+			status = "completed"
+			errMsg = ""
 		case "message_start":
 			if ev.SessionID != "" {
 				sessID = ev.SessionID

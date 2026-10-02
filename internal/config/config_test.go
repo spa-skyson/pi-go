@@ -90,6 +90,79 @@ func TestResolveRole_NilRoles(t *testing.T) {
 	}
 }
 
+func TestRoleConfigFallbackModelsJSON(t *testing.T) {
+	var cfg Config
+	raw := `{"roles":{"smol":{"model":"a/b","fallbackModels":["c/d"," e/f "]},"plain":{"model":"m"}}}`
+	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	got := cfg.Roles["smol"].FallbackModels
+	if len(got) != 2 || got[0] != "c/d" || got[1] != " e/f " {
+		t.Errorf("fallbackModels = %v, want [c/d  e/f ]", got)
+	}
+	if rc, err := json.Marshal(cfg.Roles["plain"]); err != nil {
+		t.Fatal(err)
+	} else if strings.Contains(string(rc), "fallbackModels") {
+		t.Errorf("absent fallbackModels should be omitted, got %s", rc)
+	}
+}
+
+func TestResolveFallbackModels(t *testing.T) {
+	tests := []struct {
+		name  string
+		roles map[string]RoleConfig
+		role  string
+		want  []string
+	}{
+		{
+			name:  "explicit role",
+			roles: map[string]RoleConfig{"smol": {Model: "m", FallbackModels: []string{"a/b", "c/d"}}},
+			role:  "smol",
+			want:  []string{"a/b", "c/d"},
+		},
+		{
+			// Same resolution path as ResolveRole: unknown role inherits the
+			// default role's fallbacks along with its model.
+			name:  "unknown role falls back to default",
+			roles: map[string]RoleConfig{"default": {Model: "m", FallbackModels: []string{"x/y"}}},
+			role:  "no-such-role",
+			want:  []string{"x/y"},
+		},
+		{
+			name:  "known role without fallbacks yields nothing",
+			roles: map[string]RoleConfig{"smol": {Model: "m"}, "default": {Model: "m", FallbackModels: []string{"x/y"}}},
+			role:  "smol",
+			want:  nil,
+		},
+		{
+			name:  "unknown role and no default yields nothing",
+			roles: map[string]RoleConfig{"smol": {Model: "m"}},
+			role:  "plan",
+			want:  nil,
+		},
+		{
+			name:  "empty roles yields nothing",
+			roles: map[string]RoleConfig{},
+			role:  "smol",
+			want:  nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Config{Roles: tt.roles}
+			got := cfg.ResolveFallbackModels(tt.role)
+			if len(got) != len(tt.want) {
+				t.Fatalf("ResolveFallbackModels(%q) = %v, want %v", tt.role, got, tt.want)
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Errorf("[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestResolveRole_AutoDetectProvider(t *testing.T) {
 	tests := []struct {
 		model    string

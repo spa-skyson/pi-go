@@ -69,8 +69,13 @@ func TestIsTransient(t *testing.T) {
 
 		// Terminal: auth and malformed requests.
 		{"401", errors.New("401 Unauthorized"), false},
-		{"expired token", errors.New(`POST "https://chatgpt.com/backend-api/codex/responses": 401 Unauthorized {"message": "Provided authentication token is expired.","code": "token_expired"}`), false},
 		{"invalid key", errors.New("invalid api key"), false},
+		{"expired token", errors.New(`POST "https://chatgpt.com/backend-api/codex/responses": 401 Unauthorized {"message": "Provided authentication token is expired.","code": "token_expired"}`), false},
+
+		// Terminal: 402 Payment Required — an exhausted balance or an unpaid
+		// plan. Money, not load: waiting never clears it.
+		{"402 bare", errors.New("402 Payment Required"), false},
+		{"402 json body", errors.New(`POST "https://api.example.com/v1/chat/completions": 402 {"error":{"message":"Payment required: your balance is exhausted"}}`), false},
 		{"missing scopes", errors.New("401 Unauthorized {\"message\": \"You have insufficient permissions for this operation. Missing scopes: api.responses.write\"}"), false},
 		{"400", errors.New(`POST "https://api.openai.com/v1/responses": 400 Bad Request {"message": "Invalid 'input[2].call_id': empty string."}`), false},
 		{"missing model", errors.New("404 Not Found: model 'deepseek-v4-flash:0731' not found"), false},
@@ -117,6 +122,56 @@ func TestIsTransientTerminalBeatsInterface(t *testing.T) {
 	}
 	if !IsTerminal(err) {
 		t.Error("IsTerminal should report quota exhaustion")
+	}
+}
+
+// 402 Payment Required is money, not load: it must read as terminal so the
+// fallback-model chain (issue #34) treats the provider as exhausted rather
+// than retrying, and never as transient. The code is matched as a status
+// token, not a substring: a "402" inside a request id or a model revision is
+// arbitrary text, not a payment wall.
+func TestIsTerminal402(t *testing.T) {
+	tests := []string{
+		"402 Payment Required",
+		"402",
+		`402 {"error":"payment required: add credits"}`,
+		"provider says: payment required, balance exhausted",
+		`POST "https://api.example.com/v1": HTTP 402`,
+		`{"status": 402, "message": "no balance"}`,
+		`{"code":402}`,
+		"status=402",
+	}
+	for _, msg := range tests {
+		err := providerErr(msg)
+		if !IsTerminal(err) {
+			t.Errorf("IsTerminal(%q) = false, want true", msg)
+		}
+		if IsTransient(err) {
+			t.Errorf("IsTransient(%q) = true, want false", msg)
+		}
+	}
+
+	// A 402 embedded in a longer identifier is arbitrary text: the matcher's
+	// boundaries must not classify it terminal.
+	for _, msg := range []string{
+		"request 14025 failed",
+		"model gpt-402 unavailable",
+		"trace x402y ended",
+		"req_4023 dropped by upstream",
+	} {
+		if IsTerminal(providerErr(msg)) {
+			t.Errorf("IsTerminal(%q) = true, want false: not a payment wall", msg)
+		}
+	}
+
+	// The one exception stays the exception: a 402 that names a reopening
+	// window is a rate limit wearing 402 prose, and the window wins.
+	windowed := providerErr("402 payment required. Please retry in 9.422s.")
+	if IsTerminal(windowed) {
+		t.Error("a 402 naming a retry window should not be terminal")
+	}
+	if !IsTransient(windowed) {
+		t.Error("a 402 naming a retry window should be transient")
 	}
 }
 

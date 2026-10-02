@@ -74,6 +74,13 @@ var terminalPatterns = []string{
 	// Responses streams also send as a terminal error event.
 	"credit_balance_exhausted",
 
+	// HTTP 402 Payment Required prose. The bare status code is matched
+	// separately, as a token — see status402Re. Matched before the transient
+	// list, and a message carrying a retry window still wins (see
+	// IsTransient): nothing matching only these patterns can carry one, but
+	// the guard costs nothing.
+	"payment required",
+
 	// Authentication and authorization.
 	"unauthorized",
 	"forbidden",
@@ -146,6 +153,14 @@ var transientPatterns = []string{
 	"unexpected end of json input",
 }
 
+// status402Re matches HTTP 402 as a standalone status token: the code is
+// neither preceded nor followed by a character that would make it part of a
+// longer identifier. A bare substring pattern matched arbitrary text — a
+// request id "14025", a model revision "gpt-402" — and classified those
+// failures terminal. Spellings this must keep matching: "402" alone, "HTTP
+// 402", `": 402 {"` in a JSON body, "status=402", "402 Payment Required".
+var status402Re = regexp.MustCompile(`(^|[^0-9A-Za-z_-])402($|[^0-9A-Za-z_-])`)
+
 // IsTerminal reports whether err describes a failure that will recur
 // identically however long the caller waits.
 func IsTerminal(err error) bool {
@@ -158,7 +173,14 @@ func IsTerminal(err error) bool {
 	if _, ok := ServerDelay(err); ok {
 		return false
 	}
-	return containsAny(strings.ToLower(err.Error()), terminalPatterns)
+	msg := err.Error()
+	// 402 is matched as a status token rather than a substring: it is money,
+	// not load, so no wait clears it (a 402 that names a retry window is
+	// caught by the ServerDelay check above).
+	if status402Re.MatchString(msg) {
+		return true
+	}
+	return containsAny(strings.ToLower(msg), terminalPatterns)
 }
 
 // IsTransient reports whether err is worth retrying.
@@ -181,7 +203,7 @@ func IsTransient(err error) bool {
 	}
 
 	// Terminal wins on a tie: a quota 429 matches both lists.
-	if containsAny(msg, terminalPatterns) {
+	if containsAny(msg, terminalPatterns) || status402Re.MatchString(msg) {
 		return false
 	}
 	if containsAny(msg, transientPatterns) {

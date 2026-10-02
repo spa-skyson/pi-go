@@ -120,6 +120,45 @@ echo '{"type":"message_end"}'
 	}
 }
 
+func TestSpawner_ErrorEventKeepsErrorText(t *testing.T) {
+	// The child reports provider failures as an explicit error event
+	// (internal/cli/cli.go); the parent must keep the text in Event.Error
+	// rather than dropping it.
+	script := `
+echo '{"type":"message_start","agent":"test","role":"model"}'
+echo '{"type":"error","error":"402 Payment Required"}'
+`
+	binary := mockPiScript(t, script)
+	spawner := NewSpawner(binary)
+
+	proc, err := spawner.Spawn(context.Background(), SpawnOpts{
+		AgentID: "test-error",
+		Prompt:  "fail",
+	})
+	if err != nil {
+		t.Fatalf("spawn failed: %v", err)
+	}
+
+	var errEvents []Event
+	for ev := range proc.Events() {
+		if ev.Type == "error" {
+			errEvents = append(errEvents, ev)
+		}
+	}
+	if _, waitErr := proc.Wait(); waitErr != nil {
+		t.Fatalf("wait failed: %v", waitErr)
+	}
+	if len(errEvents) != 1 {
+		t.Fatalf("expected 1 error event, got %d: %+v", len(errEvents), errEvents)
+	}
+	if errEvents[0].Error != "402 Payment Required" {
+		t.Errorf("Error = %q, want %q", errEvents[0].Error, "402 Payment Required")
+	}
+	if errEvents[0].Content != "" {
+		t.Errorf("Content = %q, want empty", errEvents[0].Content)
+	}
+}
+
 func TestSpawner_ProcessCrash(t *testing.T) {
 	script := `
 echo '{"type":"message_start"}'

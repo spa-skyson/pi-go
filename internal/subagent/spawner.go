@@ -405,6 +405,11 @@ func (p *Process) emitChildLine(line string, result *strings.Builder) {
 	}
 
 	switch ev.Type {
+	case "error":
+		// Child emits provider failures as {"type":"error","error":...}
+		// (internal/cli/cli.go); keep the text in Event.Error so the parent can
+		// classify it instead of dropping it into Content.
+		p.sendEvent(Event{Type: "error", Error: ev.Error})
 	case "text_delta":
 		result.WriteString(ev.Delta)
 		p.sendEvent(Event{Type: "text_delta", Content: ev.Delta})
@@ -456,6 +461,7 @@ type jsonEvent struct {
 	Role      string `json:"role,omitempty"`
 	Delta     string `json:"delta,omitempty"`
 	Content   string `json:"content,omitempty"`
+	Error     string `json:"error,omitempty"`
 	ToolName  string `json:"tool_name,omitempty"`
 	ToolInput any    `json:"tool_input,omitempty"`
 	SessionID string `json:"session_id,omitempty"`

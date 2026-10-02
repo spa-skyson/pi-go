@@ -21,6 +21,11 @@
           "model": { "type": "string", "description": "Model name; a declared-provider prefix (\"corp/...\") routes to that provider." },
           "provider": { "type": "string", "description": "Provider override; empty auto-detects from the model name prefix." },
           "advisorModel": { "type": "string", "description": "Advisor model for the advisor tool (e.g. \"claude-opus-4-7\")." },
+          "fallbackModels": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Models tried in order when this role's primary model is unavailable (402/403/429 quota/5xx). Provider-prefixed names (\"corp/...\") allowed."
+          },
           "advisorMaxUses": { "type": "integer", "minimum": 0, "description": "Max advisor calls per request (0 = unlimited)." },
           "advisorCaching": { "type": "boolean", "description": "Enable advisor prompt caching." }
         }

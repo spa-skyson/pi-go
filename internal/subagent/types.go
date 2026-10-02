@@ -25,6 +25,10 @@ type SpawnInput struct {
 	Env          []string `json:"env,omitempty"`          // Additional environment variables
 	MaxRetries   int      `json:"max_retries,omitempty"`  // Max retry attempts on crash (default 0, max 3)
 	Timeout      int      `json:"timeout,omitempty"`      // Absolute timeout override in milliseconds
+	// ModelOverride replaces the resolved model for this spawn; used by
+	// SpawnWithRetry to restart on a fallback model after a fatal provider
+	// error. Empty means the agent model/role chain decides.
+	ModelOverride string `json:"model_override,omitempty"`
 
 	// Attribution records where the spawned agent sits in a run tree. The
 	// orchestrator forwards it through the environment; the child writes it
@@ -121,3 +125,9 @@ type Event struct {
 	ToolArgs   any    `json:"tool_input,omitempty"` // Tool arguments for tool_call (from pi --mode json)
 	Status     string `json:"status,omitempty"`     // Final status for run_done events
 }
+
+// EventFallback is synthesized by the SpawnWithInputFallback stream between
+// two attempts: the previous attempt died of a fatal provider error and the
+// next runs on the fallback model. Content carries the human-readable notice;
+// it is not an error event, and consumers must not count it as a failure.
+const EventFallback = "fallback"

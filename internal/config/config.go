@@ -26,11 +26,15 @@ type HookConfig struct {
 
 // RoleConfig maps a role to a specific model and optional provider override.
 type RoleConfig struct {
-	Model          string `json:"model"`
-	Provider       string `json:"provider,omitempty"`
-	AdvisorModel   string `json:"advisorModel,omitempty"`   // Advisor model for advisor tool (e.g., "claude-opus-4-7")
-	AdvisorMaxUses int    `json:"advisorMaxUses,omitempty"` // Max advisor calls per request (0 = unlimited)
-	AdvisorCaching bool   `json:"advisorCaching,omitempty"` // Enable advisor prompt caching
+	Model        string `json:"model"`
+	Provider     string `json:"provider,omitempty"`
+	AdvisorModel string `json:"advisorModel,omitempty"` // Advisor model for advisor tool (e.g., "claude-opus-4-7")
+	// FallbackModels lists the models tried in order when the role's primary
+	// model is unavailable — quota exhausted, auth failure, or repeated 5xx.
+	// The consumer caps the list; parsing keeps every entry.
+	FallbackModels []string `json:"fallbackModels,omitempty"`
+	AdvisorMaxUses int      `json:"advisorMaxUses,omitempty"` // Max advisor calls per request (0 = unlimited)
+	AdvisorCaching bool     `json:"advisorCaching,omitempty"` // Enable advisor prompt caching
 }
 
 // ErrNoDefaultRole is returned when no default role is configured.
@@ -386,6 +390,26 @@ func (c *Config) ResolveRole(role string) (model string, prov string, advisorMod
 	}
 
 	return rc.Model, prov, rc.AdvisorModel, rc.AdvisorMaxUses, rc.AdvisorCaching, nil
+}
+
+// ResolveFallbackModels returns the fallback models configured for a role, in
+// declaration order, with the same resolution path ResolveRole uses:
+// requested role → "default" role. Missing fallbacks are the norm, not an
+// error, so an unknown role, an absent "default", or a role without
+// fallbackModels all yield nil — the caller simply has nothing to fall back
+// to. The list is returned as configured; capping it is the consumer's job.
+func (c *Config) ResolveFallbackModels(role string) []string {
+	if len(c.Roles) == 0 {
+		return nil
+	}
+	rc, ok := c.Roles[role]
+	if !ok {
+		rc, ok = c.Roles["default"]
+		if !ok {
+			return nil
+		}
+	}
+	return rc.FallbackModels
 }
 
 // autoDetectProvider detects the provider from model name prefix.

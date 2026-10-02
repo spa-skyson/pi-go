@@ -490,6 +490,12 @@ func (m *model) handleModelCommand(args []string) (tea.Model, tea.Cmd) {
 	m.cfg.ModelName = newName
 	m.cfg.ProviderName = newProvider
 
+	// A deliberate user-driven switch resets the fallback session: the chain
+	// was chosen against the previous model, and the user just said this one
+	// works.
+	m.modelFallbacks = nil
+	m.modelFallbackUsed = 0
+
 	var sb strings.Builder
 	if m.activeAgent != "" {
 		// Session-only override for the active primary agent: the model
