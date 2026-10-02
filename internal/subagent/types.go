@@ -125,3 +125,9 @@ type Event struct {
 	ToolArgs   any    `json:"tool_input,omitempty"` // Tool arguments for tool_call (from pi --mode json)
 	Status     string `json:"status,omitempty"`     // Final status for run_done events
 }
+
+// EventFallback is synthesized by the SpawnWithInputFallback stream between
+// two attempts: the previous attempt died of a fatal provider error and the
+// next runs on the fallback model. Content carries the human-readable notice;
+// it is not an error event, and consumers must not count it as a failure.
+const EventFallback = "fallback"

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spa-skyson/pi-rate/internal/config"
 )
@@ -169,18 +170,305 @@ exit 1
 	if err == nil {
 		t.Fatal("expected a crash failure after retries")
 	}
+	if !strings.Contains(err.Error(), "crashed after 3 attempts") {
+		t.Errorf("error %q should name the exhausted crash budget", err)
+	}
 	calls := readArgvLog(t, logPath)
-	// The mock crash produces a synthetic error event with the process exit
-	// text, which classifies as a terminal error (not retryable crash), so
-	// the run ends on the first attempt. What matters: no fallback model was
-	// ever injected, because none is configured.
-	if len(calls) < 1 {
-		t.Fatalf("spawn attempts = %d, want at least 1", len(calls))
+	// The crash produces a synthetic error event with the process exit text,
+	// which is not a provider wall: the run ends through the crash path, and
+	// every attempt stays on the primary model.
+	if len(calls) != 3 {
+		t.Fatalf("spawn attempts = %d, want 3 (crash retries on the same model)", len(calls))
 	}
 	for i, c := range calls {
 		if strings.Contains(c, "fb-") {
 			t.Errorf("attempt %d argv %q must not use a fallback model", i, c)
 		}
+	}
+}
+
+// TestSpawnWithRetry_CrashNotSteeredToFallback pins the crash/provider split:
+// a child that crashes without a provider error must run through the crash
+// path even when a fallback chain is configured — the chain is for dead
+// accounts, not for dead processes, and it must still be unused afterwards.
+func TestSpawnWithRetry_CrashNotSteeredToFallback(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "argv.log")
+	script := `#!/bin/bash
+echo "$*" >> "` + logPath + `"
+echo "segmentation fault" >&2
+exit 139
+`
+	binary := mockPiScript(t, script)
+
+	cfg := testConfig()
+	cfg.Roles["smol"] = configRoleWithFallbacks("primary-model", "fb-one", "fb-two")
+
+	orch := NewOrchestrator(cfg, "", nil)
+	defer orch.Shutdown()
+	orch.SetPiBinary(binary)
+
+	_, _, err := orch.SpawnWithRetry(context.Background(), SpawnInput{
+		Agent:      AgentConfig{Name: "fbagent", Role: "smol", Model: "primary-model"},
+		Prompt:     "hi",
+		MaxRetries: 1,
+	})
+	if err == nil {
+		t.Fatal("expected a crash failure after retries")
+	}
+	calls := readArgvLog(t, logPath)
+	if len(calls) != 2 {
+		t.Fatalf("spawn attempts = %d, want 2 (crash retries on the primary model)", len(calls))
+	}
+	for i, c := range calls {
+		if !strings.Contains(c, "primary-model") || strings.Contains(c, "fb-") {
+			t.Errorf("attempt %d argv %q must stay on the primary model", i, c)
+		}
+	}
+}
+
+// TestSpawnWithRetry_TimeoutNotSteeredToFallback pins the other half of the
+// split: an attempt stopped by its own time limit is final — neither a crash
+// worth re-spawning nor a model problem — so the chain stays untouched and
+// the error names the stop.
+func TestSpawnWithRetry_TimeoutNotSteeredToFallback(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "argv.log")
+	script := `#!/bin/bash
+echo "$*" >> "` + logPath + `"
+sleep 5
+`
+	binary := mockPiScript(t, script)
+
+	cfg := testConfig()
+	cfg.Roles["smol"] = configRoleWithFallbacks("primary-model", "fb-one")
+
+	orch := NewOrchestrator(cfg, "", nil)
+	defer orch.Shutdown()
+	orch.SetPiBinary(binary)
+
+	start := time.Now()
+	_, _, err := orch.SpawnWithRetry(context.Background(), SpawnInput{
+		Agent:      AgentConfig{Name: "sleepy", Role: "smol", Model: "primary-model", Timeout: 250},
+		Prompt:     "hi",
+		MaxRetries: 1,
+	})
+	if err == nil {
+		t.Fatal("expected the timeout to surface as a failure")
+	}
+	if !strings.Contains(err.Error(), "stopped") {
+		t.Errorf("error %q should name the stop, not a provider failure", err)
+	}
+	if calls := readArgvLog(t, logPath); len(calls) != 1 {
+		t.Fatalf("spawn attempts = %d, want 1 (a timeout must not burn the fallback chain)", len(calls))
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Errorf("run took %v; the 250ms agent timeout did not bound it", elapsed)
+	}
+}
+
+// TestSpawnWithRetry_FallbackBudgetBoundsRestart pins the chain budget: the
+// fallback restart runs under the agent's declared timeout, not an unbounded
+// default — the restart is killed and the run ends once the budget is spent.
+func TestSpawnWithRetry_FallbackBudgetBoundsRestart(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "argv.log")
+	script := `#!/bin/bash
+echo "$*" >> "` + logPath + `"
+if [[ "$*" == *"fb-one"* ]]; then
+  sleep 10
+fi
+echo '{"type":"error","error":"402 Payment Required"}'
+exit 1
+`
+	binary := mockPiScript(t, script)
+
+	cfg := testConfig()
+	cfg.Roles["smol"] = configRoleWithFallbacks("primary-model", "fb-one")
+
+	orch := NewOrchestrator(cfg, "", nil)
+	defer orch.Shutdown()
+	orch.SetPiBinary(binary)
+
+	start := time.Now()
+	_, _, err := orch.SpawnWithRetry(context.Background(), SpawnInput{
+		// The primary attempt fails fast; the fallback hangs. The 800ms
+		// agent timeout must bound the restart instead of letting it run to
+		// the 20-minute default.
+		Agent:      AgentConfig{Name: "fbagent", Role: "smol", Model: "primary-model", Timeout: 800},
+		Prompt:     "hi",
+		MaxRetries: 1,
+	})
+	if err == nil {
+		t.Fatal("expected the hung fallback to be killed by the chain budget")
+	}
+	if calls := readArgvLog(t, logPath); len(calls) != 2 {
+		t.Fatalf("spawn attempts = %d, want 2 (primary, then the killed fallback)", len(calls))
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Errorf("run took %v; the 800ms chain budget did not bound the restart", elapsed)
+	}
+}
+
+// TestChainBudgetMatchesSpawnTimeout pins the wiring the chain budget rests
+// on: the budget is derived from the same effective timeout Spawn gives the
+// child, so a restart's ceiling equals the attempt it replaces — an agent's
+// frontmatter timeout must not silently become the 20-minute default on the
+// second try.
+func TestChainBudgetMatchesSpawnTimeout(t *testing.T) {
+	agent := AgentConfig{Name: "a", Timeout: 1234}
+	input := SpawnInput{Agent: agent}
+	if got := effectiveSpawnTimeout(agent, input); got != 1234 {
+		t.Errorf("effectiveSpawnTimeout = %d, want the agent's 1234", got)
+	}
+	input.Timeout = 5000
+	if got := effectiveSpawnTimeout(agent, input); got != 5000 {
+		t.Errorf("effectiveSpawnTimeout = %d, want the explicit 5000 override", got)
+	}
+
+	var b chainBudget
+	b.start(context.Background(), 1234)
+	defer b.cancel()
+	deadline, ok := b.ctx.Deadline()
+	if !ok {
+		t.Fatal("chain budget context carries no deadline")
+	}
+	if d := time.Until(deadline); d <= 0 || d > 1234*time.Millisecond {
+		t.Errorf("chain budget deadline in %v, want at most 1234ms", d)
+	}
+}
+
+// streamScriptPath builds a mock pi binary whose primary attempt streams a
+// text delta before the provider error, and whose fallback attempt recovers.
+func streamScriptPath(t *testing.T, logPath string) string {
+	t.Helper()
+	script := `#!/bin/bash
+echo "$*" >> "` + logPath + `"
+if [[ "$*" == *"fb-one"* ]]; then
+  echo '{"type":"text_delta","delta":"recovered"}'
+  echo '{"type":"message_end"}'
+  exit 0
+fi
+echo '{"type":"text_delta","delta":"partial "}'
+echo '{"type":"error","error":"402 Payment Required"}'
+exit 1
+`
+	return mockPiScript(t, script)
+}
+
+// TestSpawnWithInputFallbackStreamPreserved pins the production contract: the
+// merged stream carries the failed attempt's events, the restart notice, and
+// the retry's events in order, with exactly one run_done — the final
+// attempt's. A failed attempt's trailing noise (the spawner's synthetic exit
+// error, its own run_done) must stay off the stream: a subscriber seeing it
+// would mistake the abandoned attempt for the end.
+func TestSpawnWithInputFallbackStreamPreserved(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "argv.log")
+	binary := streamScriptPath(t, logPath)
+
+	cfg := testConfig()
+	cfg.Roles["smol"] = configRoleWithFallbacks("primary-model", "fb-one")
+
+	orch := NewOrchestrator(cfg, "", nil)
+	defer orch.Shutdown()
+	orch.SetPiBinary(binary)
+	orch.RegisterAgents([]AgentConfig{
+		{Name: "fbagent", Role: "smol", Model: "primary-model"},
+	})
+
+	events, agentID, err := orch.SpawnWithInputFallback(context.Background(), AgentInput{
+		Type:   "fbagent",
+		Prompt: "hi",
+	})
+	if err != nil {
+		t.Fatalf("SpawnWithInputFallback: %v", err)
+	}
+	if agentID == "" {
+		t.Fatal("expected a non-empty agent id")
+	}
+
+	type got struct {
+		typ     string
+		content string
+		err     string
+		status  string
+	}
+	evv := func(ev Event) got {
+		c := ev.Content
+		if ev.Type == "error" && c == "" {
+			c = ev.Error
+		}
+		return got{ev.Type, c, ev.Error, ev.Status}
+	}
+	var seen []got
+	for ev := range events {
+		seen = append(seen, evv(ev))
+	}
+
+	want := []got{
+		{"text_delta", "partial ", "", ""},
+		{"error", "402 Payment Required", "402 Payment Required", ""},
+		{"fallback", "model primary-model failed (402 Payment Required); restarting on fb-one", "", ""},
+		{"text_delta", "recovered", "", ""},
+		{"message_end", "", "", ""},
+		{"run_done", "", "", "completed"},
+	}
+	if len(seen) != len(want) {
+		t.Fatalf("stream = %+v, want exactly %d events", seen, len(want))
+	}
+	for i, g := range want {
+		if seen[i] != g {
+			t.Errorf("event %d = %+v, want %+v", i, seen[i], g)
+		}
+	}
+}
+
+// TestSpawnWithInputFallbackExhaustedSurfacesOnError pins the exhausted-chain
+// contract on the merged stream: the spawn itself succeeds — the stream is
+// live — and the failure arrives as the stream's terminal error event, after
+// the last attempt's own error and the notices.
+func TestSpawnWithInputFallbackExhaustedSurfacesOnError(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "argv.log")
+	// No argv ever matches the marker, so every attempt emits the 402 error.
+	binary := fallbackScriptPath(t, logPath, "never-used", "402 Payment Required")
+
+	cfg := testConfig()
+	cfg.Roles["smol"] = configRoleWithFallbacks("primary-model", "fb-one")
+
+	orch := NewOrchestrator(cfg, "", nil)
+	defer orch.Shutdown()
+	orch.SetPiBinary(binary)
+	orch.RegisterAgents([]AgentConfig{
+		{Name: "fbagent", Role: "smol", Model: "primary-model"},
+	})
+
+	events, _, err := orch.SpawnWithInputFallback(context.Background(), AgentInput{
+		Type:   "fbagent",
+		Prompt: "hi",
+	})
+	if err != nil {
+		t.Fatalf("SpawnWithInputFallback: %v", err)
+	}
+
+	var types []string
+	var last Event
+	for ev := range events {
+		types = append(types, ev.Type)
+		last = ev
+	}
+	// The last attempt's provider error, then the wrapper's terminal failure
+	// event — the stream's own end of story.
+	want := []string{"error", "fallback", "error", "error"}
+	if len(types) != len(want) {
+		t.Fatalf("stream types = %v, want %v", types, want)
+	}
+	for i := range want {
+		if types[i] != want[i] {
+			t.Fatalf("stream types = %v, want %v", types, want)
+		}
+	}
+	if !strings.Contains(last.Error, "402") {
+		t.Errorf("terminal event error %q should carry the provider failure", last.Error)
+	}
+	if calls := readArgvLog(t, logPath); len(calls) != 2 {
+		t.Errorf("spawn attempts = %d, want 2 (primary then the single fallback)", len(calls))
 	}
 }
 

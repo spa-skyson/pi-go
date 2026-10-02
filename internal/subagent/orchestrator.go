@@ -16,6 +16,7 @@ import (
 
 	"github.com/spa-skyson/pi-rate/internal/config"
 	"github.com/spa-skyson/pi-rate/internal/permission"
+	"github.com/spa-skyson/pi-rate/internal/retry"
 	"github.com/spa-skyson/pi-rate/internal/session"
 )
 
@@ -340,6 +341,10 @@ func (o *Orchestrator) AgentModel(name string) string {
 // deliberately ignore SpawnOpts.Model (spawner_acp.go, spawner_codex.go), so
 // a fallback restart could not reach them. Returns the final events channel,
 // agentID, and error (nil on success).
+func (o *Orchestrator) SpawnWithRetry(ctx context.Context, input SpawnInput) (<-chan Event, string, error) {
+	return o.spawnWithRetry(ctx, input, nil, nil)
+}
+
 // chainBudget is the lazily created chain-wide timeout budget for fallback
 // restarts in one SpawnWithRetry call: one WithTimeout per chain, the
 // restarts that follow inherit whatever is left of it.
@@ -354,8 +359,42 @@ func (b *chainBudget) start(parent context.Context, agentTimeoutMs int) {
 	b.ctx, b.cancel = context.WithTimeout(parent, ResolveTimeout(agentTimeoutMs).Absolute)
 }
 
-func (o *Orchestrator) SpawnWithRetry(ctx context.Context, input SpawnInput) (<-chan Event, string, error) {
+// effectiveSpawnTimeout returns the absolute spawn timeout in effect for this
+// input: an explicit SpawnInput.Timeout overrides the agent's own declaration.
+// Spawn (the child's own absolute limit) and the fallback chain budget must
+// answer this identically — a chain budget derived from anything else would
+// hand a restart a different ceiling than the attempt it restarts, silently
+// zeroing the agent's declared timeout on the second try.
+func effectiveSpawnTimeout(agent AgentConfig, input SpawnInput) int {
+	if input.Timeout > 0 {
+		return input.Timeout
+	}
+	return agent.Timeout
+}
+
+// streamStart is the synchronous handshake of SpawnWithInputFallback: the
+// first attempt that produced a live event stream, or the failure when no
+// attempt ever did.
+type streamStart struct {
+	agentID string
+	err     error
+}
+
+// spawnWithRetry is SpawnWithRetry's loop. tap, when non-nil, receives every
+// event of every attempt the loop observes (see SpawnWithInputFallback); an
+// attempt it abandons contributes nothing past its terminal event. first
+// carries the streamStart handshake exactly once.
+func (o *Orchestrator) spawnWithRetry(ctx context.Context, input SpawnInput, tap chan<- Event, first chan<- streamStart) (<-chan Event, string, error) {
 	maxRetries := clampRetries(input.MaxRetries)
+	// External runners (ACP, codex) cannot take a fallback model, so their
+	// error events never steer the chain; awaitAttemptOutcome classifies them
+	// by tracked process state instead, exactly as before this path existed.
+	externalRunner := isExternalRunnerAgent(input.Agent.Name)
+
+	// The model the current attempt runs on, for the restart notice. A
+	// resolution failure leaves it empty: the notice then names no model,
+	// which is cosmetic, not load-bearing.
+	currentModel, _ := agentSpawnModel(o.cfg, input.Agent)
 
 	// Fallback state, resolved lazily on the first provider error: agents
 	// that never hit one pay nothing for the chain.
@@ -363,11 +402,24 @@ func (o *Orchestrator) SpawnWithRetry(ctx context.Context, input SpawnInput) (<-
 	fallbacksResolved := false
 	fallbackUsed := 0
 	chain := &chainBudget{ctx: ctx}
-	defer func() {
+	// failExit tears the chain budget down on the exits that leave nothing
+	// running: every attempt's stream has been drained to close, so no
+	// process still needs the context. The success exits deliberately skip
+	// it — they hand back a live stream whose attempt runs under the same
+	// budget, and canceling here would kill a healthy child mid-flight ("pi
+	// process failed: context canceled" right after its result). A budget
+	// left standing expires on its own, exactly like a plain Spawn's timeout.
+	// It also completes the streamStart handshake when no attempt ever
+	// produced a stream.
+	failExit := func(agentID string, err error) (<-chan Event, string, error) {
 		if chain.cancel != nil {
 			chain.cancel()
 		}
-	}()
+		if first != nil {
+			first <- streamStart{err: err}
+		}
+		return nil, agentID, err
+	}
 
 	var finalAgentID string
 	var finalEvents <-chan Event
@@ -376,9 +428,13 @@ func (o *Orchestrator) SpawnWithRetry(ctx context.Context, input SpawnInput) (<-
 		events, agentID, err := o.Spawn(chain.ctx, input)
 		if err != nil {
 			if attempt >= maxRetries {
-				return nil, "", fmt.Errorf("spawn failed after %d attempts: %w", attempt+1, err)
+				return failExit("", fmt.Errorf("spawn failed after %d attempts: %w", attempt+1, err))
 			}
 			continue
+		}
+		if first != nil {
+			first <- streamStart{agentID: agentID}
+			first = nil
 		}
 
 		finalAgentID = agentID
@@ -390,18 +446,11 @@ func (o *Orchestrator) SpawnWithRetry(ctx context.Context, input SpawnInput) (<-
 			return finalEvents, finalAgentID, nil
 		}
 
-		outcome, errText := o.awaitAttemptOutcome(events, agentID)
-		if outcome == attemptProviderError && isExternalRunnerAgent(input.Agent.Name) {
-			// External runners (ACP, codex) cannot take a fallback model, so
-			// an error event falls back to the pre-fallback classification:
-			// by tracked process state, exactly as before this path existed.
-			if o.agentCrashed(agentID) {
-				outcome = attemptCrashed
-			} else {
-				outcome = attemptHealthy
-			}
-		}
-		if outcome == attemptProviderError {
+		outcome, errText := o.awaitAttemptOutcome(events, agentID, externalRunner, tap)
+		switch {
+		case outcome == attemptHealthy, outcome == attemptSilent && attempt >= maxRetries:
+			return finalEvents, finalAgentID, nil
+		case outcome == attemptProviderError:
 			if !fallbacksResolved {
 				fallbacks = agentFallbackModels(o.cfg, input.Agent)
 				fallbacksResolved = true
@@ -410,27 +459,90 @@ func (o *Orchestrator) SpawnWithRetry(ctx context.Context, input SpawnInput) (<-
 				next := fallbacks[fallbackUsed]
 				fallbackUsed++
 				if chain.cancel == nil {
-					chain.start(ctx, input.Timeout)
+					chain.start(ctx, effectiveSpawnTimeout(input.Agent, input))
 				}
 				slog.Info("subagent: fatal provider error, restarting on fallback model",
 					"agent", input.Agent.Name, "error", errText, "fallback", next)
+				if tap != nil {
+					tap <- Event{Type: EventFallback, Content: fmt.Sprintf(
+						"model %s failed (%s); restarting on %s",
+						currentModel, firstLine(errText), next)}
+				}
 				input.ModelOverride = next
+				currentModel = next
 				continue
 			}
 			// Chain exhausted or none configured: the provider error is
 			// final. Crash retries must not burn attempts on a dead account.
-			return nil, agentID, fmt.Errorf("subagent %s failed: %s", agentID, errText)
-		}
-
-		// Wait for the subagent to reach a terminal event and check status.
-		switch {
-		case outcome == attemptHealthy, outcome == attemptSilent && attempt >= maxRetries:
-			return finalEvents, finalAgentID, nil
+			return failExit(agentID, fmt.Errorf("subagent %s failed: %s", agentID, errText))
+		case outcome == attemptStopped:
+			// Timed out or otherwise stopped for good: neither a crash worth
+			// re-spawning nor a model problem a fallback could fix.
+			return failExit(agentID, fmt.Errorf("subagent %s stopped: %s", agentID, errText))
 		case attempt >= maxRetries:
-			return nil, agentID, fmt.Errorf("subagent %s crashed after %d attempts", agentID, attempt+1)
+			return failExit(agentID, fmt.Errorf("subagent %s crashed after %d attempts", agentID, attempt+1))
 		}
 		// Crashed or silent with attempts left: re-spawn on the same model.
 	}
+}
+
+// firstLine trims a provider error to its first line for a notice: the
+// payloads arrive multi-line and a subscriber renders the text verbatim.
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
+// SpawnWithInputFallback is SpawnWithInput with the fallback mechanics of
+// SpawnWithRetry and a stream that survives the restarts: the returned
+// channel carries every event of every attempt — a failed attempt's stream up
+// to and including its terminal error, a synthetic "fallback" notice before
+// each restart, and the final attempt's stream to completion, its run_done
+// included. A failed attempt's trailing events (the spawner's exit noise and
+// its own run_done) are kept off the stream, so a subscriber can never
+// mistake an abandoned attempt for the end.
+//
+// The agent id returned synchronously is the first attempt's; a restart runs
+// under a new id. MaxRetries below 1 is raised to 1: the retry loop
+// classifies attempts only when it may re-spawn, and without that a provider
+// error could never reach the fallback chain.
+func (o *Orchestrator) SpawnWithInputFallback(ctx context.Context, input AgentInput) (<-chan Event, string, error) {
+	spawnInput, err := o.resolveAgentInput(input)
+	if err != nil {
+		return nil, "", err
+	}
+	if spawnInput.MaxRetries < 1 {
+		spawnInput.MaxRetries = 1
+	}
+
+	out := make(chan Event, 64)
+	start := make(chan streamStart, 1)
+	go func() {
+		defer close(out)
+		events, _, err := o.spawnWithRetry(ctx, spawnInput, out, start)
+		if err != nil {
+			// No attempt produced a usable stream, or the chain died after
+			// its restarts: surface the failure as the stream's terminal
+			// event, so a subscriber reading only events still sees it.
+			out <- Event{Type: "error", Error: err.Error()}
+			return
+		}
+		// The winning attempt's stream continues past the terminal event the
+		// loop consumed — run_done and whatever preceded it. Forward the
+		// remainder: the subscriber's stream ends the way a plain Spawn's
+		// does.
+		for ev := range events {
+			out <- ev
+		}
+	}()
+
+	s := <-start
+	if s.err != nil {
+		return nil, "", s.err
+	}
+	return out, s.agentID, nil
 }
 
 // clampRetries pins a requested retry budget to the supported range: never
@@ -460,28 +572,64 @@ const (
 	attemptSilent
 
 	// attemptProviderError: the child emitted a terminal error event with
-	// text - its provider failed fatally (transient retries were already
-	// exhausted inside the child). Distinct from a crash: classified from
-	// the event, not from process state.
+	// text that reads as a fatal provider failure (quota, 402, auth — the
+	// shared retry classification; transient retries were already exhausted
+	// inside the child). Distinct from a crash: classified from the event,
+	// not from process state. This is the only outcome that steers the
+	// fallback chain.
 	attemptProviderError
+
+	// attemptStopped: an error event whose text is not a provider wall, and
+	// the agent did not crash — a timeout, a cancel, a clean exit after an
+	// error. Final like a provider error (no re-spawn buys anything), but a
+	// model switch could not fix it.
+	attemptStopped
 )
 
 // awaitAttemptOutcome consumes events until the first terminal one
 // ("message_end" or "error") and reports how the attempt ended. Events before
-// that are dropped, which is why the maxRetries==0 shortcut in SpawnWithRetry
-// skips this entirely. The second return value is the provider error text
-// when the outcome is attemptProviderError, empty otherwise.
-func (o *Orchestrator) awaitAttemptOutcome(events <-chan Event, agentID string) (attemptOutcome, string) {
+// that are forwarded to tap when it is non-nil — that is how the streaming
+// wrapper's subscriber sees a failed attempt's stream — and dropped otherwise,
+// which is why the maxRetries==0 shortcut in spawnWithRetry skips this
+// entirely. The second return value is the provider error text when the
+// outcome is attemptProviderError, and the stop text for attemptStopped,
+// empty otherwise.
+func (o *Orchestrator) awaitAttemptOutcome(events <-chan Event, agentID string, externalRunner bool, tap chan<- Event) (attemptOutcome, string) {
 	for ev := range events {
+		if tap != nil {
+			tap <- ev
+		}
 		if ev.Type != "message_end" && ev.Type != "error" {
 			continue
 		}
 		// A provider error is classified from the event text itself, before
 		// any process-state check: the status write races the event
-		// forwarding, but the event is authoritative. An error event without
-		// text keeps the old crash/healthy classification.
+		// forwarding, but the event is authoritative. Only a failure the
+		// shared retry classification calls terminal may steer the fallback
+		// chain — a crashed child's synthesized exit error ("pi process
+		// failed: exit status 1: ...") must not, or a crash would be treated
+		// as a model problem and burn the chain on it.
 		if ev.Type == "error" && ev.Error != "" {
-			return attemptProviderError, ev.Error
+			if !externalRunner && retry.IsTerminal(errors.New(ev.Error)) {
+				o.drainAttempt(events)
+				return attemptProviderError, ev.Error
+			}
+			// Everything else — a crash's exit error, a timeout, an external
+			// runner's failure — is classified by tracked process state,
+			// exactly as before the fallback path existed. Drain first: the
+			// forwarder writes the terminal status only after the stream
+			// closes, so consuming the rest orders that write before the
+			// agentCrashed read below instead of racing it.
+			o.drainAttempt(events)
+			if o.agentCrashed(agentID) {
+				return attemptCrashed, ""
+			}
+			if externalRunner {
+				// An external runner that failed without crashing is handed
+				// back as a success, as before the fallback path existed.
+				return attemptHealthy, ""
+			}
+			return attemptStopped, ev.Error
 		}
 		if o.agentCrashed(agentID) {
 			return attemptCrashed, ""
@@ -489,6 +637,18 @@ func (o *Orchestrator) awaitAttemptOutcome(events <-chan Event, agentID string) 
 		return attemptHealthy, ""
 	}
 	return attemptSilent, ""
+}
+
+// drainAttempt consumes the rest of an attempt's event stream without
+// forwarding it anywhere. A failed attempt's trailing events — the spawner's
+// synthetic exit error, the forwarder's run_done — describe an attempt the
+// retry loop is about to abandon; leaking the run_done in particular would
+// make the subscriber treat the whole chain as finished. Draining to close
+// also orders the forwarder's terminal status write before the caller's next
+// agentCrashed read.
+func (o *Orchestrator) drainAttempt(events <-chan Event) {
+	for range events {
+	}
 }
 
 // agentCrashed reports whether the tracked agent is in a state worth
@@ -555,10 +715,7 @@ func (o *Orchestrator) Spawn(ctx context.Context, input SpawnInput) (<-chan Even
 
 	// An explicit spawn timeout overrides the agent definition; otherwise use
 	// the timeout declared by the resolved agent.
-	timeout := agent.Timeout
-	if input.Timeout > 0 {
-		timeout = input.Timeout
-	}
+	timeout := effectiveSpawnTimeout(agent, input)
 
 	// Build spawn options shared by the pi spawner and the ACP dispatcher.
 	// ThinkingLevel is normalized here rather than at parse time so the raw

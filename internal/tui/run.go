@@ -515,7 +515,9 @@ func (m *model) startRunAgent(
 	prompt := buildRunPrompt(specName, promptMD, checklist)
 	runID := newRunID(specName)
 
-	events, agentID, err := m.cfg.Orchestrator.SpawnWithInput(m.ctx, subagent.AgentInput{
+	// The fallback-capable spawn keeps the run's event stream whole across a
+	// model restart: the run state subscribes once and reads every attempt.
+	events, agentID, err := m.cfg.Orchestrator.SpawnWithInputFallback(m.ctx, subagent.AgentInput{
 		Type:         "task",
 		Prompt:       prompt,
 		Worktree:     new(true),
@@ -580,7 +582,7 @@ func (m *model) handleRunParallel(specName, promptMD string, gates []Gate, check
 	runID := newRunID(specName)
 
 	// Spawn agent 1.
-	events1, agentID1, err := m.cfg.Orchestrator.SpawnWithInput(m.ctx, subagent.AgentInput{
+	events1, agentID1, err := m.cfg.Orchestrator.SpawnWithInputFallback(m.ctx, subagent.AgentInput{
 		Type:         "task",
 		Prompt:       prompt1,
 		Worktree:     &useWorktree,
@@ -598,7 +600,7 @@ func (m *model) handleRunParallel(specName, promptMD string, gates []Gate, check
 	}
 
 	// Spawn agent 2.
-	events2, agentID2, err := m.cfg.Orchestrator.SpawnWithInput(m.ctx, subagent.AgentInput{
+	events2, agentID2, err := m.cfg.Orchestrator.SpawnWithInputFallback(m.ctx, subagent.AgentInput{
 		Type:         "task",
 		Prompt:       prompt2,
 		Worktree:     &useWorktree,
@@ -743,6 +745,16 @@ func (m *model) handleRunAgentEvent(msg runAgentEventMsg) (tea.Model, tea.Cmd) {
 	case "message_end":
 		// Message completed — reset streaming accumulator for the next message.
 		m.chatModel.Streaming = ""
+
+	case subagent.EventFallback:
+		// The run agent died of a fatal provider error and was restarted on
+		// its fallback model; the stream continues with the new attempt. The
+		// notice goes to the transcript so the switch is visible where the
+		// failed attempt's error already is.
+		m.chatModel.Messages = append(m.chatModel.Messages, message{
+			role:    "assistant",
+			content: ev.Content,
+		})
 
 	case "error":
 		m.applyRunError(ev)
@@ -1054,7 +1066,7 @@ func (m *model) retryRun(reason, extraContext string) tea.Cmd {
 		})
 
 		var err error
-		events, agentID, err = m.cfg.Orchestrator.SpawnWithInput(m.ctx, subagent.AgentInput{
+		events, agentID, err = m.cfg.Orchestrator.SpawnWithInputFallback(m.ctx, subagent.AgentInput{
 			Type:        "task",
 			Prompt:      prompt,
 			WorkDir:     wtPath,
