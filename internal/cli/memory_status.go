@@ -62,9 +62,9 @@ func runMemoryStatus(dbPath string) error {
 	fmt.Printf("Rooms:    %d\n", status.RoomCount)
 
 	if status.ModelLoaded {
-		fmt.Println("Model:    loaded")
+		fmt.Printf("Model:    loaded (%s)\n", status.Embedder)
 	} else {
-		fmt.Println("Model:    not loaded")
+		fmt.Println("Model:    not loaded (semantic search off, FTS5 keyword search active)")
 	}
 
 	if status.KG != nil {

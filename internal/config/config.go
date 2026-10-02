@@ -282,6 +282,19 @@ type PalaceConfig struct {
 	OllamaModel string `json:"ollama_model,omitempty"`
 	// LocalEmbedder forces the slower in-process model instead of Ollama.
 	LocalEmbedder bool `json:"local_embedder,omitempty"`
+
+	// EmbeddingsURL selects an external OpenAI-compatible embeddings endpoint
+	// (root up to /embeddings, e.g. "http://llm.internal:8000/v1") ahead of
+	// Ollama and the in-process model. Empty keeps the previous behavior —
+	// Ollama first, in-process fallback.
+	EmbeddingsURL string `json:"embeddings_url,omitempty"`
+	// EmbeddingsModel is the model name sent to that endpoint; empty uses the
+	// palace default (bge-m3). Changing it — or the backend above — invalidates
+	// every stored vector, same as ollama_model: re-run `pi memory mine`.
+	EmbeddingsModel string `json:"embeddings_model,omitempty"`
+	// EmbeddingsAPIKey is the Bearer token for the endpoint; empty sends no
+	// Authorization header. It is a secret: never write it to logs or notices.
+	EmbeddingsAPIKey string `json:"embeddings_api_key,omitempty"`
 }
 
 // CompactorConfig holds user-overridable compaction settings.
@@ -530,7 +543,20 @@ func LoadFrom(cwd string) (Config, error) {
 		return cfg, err
 	}
 
+	substitutePalaceEnv(&cfg, cwd)
+
 	return cfg, nil
+}
+
+// substitutePalaceEnv expands ${VAR} in palace.embeddings_api_key from
+// ~/.pirate/.env (or the project .pirate/.env), so the endpoint token lives
+// beside the other provider secrets instead of inside config.json. It reuses
+// the exact mechanism the MCP headers use.
+func substitutePalaceEnv(cfg *Config, cwd string) {
+	if cfg.Palace == nil || cfg.Palace.EmbeddingsAPIKey == "" {
+		return
+	}
+	cfg.Palace.EmbeddingsAPIKey = substituteEnv(loadEnvFileFrom(cwd), cfg.Palace.EmbeddingsAPIKey)
 }
 
 // loadConfigFiles overlays the nearest project .pirate/config.json onto the

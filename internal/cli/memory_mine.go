@@ -391,6 +391,11 @@ func minePalaceConfig(dbPath, modelPath string) palace.PalaceConfig {
 	if userCfg.Palace.LocalEmbedder {
 		palaceCfg.UseOllama = false
 	}
+	if userCfg.Palace.EmbeddingsURL != "" {
+		palaceCfg.APIEmbedderURL = userCfg.Palace.EmbeddingsURL
+		palaceCfg.APIEmbedderModel = userCfg.Palace.EmbeddingsModel
+		palaceCfg.APIEmbedderKey = userCfg.Palace.EmbeddingsAPIKey
+	}
 	return palaceCfg
 }
 
@@ -400,9 +405,16 @@ func minePalaceConfig(dbPath, modelPath string) palace.PalaceConfig {
 // re-embedded everything) gave no clue which store it had actually touched.
 func printMineBanner(palaceCfg palace.PalaceConfig, dbPath, modelPath, wing string) {
 	fmt.Printf("Palace DB: %s\n", dbPath)
-	if palaceCfg.UseOllama {
+	switch {
+	case palaceCfg.APIEmbedderURL != "":
+		model := palaceCfg.APIEmbedderModel
+		if model == "" {
+			model = palace.DefaultAPIEmbedModel
+		}
+		fmt.Printf("Embedder:  api %s (%s)\n", model, palaceCfg.APIEmbedderURL)
+	case palaceCfg.UseOllama:
 		fmt.Printf("Embedder:  ollama %s (%s)\n", palaceCfg.OllamaModel, palaceCfg.OllamaURL)
-	} else {
+	default:
 		fmt.Printf("Embedder:  in-process %s\n", modelPath)
 	}
 	fmt.Printf("Wing:      %s\n\n", wing)
@@ -438,10 +450,15 @@ func ensureMineModel(dbPath, modelPath string) error {
 }
 
 // minePalaceOptions turns the resolved config into the options palace.New takes.
+// The api backend is expressed by its URL alone: openEmbedder checks it first,
+// ahead of UseOllama.
 func minePalaceOptions(palaceCfg palace.PalaceConfig, dbPath, modelPath string) []palace.Option {
 	palaceOpts := []palace.Option{
 		palace.WithDBPath(dbPath),
 		palace.WithModelPath(modelPath),
+	}
+	if palaceCfg.APIEmbedderURL != "" {
+		return append(palaceOpts, palace.WithAPIEmbedder(palaceCfg.APIEmbedderURL, palaceCfg.APIEmbedderModel, palaceCfg.APIEmbedderKey))
 	}
 	if palaceCfg.UseOllama {
 		return append(palaceOpts, palace.WithOllamaEmbedder(palaceCfg.OllamaURL, palaceCfg.OllamaModel))

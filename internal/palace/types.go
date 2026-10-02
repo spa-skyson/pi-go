@@ -143,6 +143,10 @@ type PalaceStatus struct {
 	RoomCount   int      `json:"room_count"`
 	KG          *KGStats `json:"kg,omitempty"`
 	ModelLoaded bool     `json:"model_loaded"`
+	// Embedder names the active embedding backend: "api/<model>",
+	// "ollama/<model>", the compiled-in local backend, or "fts5" when no
+	// embedder is loaded and search degrades to keyword matching.
+	Embedder string `json:"embedder,omitempty"`
 }
 
 // KGStats are aggregate statistics for the knowledge graph.

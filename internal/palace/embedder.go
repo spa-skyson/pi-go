@@ -203,9 +203,19 @@ func FindDuplicates(embedding []float32, candidates []EmbeddingRow, threshold fl
 }
 
 // RankBySimilarity sorts candidates by cosine similarity to query descending and returns the top limit.
+//
+// Candidates whose vector has a different dimension than the query are dropped,
+// not scored 0: vectors of different dimensions come from different models
+// (MiniLM 384, embeddinggemma 768, bge-m3 1024) and are not comparable. After a
+// backend or model switch the old vectors must not surface as zero-similarity
+// semantic results — they are excluded until re-mining replaces them, which is
+// the same contract an ollama_model change has always carried.
 func RankBySimilarity(query []float32, candidates []EmbeddingRow, limit int) []ScoredResult {
 	scored := make([]ScoredResult, 0, len(candidates))
 	for _, c := range candidates {
+		if len(c.Embedding) != len(query) {
+			continue
+		}
 		scored = append(scored, ScoredResult{
 			DrawerID:   c.DrawerID,
 			Similarity: CosineSimilarity(query, c.Embedding),

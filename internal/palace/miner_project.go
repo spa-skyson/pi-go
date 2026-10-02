@@ -393,13 +393,14 @@ func embedChunks(palace *Palace, cfg *MineConfig, allChunks []chunkJob) [][]floa
 // Worker 0 reuses the palace's own embedder so the common single-worker case
 // allocates nothing extra, and is therefore not closed here.
 func embedderPool(palace *Palace, workers int) ([]Embedder, func()) {
-	// Ollama is a network client, safe to share across goroutines, and it batches
-	// server-side — so extra instances buy nothing. Worse, the fallback below
-	// would build *local* embedders alongside it, and the two models produce
-	// different dimensions (768 vs 384). Mixing them writes vectors of two shapes
-	// into one wing, where CosineSimilarity silently returns 0 for every
-	// mismatched pair and search quietly stops working.
-	if _, ok := palace.embedder.(*ollamaEmbedder); ok {
+	// Ollama and the API embedder are network clients, safe to share across
+	// goroutines, so extra instances buy nothing. Worse, the fallback below
+	// would build *local* embedders alongside them, and the models produce
+	// different dimensions (768 vs 384, bge-m3 1024). Mixing them writes
+	// vectors of two shapes into one wing, where CosineSimilarity silently
+	// returns 0 for every mismatched pair and search quietly stops working.
+	switch palace.embedder.(type) {
+	case *ollamaEmbedder, *apiEmbedder:
 		return []Embedder{palace.embedder}, func() {}
 	}
 
@@ -500,16 +501,22 @@ func insertDrawers(ctx context.Context, palace *Palace, cfg *MineConfig, drawers
 
 // batchSizeFor reports how many texts to submit per Embed call for e.
 func batchSizeFor(e Embedder) int {
-	if _, ok := e.(*ollamaEmbedder); ok {
+	switch e.(type) {
+	case *ollamaEmbedder:
 		return ollamaEmbedBatchSize
+	case *apiEmbedder:
+		return apiEmbedBatchSize
 	}
 	return embedBatchSize
 }
 
 // embedderName identifies the backend for logs.
 func embedderName(e Embedder) string {
-	if o, ok := e.(*ollamaEmbedder); ok {
-		return "ollama/" + o.model
+	switch v := e.(type) {
+	case *ollamaEmbedder:
+		return "ollama/" + v.model
+	case *apiEmbedder:
+		return "api/" + v.model
 	}
 	return backendName
 }
