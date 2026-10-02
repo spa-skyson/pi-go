@@ -335,9 +335,10 @@ func (o *Orchestrator) AgentModel(name string) string {
 // transient ones), restarts it on the next model of the agent fallback chain:
 // frontmatter fallback-models, else the role fallbackModels, capped at
 // maxAgentFallbacks. Each fallback restart buys one extra attempt on top of
-// the crash budget; crash retries never change the model. The chain shares
-// one timeout budget, taken when the first fallback starts, so every restart
-// inherits the remainder. ACP and codex agents are exempt: their runners
+// the crash budget; crash retries never change the model. The whole chain —
+// the first attempt and every restart — shares one timeout budget, taken when
+// the first attempt spawns, so a restart inherits only what the earlier
+// attempts left of it. ACP and codex agents are exempt: their runners
 // deliberately ignore SpawnOpts.Model (spawner_acp.go, spawner_codex.go), so
 // a fallback restart could not reach them. Returns the final events channel,
 // agentID, and error (nil on success).
@@ -345,16 +346,18 @@ func (o *Orchestrator) SpawnWithRetry(ctx context.Context, input SpawnInput) (<-
 	return o.spawnWithRetry(ctx, input, nil, nil)
 }
 
-// chainBudget is the lazily created chain-wide timeout budget for fallback
-// restarts in one SpawnWithRetry call: one WithTimeout per chain, the
-// restarts that follow inherit whatever is left of it.
+// chainBudget is the chain-wide timeout budget for one SpawnWithRetry call:
+// one WithTimeout covering the first attempt and every restart, each
+// inheriting whatever is left of it. It is taken at the first spawn — a
+// budget taken at the first restart would hand the chain the agent timeout
+// twice over.
 type chainBudget struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 }
 
-// start replaces the budget with a fresh context derived from parent. It may
-// run at most once per chain; later fallback restarts must not call it.
+// start creates the budget: a context derived from parent with the chain's
+// absolute timeout. It runs exactly once per chain, before the first attempt.
 func (b *chainBudget) start(parent context.Context, agentTimeoutMs int) {
 	b.ctx, b.cancel = context.WithTimeout(parent, ResolveTimeout(agentTimeoutMs).Absolute)
 }
@@ -401,7 +404,11 @@ func (o *Orchestrator) spawnWithRetry(ctx context.Context, input SpawnInput, tap
 	var fallbacks []string
 	fallbacksResolved := false
 	fallbackUsed := 0
-	chain := &chainBudget{ctx: ctx}
+	// The chain budget starts here, at the first spawn — not at the first
+	// restart — so attempt 0's time is subtracted too and the attempts
+	// together never exceed one effectiveSpawnTimeout.
+	chain := &chainBudget{}
+	chain.start(ctx, effectiveSpawnTimeout(input.Agent, input))
 	// failExit tears the chain budget down on the exits that leave nothing
 	// running: every attempt's stream has been drained to close, so no
 	// process still needs the context. The success exits deliberately skip
@@ -412,9 +419,7 @@ func (o *Orchestrator) spawnWithRetry(ctx context.Context, input SpawnInput, tap
 	// It also completes the streamStart handshake when no attempt ever
 	// produced a stream.
 	failExit := func(agentID string, err error) (<-chan Event, string, error) {
-		if chain.cancel != nil {
-			chain.cancel()
-		}
+		chain.cancel()
 		if first != nil {
 			first <- streamStart{err: err}
 		}
@@ -456,13 +461,14 @@ func (o *Orchestrator) spawnWithRetry(ctx context.Context, input SpawnInput, tap
 				fallbacksResolved = true
 			}
 			if fallbackUsed < len(fallbacks) {
+				if err := chain.ctx.Err(); err != nil {
+					// The chain budget is spent: a restart would begin past
+					// its own deadline, so the chain ends here with the
+					// timeout as the final error instead of a doomed attempt.
+					return failExit(agentID, fmt.Errorf("subagent %s failed: %s: chain budget exhausted: %w", agentID, errText, err))
+				}
 				next := fallbacks[fallbackUsed]
 				fallbackUsed++
-				if chain.cancel == nil {
-					chain.start(ctx, effectiveSpawnTimeout(input.Agent, input))
-				}
-				slog.Info("subagent: fatal provider error, restarting on fallback model",
-					"agent", input.Agent.Name, "error", errText, "fallback", next)
 				if tap != nil {
 					tap <- Event{Type: EventFallback, Content: fmt.Sprintf(
 						"model %s failed (%s); restarting on %s",

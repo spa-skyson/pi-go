@@ -335,6 +335,98 @@ func TestChainBudgetMatchesSpawnTimeout(t *testing.T) {
 	}
 }
 
+// TestChainBudgetCoversFirstAttempt pins the chain budget's total: the
+// deadline is taken at the first spawn, so the first attempt's time comes out
+// of the restart's share — the attempts together never exceed one
+// effectiveSpawnTimeout (plus a small overhead allowance). A budget taken at
+// the first restart would grant the chain the agent timeout twice over.
+func TestChainBudgetCoversFirstAttempt(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "argv.log")
+	// The primary attempt burns 700ms of the 1500ms budget before its
+	// provider error; the fallback then hangs. The chain must cut it off
+	// ~800ms into the restart, not grant the restart a fresh 1500ms.
+	script := `#!/bin/bash
+echo "$*" >> "` + logPath + `"
+if [[ "$*" == *"fb-one"* ]]; then
+  sleep 10
+  echo '{"type":"error","error":"402 Payment Required"}'
+  exit 1
+fi
+sleep 0.7
+echo '{"type":"error","error":"402 Payment Required"}'
+exit 1
+`
+	binary := mockPiScript(t, script)
+
+	cfg := testConfig()
+	cfg.Roles["smol"] = configRoleWithFallbacks("primary-model", "fb-one")
+
+	orch := NewOrchestrator(cfg, "", nil)
+	defer orch.Shutdown()
+	orch.SetPiBinary(binary)
+
+	const budget = 1500 * time.Millisecond
+	start := time.Now()
+	_, _, err := orch.SpawnWithRetry(context.Background(), SpawnInput{
+		Agent:      AgentConfig{Name: "fbagent", Role: "smol", Model: "primary-model", Timeout: int(budget / time.Millisecond)},
+		Prompt:     "hi",
+		MaxRetries: 1,
+	})
+	if err == nil {
+		t.Fatal("expected the hung fallback to be killed by the chain budget")
+	}
+	if calls := readArgvLog(t, logPath); len(calls) != 2 {
+		t.Fatalf("spawn attempts = %d, want 2 (primary, then the killed fallback)", len(calls))
+	}
+	// The sum of the attempts must stay within one budget; a restart that
+	// carries its own fresh budget lands near 2*budget with the 700ms first
+	// attempt and cannot come in under this bound.
+	if elapsed := time.Since(start); elapsed > budget+450*time.Millisecond {
+		t.Errorf("chain ran %v; want first attempt + restart bounded by the %v budget plus overhead", elapsed, budget)
+	}
+}
+
+// TestChainBudgetExpiryEndsTheChain pins the spent-budget edge: once the
+// chain budget is gone the run ends with the timeout as the final error, on
+// the attempts already made — no restart is granted a deadline that has
+// already passed.
+func TestChainBudgetExpiryEndsTheChain(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "argv.log")
+	// The first attempt hangs and the budget kills it mid-flight: no
+	// provider error is ever classified, and no fallback restart follows.
+	script := `#!/bin/bash
+echo "$*" >> "` + logPath + `"
+sleep 10
+`
+	binary := mockPiScript(t, script)
+
+	cfg := testConfig()
+	cfg.Roles["smol"] = configRoleWithFallbacks("primary-model", "fb-one")
+
+	orch := NewOrchestrator(cfg, "", nil)
+	defer orch.Shutdown()
+	orch.SetPiBinary(binary)
+
+	start := time.Now()
+	_, _, err := orch.SpawnWithRetry(context.Background(), SpawnInput{
+		Agent:      AgentConfig{Name: "fbagent", Role: "smol", Model: "primary-model", Timeout: 400},
+		Prompt:     "hi",
+		MaxRetries: 1,
+	})
+	if err == nil {
+		t.Fatal("expected the spent budget to end the chain with an error")
+	}
+	if !strings.Contains(err.Error(), "stopped") {
+		t.Errorf("error %q should name the timeout stop, not a restart failure", err)
+	}
+	if calls := readArgvLog(t, logPath); len(calls) != 1 {
+		t.Fatalf("spawn attempts = %d, want 1 (the timeout ended the chain; no restart may follow)", len(calls))
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Errorf("run took %v; the 400ms chain budget did not end it", elapsed)
+	}
+}
+
 // streamScriptPath builds a mock pi binary whose primary attempt streams a
 // text delta before the provider error, and whose fallback attempt recovers.
 func streamScriptPath(t *testing.T, logPath string) string {
