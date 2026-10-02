@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -295,7 +296,7 @@ func runMemoryMine(dir, wing string, convos bool) error {
 	dbPath := filepath.Join(absDir, config.ProjectDirName, "palace.db")
 	modelPath := defaultPalaceModelPath()
 
-	palaceCfg := minePalaceConfig(dbPath, modelPath)
+	palaceCfg := resolvePalaceConfig(dbPath, modelPath)
 
 	// Mining without an embedder produces drawers with no vectors, which look
 	// fine until every semantic search silently returns nothing. Refuse up front
@@ -306,11 +307,11 @@ func runMemoryMine(dir, wing string, convos bool) error {
 
 	printMineBanner(palaceCfg, dbPath, modelPath, wing)
 
-	if err := ensureMineModel(dbPath, modelPath); err != nil {
+	if err := ensureMineModel(dbPath, modelPath, palaceCfg); err != nil {
 		return err
 	}
 
-	palaceOpts := minePalaceOptions(palaceCfg, dbPath, modelPath)
+	palaceOpts := minePalaceOptions(palaceCfg)
 	// Opening the palace loads the embedding model and runs any schema
 	// migrations, which on a cold start is seconds of silence right after the
 	// banner — the exact point the run looked wedged.
@@ -371,33 +372,9 @@ func printMineFileList(files []string) {
 	fmt.Println()
 }
 
-// minePalaceConfig builds the palace config for a mining run, letting the user
-// config override the embedder defaults. A broken config is not fatal here: the
-// defaults are the same ones mining used before the config existed.
-func minePalaceConfig(dbPath, modelPath string) palace.PalaceConfig {
-	palaceCfg := palace.DefaultConfig()
-	palaceCfg.DBPath = dbPath
-	palaceCfg.ModelPath = modelPath
-	userCfg, err := config.Load()
-	if err != nil || userCfg.Palace == nil {
-		return palaceCfg
-	}
-	if userCfg.Palace.OllamaURL != "" {
-		palaceCfg.OllamaURL = userCfg.Palace.OllamaURL
-	}
-	if userCfg.Palace.OllamaModel != "" {
-		palaceCfg.OllamaModel = userCfg.Palace.OllamaModel
-	}
-	if userCfg.Palace.LocalEmbedder {
-		palaceCfg.UseOllama = false
-	}
-	if userCfg.Palace.EmbeddingsURL != "" {
-		palaceCfg.APIEmbedderURL = userCfg.Palace.EmbeddingsURL
-		palaceCfg.APIEmbedderModel = userCfg.Palace.EmbeddingsModel
-		palaceCfg.APIEmbedderKey = userCfg.Palace.EmbeddingsAPIKey
-	}
-	return palaceCfg
-}
+// minePalaceConfig's old job — overlaying the user's palace section onto the
+// defaults — lives in resolvePalaceConfig now, shared with every other memory
+// command, so mining can no longer drift from what search/status open.
 
 // printMineBanner names the database and model up front. Mining writes to a
 // per-project DB and loads a model from a shared cache, and neither location is
@@ -411,7 +388,7 @@ func printMineBanner(palaceCfg palace.PalaceConfig, dbPath, modelPath, wing stri
 		if model == "" {
 			model = palace.DefaultAPIEmbedModel
 		}
-		fmt.Printf("Embedder:  api %s (%s)\n", model, palaceCfg.APIEmbedderURL)
+		fmt.Printf("Embedder:  api %s (%s)\n", model, redactedURL(palaceCfg.APIEmbedderURL))
 	case palaceCfg.UseOllama:
 		fmt.Printf("Embedder:  ollama %s (%s)\n", palaceCfg.OllamaModel, palaceCfg.OllamaURL)
 	default:
@@ -420,18 +397,37 @@ func printMineBanner(palaceCfg palace.PalaceConfig, dbPath, modelPath, wing stri
 	fmt.Printf("Wing:      %s\n\n", wing)
 }
 
+// redactedURL hides userinfo credentials in a configured endpoint URL —
+// http://user:key@gateway:8000/v1 prints as http://user:xxxxx@... — while
+// leaving plain URLs byte-for-byte alone.
+func redactedURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	return u.Redacted()
+}
+
 // ensureMineModel auto-inits: it creates the palace directory and fetches the
 // model if needed, so `pirate memory mine` works on a fresh checkout without a
 // separate `memory init` / `memory model download` step.
+//
+// The download only happens when the in-process model is actually this run's
+// embedder: with an api endpoint or Ollama selected, EmbedderAvailability has
+// already approved that backend, and a multi-megabyte MiniLM fetch for a model
+// that will never run is pure waste.
 //
 // ModelReady checks for the fp32 weights specifically, not just for the
 // directory. That matters for repair as much as for first use: installs made
 // before the fp32 switch hold only model_qint8_arm64.onnx, which loads fine
 // but runs ~3x slower on the pure-Go backend, so a directory-exists check
 // would leave them on the slow model indefinitely.
-func ensureMineModel(dbPath, modelPath string) error {
+func ensureMineModel(dbPath, modelPath string, palaceCfg palace.PalaceConfig) error {
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		return fmt.Errorf("creating palace directory: %w", err)
+	}
+	if palaceCfg.APIEmbedderURL != "" || palaceCfg.UseOllama {
+		return nil
 	}
 	if palace.ModelReady(modelPath) {
 		return nil
@@ -449,21 +445,11 @@ func ensureMineModel(dbPath, modelPath string) error {
 	return nil
 }
 
-// minePalaceOptions turns the resolved config into the options palace.New takes.
-// The api backend is expressed by its URL alone: openEmbedder checks it first,
-// ahead of UseOllama.
-func minePalaceOptions(palaceCfg palace.PalaceConfig, dbPath, modelPath string) []palace.Option {
-	palaceOpts := []palace.Option{
-		palace.WithDBPath(dbPath),
-		palace.WithModelPath(modelPath),
-	}
-	if palaceCfg.APIEmbedderURL != "" {
-		return append(palaceOpts, palace.WithAPIEmbedder(palaceCfg.APIEmbedderURL, palaceCfg.APIEmbedderModel, palaceCfg.APIEmbedderKey))
-	}
-	if palaceCfg.UseOllama {
-		return append(palaceOpts, palace.WithOllamaEmbedder(palaceCfg.OllamaURL, palaceCfg.OllamaModel))
-	}
-	return append(palaceOpts, palace.WithLocalEmbedder())
+// minePalaceOptions turns the resolved config into the options palace.New
+// takes. WithConfig carries the whole decision — api, ollama or local, paths
+// included — so mining opens exactly the palace every other command opens.
+func minePalaceOptions(palaceCfg palace.PalaceConfig) []palace.Option {
+	return []palace.Option{palace.WithConfig(palaceCfg)}
 }
 
 // ollamaSetupError turns an embedder-availability failure into instructions.

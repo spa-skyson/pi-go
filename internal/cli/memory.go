@@ -6,11 +6,34 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/spa-skyson/pi-rate/internal/config"
+	"github.com/spa-skyson/pi-rate/internal/palace"
 )
 
 // defaultPalaceModelPath returns the default embedding model path.
 func defaultPalaceModelPath() string {
 	return filepath.Join(config.PirateHome(), "models", "sentence-transformers_all-MiniLM-L6-v2")
+}
+
+// resolvePalaceConfig resolves the user's palace section onto the defaults,
+// with dbPath and modelPath — when non-empty — overriding the config values,
+// since each command names its own store. A broken config file is not fatal
+// here: the defaults are what the command ran with before the config existed.
+// Together with palaceConfigFromCLI (which does the resolution) this is the
+// entrance every memory command takes, so the configured embedder — api,
+// ollama or local — is the same one mining opened.
+func resolvePalaceConfig(dbPath, modelPath string) palace.PalaceConfig {
+	userCfg, err := config.Load()
+	if err != nil {
+		userCfg = config.Config{}
+	}
+	palaceCfg := palaceConfigFromCLI(&userCfg)
+	if dbPath != "" {
+		palaceCfg.DBPath = dbPath
+	}
+	if modelPath != "" {
+		palaceCfg.ModelPath = modelPath
+	}
+	return palaceCfg
 }
 
 func newMemoryCmd() *cobra.Command {

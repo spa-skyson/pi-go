@@ -216,6 +216,9 @@ func runInteractive(
 	// value; env override and out-of-range handling live in the resolver
 	// (issue #43).
 	midTurnAttempts := cfg.ResolveMidTurnAttempts()
+	// Same source as setupPalace: the sidebar opens the palace with the
+	// embedder the user actually configured.
+	palaceCfg := palaceConfigFromCLI(&cfg)
 	tuiErr := tui.Run(ctx, tui.Config{
 		PlanAutoFix:     planAutoFixEnabled(cfg),
 		MidTurnAttempts: &midTurnAttempts,
@@ -233,7 +236,10 @@ func runInteractive(
 		// Attention carries the resolved config section (nil pointers inside mean
 		// "on"); nil section means the signals stay off. Consumed by
 		// internal/tui/attention.go.
-		Attention:      cfg.Attention,
+		Attention: cfg.Attention,
+		// The resolved palace config (paths plus embedder choice), so the
+		// sidebar status reports the configured backend instead of a default.
+		Palace:         &palaceCfg,
 		DeferredInit:   initCh,
 		SystemNoticeCh: noticeCh,
 		ApprovalCh:     approvalCh,

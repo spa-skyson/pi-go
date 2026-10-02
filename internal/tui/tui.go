@@ -1052,7 +1052,7 @@ func (m *model) Init() tea.Cmd {
 	if m.cfg.TodoCh != nil {
 		cmds = append(cmds, waitForTodoUpdate(m.cfg.TodoCh))
 	}
-	cmds = append(cmds, memoryTickCmd(m.cwd()), requestBg)
+	cmds = append(cmds, memoryTickCmd(m.cwd(), m.cfg.Palace), requestBg)
 	return tea.Batch(cmds...)
 }
 
@@ -1421,7 +1421,7 @@ func (m *model) updateSession(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 func (m *model) handleMemoryTick(msg memoryTickMsg) (tea.Model, tea.Cmd) {
 	m.memoryStatus = msg.status
 	return m, tea.Tick(memoryTickInterval, func(time.Time) tea.Msg {
-		return memoryTickCmd(m.cwd())()
+		return memoryTickCmd(m.cwd(), m.cfg.Palace)()
 	})
 }
 
@@ -3183,7 +3183,7 @@ func (m *model) handleInitEvent(msg initEventMsg) (tea.Model, tea.Cmd) {
 		if r.SystemNoticeCh != nil && r.SystemNoticeCh != prevNoticeCh {
 			cmds = append(cmds, waitForSystemNotice(r.SystemNoticeCh))
 		}
-		cmds = append(cmds, memoryTickCmd(m.cwd()))
+		cmds = append(cmds, memoryTickCmd(m.cwd(), m.cfg.Palace))
 		return m, tea.Batch(cmds...)
 	}
 

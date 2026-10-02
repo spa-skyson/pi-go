@@ -1681,17 +1681,11 @@ func setupPalace(cfg config.Config, memWorker *memory.Worker) ([]adktool.Tool, s
 		return nil, "", noop
 	}
 	palaceCfg := palaceConfigFromCLI(&cfg)
-	if palaceCfg.DBPath == "" {
-		return nil, "", noop
-	}
 	if _, err := os.Stat(palaceCfg.DBPath); err != nil {
 		return nil, "", noop
 	}
 
-	p, err := palace.New(
-		palace.WithDBPath(palaceCfg.DBPath),
-		palace.WithModelPath(palaceCfg.ModelPath),
-	)
+	p, err := palace.New(palace.WithConfig(palaceCfg))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "pirate: warning: palace tools disabled: %v\n", err)
 		return nil, "", noop
@@ -2688,20 +2682,48 @@ func findNearestDotEnv(start string) string {
 	}
 }
 
-// palaceConfigFromCLI derives palace.Option parameters from the application config.
-func palaceConfigFromCLI(cfg *config.Config) struct{ DBPath, ModelPath string } {
-	var dbPath, modelPath string
-	if cfg.Palace != nil {
-		dbPath = cfg.Palace.DBPath
-		modelPath = cfg.Palace.ModelPath
+// palaceConfigFromCLI resolves the palace config section into the full
+// palace.PalaceConfig every palace.New call site consumes: paths with their
+// defaults plus the embedder decision — an external API endpoint first, then
+// Ollama, then the in-process model. Single source of truth: search, status,
+// wake-up, kg and the TUI sidebar must open the same embedder mining uses, or
+// the dim filter (RankBySimilarity) silently discards api-mined vectors and
+// status reports the wrong backend.
+//
+// ${VAR} in the api settings expands here, where the embedder is built. The
+// stored config keeps the literal placeholder so a later Save never writes an
+// expanded key — see config.ResolveEnvValue.
+func palaceConfigFromCLI(cfg *config.Config) palace.PalaceConfig {
+	palaceCfg := palace.DefaultConfig()
+	if p := cfg.Palace; p != nil {
+		if p.DBPath != "" {
+			palaceCfg.DBPath = p.DBPath
+		}
+		if p.ModelPath != "" {
+			palaceCfg.ModelPath = p.ModelPath
+		}
+		if p.OllamaURL != "" {
+			palaceCfg.OllamaURL = p.OllamaURL
+		}
+		if p.OllamaModel != "" {
+			palaceCfg.OllamaModel = p.OllamaModel
+		}
+		if p.LocalEmbedder {
+			palaceCfg.UseOllama = false
+		}
+		if p.EmbeddingsURL != "" {
+			palaceCfg.APIEmbedderURL = config.ResolveEnvValue(p.EmbeddingsURL)
+			palaceCfg.APIEmbedderModel = config.ResolveEnvValue(p.EmbeddingsModel)
+			palaceCfg.APIEmbedderKey = config.ResolveEnvValue(p.EmbeddingsAPIKey)
+		}
 	}
-	if dbPath == "" {
-		dbPath = filepath.Join(config.PirateHome(), "palace.db")
+	if palaceCfg.DBPath == "" {
+		palaceCfg.DBPath = filepath.Join(config.PirateHome(), "palace.db")
 	}
-	if modelPath == "" {
-		modelPath = filepath.Join(config.PirateHome(), "models", "KnightsAnalytics_all-MiniLM-L6-v2")
+	if palaceCfg.ModelPath == "" {
+		palaceCfg.ModelPath = filepath.Join(config.PirateHome(), "models", "KnightsAnalytics_all-MiniLM-L6-v2")
 	}
-	return struct{ DBPath, ModelPath string }{dbPath, modelPath}
+	return palaceCfg
 }
 
 // Execute runs the root command.

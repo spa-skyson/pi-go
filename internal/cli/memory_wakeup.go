@@ -3,12 +3,8 @@ package cli
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
-
-	"github.com/spa-skyson/pi-rate/internal/config"
-	"github.com/spa-skyson/pi-rate/internal/palace"
 )
 
 func newMemoryWakeUpCmd() *cobra.Command {
@@ -35,14 +31,7 @@ piping into other tools.`,
 }
 
 func runMemoryWakeUp(dbPath, wing string) error {
-	if dbPath == "" {
-		dbPath = filepath.Join(config.ProjectDirName, "palace.db")
-	}
-
-	p, err := palace.New(
-		palace.WithDBPath(dbPath),
-		palace.WithModelPath(defaultPalaceModelPath()),
-	)
+	p, err := openPalaceDB(dbPath)
 	if err != nil {
 		return fmt.Errorf("opening palace: %w", err)
 	}

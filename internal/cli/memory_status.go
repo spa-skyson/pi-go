@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/spa-skyson/pi-rate/internal/config"
-	"github.com/spa-skyson/pi-rate/internal/palace"
 )
 
 func newMemoryStatusCmd() *cobra.Command {
@@ -40,10 +39,7 @@ func runMemoryStatus(dbPath string) error {
 		return nil
 	}
 
-	p, err := palace.New(
-		palace.WithDBPath(dbPath),
-		palace.WithModelPath(defaultPalaceModelPath()),
-	)
+	p, err := openPalaceDB(dbPath)
 	if err != nil {
 		return fmt.Errorf("opening palace: %w", err)
 	}

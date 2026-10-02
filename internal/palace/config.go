@@ -111,3 +111,13 @@ func WithAPIEmbedder(url, model, key string) Option {
 func WithLocalEmbedder() Option {
 	return func(c *PalaceConfig) { c.UseOllama = false }
 }
+
+// WithConfig adopts a fully resolved config — what the CLI's
+// palaceConfigFromCLI builds: defaults overlaid with the user's palace
+// section, embedder decision (api / ollama / local) included. Every command
+// that opens a palace goes through it so the backend configured once is the
+// backend everywhere; a site that needs different paths can pass
+// WithDBPath/WithModelPath after it.
+func WithConfig(resolved PalaceConfig) Option {
+	return func(c *PalaceConfig) { *c = resolved }
+}
