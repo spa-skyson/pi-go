@@ -344,8 +344,8 @@ func (m *model) handleSubagentSteerKey(key tea.Key) tea.Cmd {
 			si.text = string(r[:len(r)-1])
 		}
 	default:
-		// Same guard as the popup filter: one printable character, no chord.
-		if len(key.Text) == 1 && key.Mod == 0 {
+		// Same guard as the popup filter: one printable rune, no chord.
+		if singleRuneKey(key.Text) && key.Mod == 0 {
 			si.text += key.Text
 		}
 	}

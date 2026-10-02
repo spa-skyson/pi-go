@@ -397,3 +397,50 @@ func TestRenderQuestionDialog_NarrowPanel(t *testing.T) {
 		t.Errorf("a capped question or description must end in an ellipsis; got:\n%s", view)
 	}
 }
+
+// TestQuestionKey_FreeTextAcceptsNonASCII pins issue #42: the free-text guard
+// counts runes, not bytes — a Cyrillic keystroke (2 bytes in UTF-8) must land
+// in the buffer, a chord must not, and Backspace must drop a whole rune, not
+// one of its bytes.
+func TestQuestionKey_FreeTextAcceptsNonASCII(t *testing.T) {
+	m, req := newQuestionModel(t)
+	m.handleQuestionRequest(questionRequestMsg{req: *req})
+	m.handleQuestionKey(tea.Key{Code: 't'}) // open the free-text editor
+
+	// A Cyrillic rune is 2 bytes; the old byte guard dropped it silently.
+	if _, _, handled := m.handleQuestionKey(tea.Key{Code: 'я', Text: "я"}); !handled {
+		t.Fatal("free editor must own printable input")
+	}
+	if got := m.question.text; got != "я" {
+		t.Fatalf("text buffer = %q, want %q", got, "я")
+	}
+
+	// Latin still appends as before.
+	m.handleQuestionKey(tea.Key{Code: 'a', Text: "a"})
+	if got := m.question.text; got != "яa" {
+		t.Fatalf("text buffer = %q, want %q", got, "яa")
+	}
+
+	// A chord never lands, even when Text looks insertable.
+	m.handleQuestionKey(tea.Key{Code: 'r', Text: "r", Mod: tea.ModCtrl})
+	if got := m.question.text; got != "яa" {
+		t.Fatalf("chord inserted: text buffer = %q, want %q", got, "яa")
+	}
+
+	// Backspace drops the whole latin rune...
+	m.handleQuestionKey(tea.Key{Code: tea.KeyBackspace})
+	if got := m.question.text; got != "я" {
+		t.Fatalf("after backspace = %q, want %q", got, "я")
+	}
+	// ...and then the whole Cyrillic rune — a byte-wise delete would leave a
+	// lone UTF-8 continuation byte in the buffer.
+	m.handleQuestionKey(tea.Key{Code: tea.KeyBackspace})
+	if got := m.question.text; got != "" {
+		t.Fatalf("after backspace = %q, want empty", got)
+	}
+	select {
+	case <-req.Reply:
+		t.Fatal("editing must not answer the request")
+	default:
+	}
+}

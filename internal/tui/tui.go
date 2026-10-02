@@ -2036,12 +2036,16 @@ func (m *model) handleSearchPopupKey(key tea.Key) (tea.Cmd, bool) {
 			m.popOverlay(overlaySearchPopup)
 			return nil, true
 		}
-		sp.search = sp.search[:len(sp.search)-1]
+		// Drop the last rune, not the last byte — a byte off a multi-byte
+		// rune leaves invalid UTF-8 in the filter (same slice as the question
+		// and steer inputs).
+		r := []rune(sp.search)
+		sp.search = string(r[:len(r)-1])
 		sp.filterSearch()
 		return nil, true
 	default:
-		// Type to search (only for printable single characters).
-		if key.Text != "" && len(key.Text) == 1 && key.Mod == 0 {
+		// Type to search (any single printable rune, no chord).
+		if singleRuneKey(key.Text) && key.Mod == 0 {
 			sp.search += key.Text
 			sp.filterSearch()
 			return nil, true

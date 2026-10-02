@@ -581,3 +581,11 @@ func isUserPaste(s string) bool {
 	}
 	return !terminalResponseRe.MatchString(s)
 }
+
+// singleRuneKey reports whether a keystroke's Text is exactly one rune — one
+// printable character, ASCII or not. A len(text)==1 guard measures bytes, so
+// any non-ASCII rune (Cyrillic is 2 bytes in UTF-8) was silently dropped by
+// the mini-inputs.
+func singleRuneKey(text string) bool {
+	return utf8.RuneCountInString(text) == 1
+}
