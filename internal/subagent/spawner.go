@@ -34,9 +34,30 @@ var ErrProcessDone = errors.New("subagent process already done")
 // buffer must not become the new place the memory goes.
 const maxStderrCapture = 64 * 1024
 
-// timeoutHint names the knobs, because a subagent killed by a limit is exactly
-// the moment the reader wants to know the limit is adjustable.
+// The two limits a subagent can die of, documented together because a user
+// hit by one usually needs to know the other exists:
+//
+//   - absolute wall-clock cap — PI_SUBAGENT_TIMEOUT_MS env var, or a
+//   `timeout:` (milliseconds) key in the agent's frontmatter (timeoutHint);
+//   - inactivity cap — PI_SUBAGENT_INACTIVITY_MS env var (inactivityHint).
+//   There is no frontmatter key for it.
+//
+// Raising the absolute cap does not raise the inactivity one, and
+// ResolveTimeout clamps inactivity to never exceed absolute — so following
+// the wrong hint cannot fix a kill, only move the other limit.
+//
+// Each kill names the hint for the limit that actually fired.
+
+// timeoutHint names the knobs for the absolute time limit, because a subagent
+// killed by a limit is exactly the moment the reader wants to know the limit
+// is adjustable.
 const timeoutHint = "raise it with PI_SUBAGENT_TIMEOUT_MS or a `timeout:` (milliseconds) key in the agent's frontmatter"
+
+// inactivityHint names the knob that governs the inactivity limit — the one
+// that fires when a child produces no output, distinct from the absolute cap
+// above. (The stream-idle watch and its keep-alive heartbeat, issue #37,
+// exist so healthy children never get to test this limit.)
+const inactivityHint = "raise it with PI_SUBAGENT_INACTIVITY_MS (milliseconds)"
 
 // SpawnOpts holds options for spawning a subagent process.
 type SpawnOpts struct {
@@ -435,11 +456,14 @@ func (p *Process) emitChildLine(line string, result *strings.Builder) {
 // childExitError classifies how a child pi process ended, returning nil for a
 // clean exit. The two timeout cases come first because a limit kill is also a
 // signal kill, and would otherwise be reported as a bare process failure.
+// Each branch names the knob for the limit that fired — the absolute branch
+// the TIMEOUT_MS/frontmatter knobs, the inactivity branch INACTIVITY_MS —
+// so following the message moves the limit that actually killed.
 func childExitError(timeoutCfg TimeoutConfig, timedOutIdle bool, ctxErr, waitErr error, stderrStr string) error {
 	switch {
 	case timedOutIdle:
 		return fmt.Errorf("pi subagent produced no output for %s: %w (%s)",
-			timeoutCfg.Inactivity, ErrSubagentTimeout, timeoutHint)
+			timeoutCfg.Inactivity, ErrSubagentTimeout, inactivityHint)
 	case errors.Is(ctxErr, context.DeadlineExceeded):
 		return fmt.Errorf("pi subagent exceeded its %s time limit: %w (%s)",
 			timeoutCfg.Absolute, ErrSubagentTimeout, timeoutHint)

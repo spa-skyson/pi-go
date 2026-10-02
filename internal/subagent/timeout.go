@@ -39,7 +39,11 @@ type TimeoutConfig struct {
 }
 
 // ResolveTimeout determines the timeout configuration for a subagent.
-// Priority: agent frontmatter > PI_SUBAGENT_TIMEOUT_MS env var > default.
+// Absolute cap — agent frontmatter `timeout:` > PI_SUBAGENT_TIMEOUT_MS env
+// var > default. Inactivity cap — PI_SUBAGENT_INACTIVITY_MS env var > default
+// (no frontmatter key). Inactivity is clamped to never exceed the absolute
+// cap, so the two knobs do not fight. Which knob a kill names is decided
+// where the kill is reported (childExitError / childExitError's hints).
 // agentTimeoutMs is the timeout field from AgentConfig (0 means unset).
 func ResolveTimeout(agentTimeoutMs int) TimeoutConfig {
 	absolute := DefaultAbsoluteTimeout

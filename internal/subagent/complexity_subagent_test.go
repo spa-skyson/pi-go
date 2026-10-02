@@ -514,7 +514,7 @@ func TestChildExitError(t *testing.T) {
 			// Even with a deadline and a wait error present, the idle case is
 			// first — a limit kill is also a signal kill.
 			timedOut: true, ctxErr: context.DeadlineExceeded, waitErr: waitErr, stderr: "boom",
-			wantSubstrs: []string{"produced no output for 1s", timeoutHint},
+			wantSubstrs: []string{"produced no output for 1s", inactivityHint},
 			wantTimeout: true,
 		},
 		{
