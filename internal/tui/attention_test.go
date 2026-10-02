@@ -39,8 +39,8 @@ func runCmd(cmd tea.Cmd) []string {
 }
 
 func TestAttentionNotifySeq_ExactBytes(t *testing.T) {
-	got := attentionNotifySeq("π Pi-rate", "Turn complete")
-	want := "\033]777;notify;π Pi-rate;Turn complete\033\\"
+	got := attentionNotifySeq("☠ Pi-rate", "Turn complete")
+	want := "\033]777;notify;☠ Pi-rate;Turn complete\033\\"
 	if got != want {
 		t.Fatalf("notify sequence = %q, want %q", got, want)
 	}
@@ -158,7 +158,7 @@ func TestAgentDone_LongTurnSignalsShortDoesNot(t *testing.T) {
 	m.turnStarted = time.Now().Add(-2 * attentionDoneAfter)
 	_, cmd = m.handleAgentDone(agentDoneMsg{})
 	seqs := runCmd(cmd)
-	if len(seqs) != 1 || seqs[0] != attentionBellSeq+attentionNotifySeq("π Pi-rate", "Turn complete") {
+	if len(seqs) != 1 || seqs[0] != attentionBellSeq+attentionNotifySeq("☠ Pi-rate", "Turn complete") {
 		t.Fatalf("long turn sequences = %v, want one done signal", seqs)
 	}
 
@@ -182,7 +182,7 @@ func TestApprovalRequest_FiresAttentionOnce(t *testing.T) {
 	req := permission.ApprovalRequest{Tool: "bash", Reply: make(chan permission.ApprovalResult, 1)}
 	_, cmd := m.handleApprovalRequest(approvalRequestMsg{req: req})
 	seqs := runCmd(cmd)
-	want := attentionBellSeq + attentionNotifySeq("π Pi-rate", "Approval required: bash")
+	want := attentionBellSeq + attentionNotifySeq("☠ Pi-rate", "Approval required: bash")
 	if len(seqs) != 1 || seqs[0] != want {
 		t.Fatalf("approval sequences = %v, want exactly [%q]", seqs, want)
 	}

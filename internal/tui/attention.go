@@ -67,5 +67,5 @@ func (m *model) turnDoneAttention() tea.Cmd {
 	if m.turnStarted.IsZero() || time.Since(m.turnStarted) < attentionDoneAfter {
 		return nil
 	}
-	return m.attentionCmd("π Pi-rate", "Turn complete")
+	return m.attentionCmd("☠ Pi-rate", "Turn complete")
 }

@@ -58,7 +58,7 @@ func (m *model) handleApprovalRequest(msg approvalRequestMsg) (tea.Model, tea.Cm
 	// user who switched away needs the bell/notification to come back. The
 	// command is nil (no-op in the Batch) when attention is off or the
 	// terminal is focused.
-	return m, tea.Batch(m.attentionCmd("π Pi-rate", "Approval required: "+req.Tool),
+	return m, tea.Batch(m.attentionCmd("☠ Pi-rate", "Approval required: "+req.Tool),
 		waitForApproval(m.cfg.ApprovalCh))
 }
 
