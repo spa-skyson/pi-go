@@ -2169,10 +2169,11 @@ func shortReason(err error) string {
 // of hand-editing /model after every quota wall. The chain latches on the
 // first terminal error of a session: the active agent's frontmatter
 // fallback-models, else the active role's fallbackModels (its own, else the
-// "default" role's), capped at maxModelFallbacks entries. Transient failures
-// (network, 5xx) never reach this path — they exhaust their retries below and
-// arrive as non-terminal errors, and a canceled or stuck-detector turn is not
-// IsTerminal either.
+// "default" role's), capped at maxModelFallbacks entries. An exhausted
+// transient budget ("transient error after N retries: …" — the child waited
+// its whole budget out and the failure never cleared; issue #39) reaches this
+// path too, unless the server named a retry window. A canceled or
+// stuck-detector turn is neither.
 //
 // Side effects on a switch: agent-scoped when a primary agent is active (the
 // override re-applies on every switch back to the agent, exactly like a manual
@@ -2183,7 +2184,7 @@ func shortReason(err error) string {
 //
 // Returns true when a switch happened.
 func (m *model) maybeFallbackModel(msg agentDoneMsg) bool {
-	if msg.err == nil || !retry.IsTerminal(msg.err) {
+	if msg.err == nil || (!retry.IsTerminal(msg.err) && !retry.IsExhaustedTransient(msg.err)) {
 		return false
 	}
 

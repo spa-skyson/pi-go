@@ -85,6 +85,82 @@ func TestFallbackSwitchOnTerminalError(t *testing.T) {
 	}
 }
 
+// errExhaustedTransient is a spent retry budget over a plain transient cause,
+// as WithRetryContext wraps it ("transient error after N retries: <cause>");
+// the fallback path treats it like a terminal wall — the model never cleared.
+var errExhaustedTransient = errors.New("transient error after 5 retries: 503 service unavailable")
+
+// errWindowedTransient is the same exhausted budget over a cause the server
+// gave a reopening window for; the failure clears on its own, so the chain
+// must hold.
+var errWindowedTransient = errors.New("transient error after 5 retries: 429 too many requests, retry in 30s")
+
+// TestFallbackSwitchOnExhaustedTransient pins the issue #39 gate: a spent
+// retry budget over a transient cause switches models exactly like a terminal
+// error does — same switcher call, same notice, same chain state.
+func TestFallbackSwitchOnExhaustedTransient(t *testing.T) {
+	var asked []string
+	m := newFallbackTestModel(t, &asked)
+	m.activeAgent = "pm"
+	m.cfg.PrimaryAgents = []subagent.AgentConfig{
+		{Name: "pm", FallbackModels: []string{"fb-one", "fb-two", "fb-three", "fb-four"}},
+	}
+
+	if !m.maybeFallbackModel(agentDoneMsg{err: errExhaustedTransient}) {
+		t.Fatal("maybeFallbackModel = false, want true for an exhausted transient budget")
+	}
+
+	if len(asked) != 1 || asked[0] != "fb-one" {
+		t.Fatalf("switcher got %v, want [fb-one]", asked)
+	}
+	if m.cfg.ModelName != "fb-one" {
+		t.Errorf("ModelName = %q, want fb-one", m.cfg.ModelName)
+	}
+	if m.cfg.ProviderName != "anthropic" {
+		t.Errorf("ProviderName = %q, want anthropic", m.cfg.ProviderName)
+	}
+	if m.modelFallbackUsed != 1 {
+		t.Errorf("modelFallbackUsed = %d, want 1", m.modelFallbackUsed)
+	}
+	if m.agentModelOverride("pm") != "fb-one" {
+		t.Errorf("agent override = %q, want fb-one (agent-scoped, session-only)", m.agentModelOverride("pm"))
+	}
+	if m.cfg.ActiveRole != "" {
+		t.Errorf("ActiveRole = %q; an agent-scoped fallback must not touch role state", m.cfg.ActiveRole)
+	}
+	joined := transcriptContent(m)
+	for _, want := range []string{"switching to fb-one", shortReason(errExhaustedTransient)} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("transcript lacks %q:\n%s", want, joined)
+		}
+	}
+}
+
+// TestFallbackNotOnWindowedTransient pins the window carve-out: when the
+// server named when its failure clears, the exhausted budget is reported as
+// before and no model is burned.
+func TestFallbackNotOnWindowedTransient(t *testing.T) {
+	var asked []string
+	m := newFallbackTestModel(t, &asked)
+	m.cfg.Roles = map[string]config.RoleConfig{
+		"default": {Model: "primary", FallbackModels: []string{"f1"}},
+	}
+
+	if m.maybeFallbackModel(agentDoneMsg{err: errWindowedTransient}) {
+		t.Error("maybeFallbackModel = true, want false: a windowed failure clears by waiting")
+	}
+
+	if len(asked) != 0 {
+		t.Errorf("switcher called for a windowed transient: %v", asked)
+	}
+	if m.cfg.ModelName != "test-model" {
+		t.Errorf("ModelName = %q, want it untouched", m.cfg.ModelName)
+	}
+	if m.modelFallbacks != nil {
+		t.Errorf("chain latched %+v on a windowed transient; want nil", m.modelFallbacks)
+	}
+}
+
 // TestFallbackSecondTerminalErrorUsesNextEntry pins the drain order: a second
 // terminal error consumes the next unused chain entry, not the first one
 // again.

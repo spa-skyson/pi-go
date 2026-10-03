@@ -430,11 +430,49 @@ func (o *Orchestrator) spawnWithRetry(ctx context.Context, input SpawnInput, tap
 	// It also completes the streamStart handshake when no attempt ever
 	// produced a stream.
 	failExit := func(agentID string, err error) (<-chan Event, string, error) {
+		// A false startFallback on entries still unused means the chain
+		// budget, not the chain, ran out — say so, or the error is
+		// indistinguishable from "no fallbacks configured".
+		if err != nil && chain.ctx.Err() != nil && fallbackUsed < len(fallbacks) {
+			err = fmt.Errorf("%w: chain budget exhausted", err)
+		}
 		chain.cancel()
 		if first != nil {
 			first <- streamStart{err: err}
 		}
 		return nil, agentID, err
+	}
+
+	// startFallback resolves the chain on first use and, when an unused entry
+	// and chain budget remain, advances to the next model and reports whether
+	// the chain continues. errText is the failure being fled from, for the
+	// restart notice.
+	startFallback := func(errText string) bool {
+		if !fallbacksResolved {
+			fallbacks = agentFallbackModels(o.cfg, input.Agent)
+			fallbacksResolved = true
+		}
+		if fallbackUsed >= len(fallbacks) {
+			return false
+		}
+		if chain.ctx.Err() != nil {
+			// The chain budget is spent: a restart would begin past its own
+			// deadline. Reporting false ends the chain, and the failExit
+			// wrap below appends "chain budget exhausted" — the fallbacks
+			// remaining here would otherwise make this indistinguishable
+			// from "no fallbacks configured".
+			return false
+		}
+		next := fallbacks[fallbackUsed]
+		fallbackUsed++
+		if tap != nil {
+			tap <- Event{Type: EventFallback, Content: fmt.Sprintf(
+				"model %s failed (%s); restarting on %s",
+				currentModel, firstLine(errText), next)}
+		}
+		input.ModelOverride = next
+		currentModel = next
+		return true
 	}
 
 	var finalAgentID string
@@ -467,26 +505,7 @@ func (o *Orchestrator) spawnWithRetry(ctx context.Context, input SpawnInput, tap
 		case outcome == attemptHealthy, outcome == attemptSilent && attempt >= maxRetries:
 			return finalEvents, finalAgentID, nil
 		case outcome == attemptProviderError:
-			if !fallbacksResolved {
-				fallbacks = agentFallbackModels(o.cfg, input.Agent)
-				fallbacksResolved = true
-			}
-			if fallbackUsed < len(fallbacks) {
-				if err := chain.ctx.Err(); err != nil {
-					// The chain budget is spent: a restart would begin past
-					// its own deadline, so the chain ends here with the
-					// timeout as the final error instead of a doomed attempt.
-					return failExit(agentID, fmt.Errorf("subagent %s failed: %s: chain budget exhausted: %w", agentID, errText, err))
-				}
-				next := fallbacks[fallbackUsed]
-				fallbackUsed++
-				if tap != nil {
-					tap <- Event{Type: EventFallback, Content: fmt.Sprintf(
-						"model %s failed (%s); restarting on %s",
-						currentModel, firstLine(errText), next)}
-				}
-				input.ModelOverride = next
-				currentModel = next
+			if startFallback(errText) {
 				continue
 			}
 			// Chain exhausted or none configured: the provider error is
@@ -496,11 +515,79 @@ func (o *Orchestrator) spawnWithRetry(ctx context.Context, input SpawnInput, tap
 			// Timed out or otherwise stopped for good: neither a crash worth
 			// re-spawning nor a model problem a fallback could fix.
 			return failExit(agentID, fmt.Errorf("subagent %s stopped: %s", agentID, errText))
-		case attempt >= maxRetries:
-			return failExit(agentID, fmt.Errorf("subagent %s crashed after %d attempts", agentID, attempt+1))
+		case outcome == attemptCrashed:
+			// A crash whose last error text still reads as a windowless
+			// provider wall — a 503 the child could not ride out, reaching the
+			// parent through the child's own error event or the exit-error
+			// synthetic (issue #39) — is the model failing, not the process.
+			// crashIsModelFailure classifies it here, on the outcome, so the
+			// fallback happens before any crash retry burns on the dead model;
+			// it also refuses external runners (ACP, codex): they ignore
+			// ModelOverride (isExternalRunnerAgent), so a restart never reaches
+			// a different model and their error texts must not spend the chain.
+			if crashIsModelFailure(errText, externalRunner) {
+				if startFallback(errText) {
+					continue
+				}
+			}
+			// Not a model problem, or the chain is spent: the plain crash
+			// path — re-spawn on the same model while attempts remain, end
+			// the chain once the budget is spent. The budget check lives in
+			// this case rather than in a separate attempt >= maxRetries arm:
+			// crashes were the only outcome that ever reached that arm, and
+			// the transient check above already diverts every model-shaped
+			// crash out of here before the budget can matter.
+			if attempt >= maxRetries {
+				return failExit(agentID, fmt.Errorf("subagent %s crashed after %d attempts", agentID, attempt+1))
+			}
 		}
-		// Crashed or silent with attempts left: re-spawn on the same model.
+		// Silent, or a crash the chain could not answer, with attempts left:
+		// re-spawn on the same model.
 	}
+}
+
+// crashIsModelFailure reports whether a crash's last error text describes the
+// model failing — a failure a different model could survive — and therefore
+// whether spawnWithRetry's crash case should spend the fallback chain on it
+// (issue #39). Three guards keep process-shaped text out:
+//
+//   - externalRunner (ACP, codex) is refused outright: those runners ignore
+//     SpawnOpts.Model (isExternalRunnerAgent), so a restart could not land on
+//     a different model, and their error texts — transient-looking or not —
+//     must not consume the chain.
+//   - the spawner's own synthetic exit error ("pi process failed: …",
+//     spawner.go's childExitError) describes the process dying, not the model:
+//     a child killed before it emitted a verdict of its own must not have its
+//     stderr noise read as one. This is deliberately prefix-shaped, not a
+//     "agent run:" requirement — a bare "503" without any wrapper (the
+//     raw-5xx path) has to keep steering the chain.
+//   - an empty text is nothing to classify.
+//
+// IsExhaustedTransient is deliberately absent here although the child's
+// exhausted budget ("transient error after N retries: …") is the other
+// model-shaped crash: awaitAttemptOutcome's gate intercepts every
+// marker-bearing error event — synthetic included — as attemptProviderError
+// before the crash classification runs, so no text reaching this helper can
+// carry the marker. A server-named window ("retry in 59s") is excluded inside
+// crashTransientNoWindow: that failure clears by waiting, so no model switch
+// is due.
+func crashIsModelFailure(errText string, externalRunner bool) bool {
+	if errText == "" || externalRunner {
+		return false
+	}
+	if strings.HasPrefix(errText, "pi process failed:") {
+		return false
+	}
+	return crashTransientNoWindow(errText)
+}
+
+// crashTransientNoWindow reports whether a crash's final error text is a
+// transient provider failure the server gave no retry window for (issue #39,
+// the raw-503 path): the child burned its own retry budget on it, so waiting
+// longer on this model buys nothing a different model would not.
+func crashTransientNoWindow(errText string) bool {
+	err := errors.New(errText)
+	return retry.IsTransient(err) && !retry.HasServerWindow(err)
 }
 
 // firstLine trims a provider error to its first line for a notice: the
@@ -589,11 +676,11 @@ const (
 	attemptSilent
 
 	// attemptProviderError: the child emitted a terminal error event with
-	// text that reads as a fatal provider failure (quota, 402, auth — the
-	// shared retry classification; transient retries were already exhausted
-	// inside the child). Distinct from a crash: classified from the event,
-	// not from process state. This is the only outcome that steers the
-	// fallback chain.
+	// text that reads as a fatal provider failure (quota, 402, auth, an
+	// exhausted transient budget — the shared retry classification, on a
+	// pi runner only: an external runner's error events never classify as
+	// this). Distinct from a crash: classified from the event, not from
+	// process state. This is the only outcome that steers the fallback chain.
 	attemptProviderError
 
 	// attemptStopped: an error event whose text is not a provider wall, and
@@ -609,12 +696,27 @@ const (
 // wrapper's subscriber sees a failed attempt's stream — and dropped otherwise,
 // which is why the maxRetries==0 shortcut in spawnWithRetry skips this
 // entirely. The second return value is the provider error text when the
-// outcome is attemptProviderError, and the stop text for attemptStopped,
-// empty otherwise.
+// outcome is attemptProviderError, the stop text for attemptStopped, and the
+// last error event's text for attemptCrashed (empty when the attempt never
+// emitted one) — the crash path classifies from it in spawnWithRetry.
+//
+// externalRunner routes an external runner's error events away from the
+// provider-error classification: a pi child's text is pi's own provider
+// verdict, but an ACP/codex runner's is its CLI's, and those runners cannot
+// take a fallback model anyway.
 func (o *Orchestrator) awaitAttemptOutcome(events <-chan Event, agentID string, externalRunner bool, tap chan<- Event) (attemptOutcome, string) {
+	// lastErrText remembers the latest error event's text: a crash verdict is
+	// classified from it, since the crash path itself carries no text (issue
+	// #39 — the crash-path classification in spawnWithRetry reads it). It can
+	// never carry the exhausted-transient marker: the gate below catches every
+	// marker-bearing error event first.
+	lastErrText := ""
 	for ev := range events {
 		if tap != nil {
 			tap <- ev
+		}
+		if ev.Type == "error" && ev.Error != "" {
+			lastErrText = ev.Error
 		}
 		if ev.Type != "message_end" && ev.Type != "error" {
 			continue
@@ -627,7 +729,13 @@ func (o *Orchestrator) awaitAttemptOutcome(events <-chan Event, agentID string, 
 		// failed: exit status 1: ...") must not, or a crash would be treated
 		// as a model problem and burn the chain on it.
 		if ev.Type == "error" && ev.Error != "" {
-			if !externalRunner && retry.IsTerminal(errors.New(ev.Error)) {
+			// An exhausted transient budget (the child's WithRetryContext
+			// wrapper, possibly re-wrapped by the spawner's exit-error
+			// synthetic) reads as terminal too: the child already spent its
+			// whole retry budget, so re-waiting on this model buys nothing
+			// (issue #39). A windowed rate limit is excluded inside
+			// IsExhaustedTransient — that one clears on its own.
+			if !externalRunner && (retry.IsTerminal(errors.New(ev.Error)) || retry.IsExhaustedTransient(errors.New(ev.Error))) {
 				o.drainAttempt(events)
 				return attemptProviderError, ev.Error
 			}
@@ -639,7 +747,7 @@ func (o *Orchestrator) awaitAttemptOutcome(events <-chan Event, agentID string, 
 			// agentCrashed read below instead of racing it.
 			o.drainAttempt(events)
 			if o.agentCrashed(agentID) {
-				return attemptCrashed, ""
+				return attemptCrashed, lastErrText
 			}
 			if externalRunner {
 				// An external runner that failed without crashing is handed
@@ -649,7 +757,7 @@ func (o *Orchestrator) awaitAttemptOutcome(events <-chan Event, agentID string, 
 			return attemptStopped, ev.Error
 		}
 		if o.agentCrashed(agentID) {
-			return attemptCrashed, ""
+			return attemptCrashed, lastErrText
 		}
 		return attemptHealthy, ""
 	}

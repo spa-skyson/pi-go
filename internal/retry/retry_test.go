@@ -433,3 +433,61 @@ func TestServerDelayRejectsNonNumericHint(t *testing.T) {
 		t.Error("an overflowing figure should not read as a delay")
 	}
 }
+
+// The exhausted-transient wrapper is the fallback chain's signal (issue #39):
+// when a child's retry budget is spent on a transient failure, the text
+// reaching the parent — directly or re-wrapped by the spawner's exit-error
+// synthetic — must read as "the model is dead, try the next one", except
+// when the server named a window (that one clears by waiting).
+func TestIsExhaustedTransient(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"empty", errors.New(""), false},
+
+		// The plain wrapper, as runJSONTurn's iterator yields it.
+		{"503 exhausted", providerErr("transient error after 5 retries: 503 service unavailable"), true},
+		{"connection reset exhausted", providerErr("transient error after 5 retries: connection reset by peer"), true},
+
+		// Buried in the spawner's synthetic exit error — the marker sits in
+		// the middle of the line, the cause is not the message head.
+		{"spawner-wrapped", providerErr("pi process failed: exit status 1: error: agent run: transient error after 5 retries: connection reset"), true},
+
+		// A server-named window means waiting, not switching.
+		{"windowed prose", providerErr("transient error after 5 retries: 429 too many requests, retry in 59s"), false},
+		{"windowed JSON detail", providerErr(`transient error after 5 retries: quota exceeded, "retryDelay": "59s"`), false},
+
+		// The partial-response verdict is not an exhausted budget.
+		{"partial response", providerErr("transient error after partial response (not retrying): 503"), false},
+
+		// Not a transient failure at all.
+		{"402", providerErr("402 Payment Required"), false},
+		{"terminal under the marker", providerErr("transient error after 5 retries: 402 payment required"), false},
+		{"unrecognized cause", providerErr("transient error after 5 retries: something broke"), false},
+		{"no marker", providerErr("503 Service Unavailable"), false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsExhaustedTransient(tc.err); got != tc.want {
+				t.Errorf("IsExhaustedTransient(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
+// IsTerminal must stay blind to the exhausted-transient wrapper over a
+// transient cause — the marker text must not turn an exhausted connection
+// reset into a terminal verdict. (A terminal cause under the marker — "…
+// retries: 402 …" — already reads terminal through status402Re, which is
+// correct: the cause is the wall.)
+func TestIsTerminalExhaustedTransientWrapper(t *testing.T) {
+	if IsTerminal(providerErr("transient error after 5 retries: connection reset by peer")) {
+		t.Error("IsTerminal(exhausted connection reset) = true, want false")
+	}
+	if !IsTerminal(providerErr("transient error after 5 retries: 402 payment required")) {
+		t.Error("IsTerminal(exhausted 402) = false, want true: the 402 cause is the wall")
+	}
+}

@@ -5,9 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	sharedacp "github.com/spa-skyson/pi-rate/internal/acp"
 	"github.com/spa-skyson/pi-rate/internal/config"
 )
 
@@ -572,4 +574,253 @@ func configRoleWithFallbacks(model string, fallbacks ...string) config.RoleConfi
 // configRoleConfig builds a plain RoleConfig without fallbacks.
 func configRoleConfig(model string) config.RoleConfig {
 	return config.RoleConfig{Model: model}
+}
+
+// TestSpawnWithRetry_FallbackOnPersistent503 pins issue #39, the raw-5xx path:
+// a persistent 503 the child cannot ride out arrives as an error event with the
+// bare provider text (no exhausted-transient marker — the child exits 1 right
+// after emitting it), and the crash path would hide it. The chain must switch
+// models on the very first crash — before any crash retry burns on the dead
+// model — so MaxRetries:1 yields exactly two attempts (primary, then fb-one),
+// not the three a spent crash budget would produce.
+func TestSpawnWithRetry_FallbackOnPersistent503(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "argv.log")
+	binary := fallbackScriptPath(t, logPath, "fb-one", "503 Service Unavailable")
+
+	cfg := testConfig()
+	cfg.Roles["smol"] = configRoleWithFallbacks("primary-model", "fb-one")
+
+	orch := NewOrchestrator(cfg, "", nil)
+	defer orch.Shutdown()
+	orch.SetPiBinary(binary)
+
+	events, _, err := orch.SpawnWithRetry(context.Background(), SpawnInput{
+		Agent:      AgentConfig{Name: "fbagent", Role: "smol", Model: "primary-model"},
+		Prompt:     "hi",
+		MaxRetries: 1,
+	})
+	if err != nil {
+		t.Fatalf("SpawnWithRetry should recover on fallback, got %v", err)
+	}
+	for range events {
+		// Drain: the success path returns the stream to the caller.
+	}
+
+	calls := readArgvLog(t, logPath)
+	if len(calls) != 2 {
+		t.Fatalf("spawn attempts = %d, want 2 (primary then fallback; no crash retry)", len(calls))
+	}
+	if !strings.Contains(calls[1], "--model fb-one") {
+		t.Errorf("second attempt argv %q must use --model fb-one", calls[1])
+	}
+}
+
+// TestSpawnWithRetry_NoFallbackAtZeroRetries documents the MaxRetries:0
+// contract: the shortcut in spawnWithRetry returns the stream undrained
+// without awaiting an outcome, so a windowless 503 on the only attempt ends
+// the run right there — one attempt, no fallback, no crash retry. The
+// shortcut also returns a nil error: the failure surfaces through the
+// stream's error events, which the caller drains itself. A terminal 402
+// under MaxRetries:0 behaves the same way (see
+// TestSpawnWithInputFallbackStreamPreserved: the streaming wrapper adds no
+// attempts either). The shortcut is deliberate: a caller that asks for zero
+// retries gets exactly one attempt, whatever the failure.
+func TestSpawnWithRetry_NoFallbackAtZeroRetries(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "argv.log")
+	binary := fallbackScriptPath(t, logPath, "fb-one", "503 Service Unavailable")
+
+	cfg := testConfig()
+	cfg.Roles["smol"] = configRoleWithFallbacks("primary-model", "fb-one")
+
+	orch := NewOrchestrator(cfg, "", nil)
+	defer orch.Shutdown()
+	orch.SetPiBinary(binary)
+
+	events, _, err := orch.SpawnWithRetry(context.Background(), SpawnInput{
+		Agent:      AgentConfig{Name: "fbagent", Role: "smol", Model: "primary-model"},
+		Prompt:     "hi",
+		MaxRetries: 0,
+	})
+	if err != nil {
+		t.Fatalf("the MaxRetries:0 shortcut returns the stream undrained with a nil error, got %v", err)
+	}
+	var errTexts []string
+	for ev := range events {
+		if ev.Type == "error" && ev.Error != "" {
+			errTexts = append(errTexts, ev.Error)
+		}
+	}
+	if len(errTexts) == 0 || !strings.Contains(strings.Join(errTexts, "\n"), "503") {
+		t.Errorf("the 503 must surface through the stream's error events, got %q", errTexts)
+	}
+	if calls := readArgvLog(t, logPath); len(calls) != 1 {
+		t.Fatalf("spawn attempts = %d, want 1 (MaxRetries:0 means no fallback, no crash retry)", len(calls))
+	}
+}
+
+// TestSpawnWithRetry_NoFallbackOnWindowed429 pins the windowed edge: a rate
+// limit that names when its window reopens clears by waiting, so the chain
+// must stay untouched and the run ends through the crash path as before.
+func TestSpawnWithRetry_NoFallbackOnWindowed429(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "argv.log")
+	binary := fallbackScriptPath(t, logPath, "never-used",
+		`429 Too Many Requests: rate limit exceeded, retryDelay:59s`)
+
+	cfg := testConfig()
+	cfg.Roles["smol"] = configRoleWithFallbacks("primary-model", "fb-one")
+
+	orch := NewOrchestrator(cfg, "", nil)
+	defer orch.Shutdown()
+	orch.SetPiBinary(binary)
+
+	_, _, err := orch.SpawnWithRetry(context.Background(), SpawnInput{
+		Agent:      AgentConfig{Name: "fbagent", Role: "smol", Model: "primary-model"},
+		Prompt:     "hi",
+		MaxRetries: 1,
+	})
+	if err == nil {
+		t.Fatal("expected the windowed failure to end the run without a fallback")
+	}
+	if !strings.Contains(err.Error(), "crashed after") {
+		t.Errorf("error %q should name the exhausted crash budget, not a model switch", err)
+	}
+	calls := readArgvLog(t, logPath)
+	if len(calls) != 2 {
+		t.Fatalf("spawn attempts = %d, want 2 (crash retries on the primary model)", len(calls))
+	}
+	for i, c := range calls {
+		if strings.Contains(c, "fb-") {
+			t.Errorf("attempt %d argv %q must not use a fallback model", i, c)
+		}
+	}
+}
+
+// TestSpawnWithRetry_FallbackOnExhaustedTransient pins issue #39, the Go-error
+// path: a connection reset that survived the child's whole retry budget
+// reaches the parent as the spawner's exit-error synthetic with the
+// exhausted-transient marker in the middle of the line. The very first error
+// event must steer the chain — before any crash retry is spent on the dead
+// model.
+func TestSpawnWithRetry_FallbackOnExhaustedTransient(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "argv.log")
+	binary := fallbackScriptPath(t, logPath, "fb-one",
+		"pi process failed: exit status 1: error: agent run: transient error after 5 retries: connection reset by peer")
+
+	cfg := testConfig()
+	cfg.Roles["smol"] = configRoleWithFallbacks("primary-model", "fb-one")
+
+	orch := NewOrchestrator(cfg, "", nil)
+	defer orch.Shutdown()
+	orch.SetPiBinary(binary)
+
+	events, _, err := orch.SpawnWithRetry(context.Background(), SpawnInput{
+		Agent:      AgentConfig{Name: "fbagent", Role: "smol", Model: "primary-model"},
+		Prompt:     "hi",
+		MaxRetries: 1,
+	})
+	if err != nil {
+		t.Fatalf("SpawnWithRetry should recover on fallback, got %v", err)
+	}
+	for range events {
+		// Drain: the success path returns the stream to the caller.
+	}
+
+	calls := readArgvLog(t, logPath)
+	// Two calls, not three: hook 1 classifies the first attempt's error event
+	// as a provider failure, so no crash retry burns on the primary model.
+	if len(calls) != 2 {
+		t.Fatalf("spawn attempts = %d, want 2 (primary, then fallback; no crash retry)", len(calls))
+	}
+	if !strings.Contains(calls[1], "--model fb-one") {
+		t.Errorf("second attempt argv %q must use --model fb-one", calls[1])
+	}
+}
+
+// TestCrashIsModelFailure pins the crash classifier's table: the windowless
+// transient (the raw-503 path) is a model failure for a pi runner only, the
+// spawner's own synthetic exit error is never one, and an external runner is
+// refused outright — its CLI's transient-looking stderr must not spend a chain
+// it could not follow (ACP/codex ignore ModelOverride).
+func TestCrashIsModelFailure(t *testing.T) {
+	tests := []struct {
+		name           string
+		errText        string
+		externalRunner bool
+		want           bool
+	}{
+		{"pi bare 503", "503 Service Unavailable", false, true},
+		{"pi request timeout", "request timeout after 60000ms", false, true},
+		{"acp bare 503", "503 Service Unavailable", true, false},
+		{"pi spawner synthetic", "pi process failed: exit status 1: 503 in stderr", false, false},
+		{"empty text", "", false, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := crashIsModelFailure(tc.errText, tc.externalRunner); got != tc.want {
+				t.Errorf("crashIsModelFailure(%q, external=%v) = %v, want %v",
+					tc.errText, tc.externalRunner, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestSpawnWithRetry_ExternalRunnerCrashNotSteeredToFallback pins the
+// external-runner half of the crash split: an ACP agent whose session fails
+// with transient-looking text ("503 …") is never steered onto the fallback
+// chain — the runner ignores ModelOverride (isExternalRunnerAgent), so a
+// fallback restart could not reach a different model and the chain must stay
+// unused. Crash retries on the same runner remain, though: that is
+// pre-existing external-runner behavior, bought by MaxRetries and unrelated
+// to the fallback chain. So MaxRetries:1 with a configured chain yields two
+// ACP spawns (attempt 0 crashes, attempt 1 re-spawns and burns the budget),
+// no --model override attempt, no EventFallback in the stream, and the run
+// ends with an error naming the crash.
+func TestSpawnWithRetry_ExternalRunnerCrashNotSteeredToFallback(t *testing.T) {
+	var mu sync.Mutex
+	spawns := 0
+	cfg := testConfig()
+	cfg.Roles["smol"] = configRoleWithFallbacks("primary-model", "fb-one")
+	orch := NewOrchestrator(cfg, "", nil)
+	defer orch.Shutdown()
+
+	prev := startACPSessionFn
+	startACPSessionFn = func(_ context.Context, _, _ string, _ SpawnOpts) (acpSession, error) {
+		mu.Lock()
+		spawns++
+		mu.Unlock()
+		sess := newFakeACPSession()
+		go func() {
+			sess.events <- sharedacp.Event{Type: sharedacp.EventTypeError, Error: "503 Service Unavailable", SessionID: "s"}
+			sess.finish(sharedacp.RunResult{Status: sharedacp.StatusError, Error: "503 Service Unavailable", SessionID: "s"})
+		}()
+		return sess, nil
+	}
+	t.Cleanup(func() { startACPSessionFn = prev })
+
+	events, _, err := orch.SpawnWithRetry(context.Background(), SpawnInput{
+		Agent:      AgentConfig{Name: "claude", Role: "smol"},
+		Prompt:     "hi",
+		MaxRetries: 1,
+	})
+	if err == nil {
+		t.Fatal("expected the external runner's failure to end the run with an error")
+	}
+	var seen []Event
+	if events != nil {
+		for ev := range events {
+			seen = append(seen, ev)
+		}
+	}
+	for _, ev := range seen {
+		if ev.Type == EventFallback {
+			t.Errorf("stream must not carry a fallback notice, got %q", ev.Content)
+		}
+	}
+
+	mu.Lock()
+	got := spawns
+	mu.Unlock()
+	if got != 2 {
+		t.Errorf("ACP spawn attempts = %d, want 2 (crash retry on the same runner), no fallback steering", got)
+	}
 }

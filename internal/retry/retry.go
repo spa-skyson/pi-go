@@ -13,6 +13,7 @@ package retry
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"regexp"
 	"strconv"
@@ -166,6 +167,70 @@ var transientPatterns = []string{
 // failures terminal. Spellings this must keep matching: "402" alone, "HTTP
 // 402", `": 402 {"` in a JSON body, "status=402", "402 Payment Required".
 var status402Re = regexp.MustCompile(`(^|[^0-9A-Za-z_-])402($|[^0-9A-Za-z_-])`)
+
+// exhaustedTransientMarker is the prefix WithRetryContext (internal/agent)
+// wraps a transient failure in when the retry budget is spent. It lives here
+// rather than in internal/agent because the consumers that must act on it —
+// the orchestrator's fallback chain and the TUI's model switcher — import
+// internal/retry already and cannot import internal/agent without a cycle.
+const exhaustedTransientMarker = "transient error after "
+
+// ExhaustedTransientError builds the error WithRetryContext yields when a
+// transient failure survived its full retry budget. Producer and consumer
+// share this symbol, so the marker text cannot drift between them.
+func ExhaustedTransientError(retries int, cause error) error {
+	return fmt.Errorf("%s%d retries: %w", exhaustedTransientMarker, retries, cause)
+}
+
+// exhaustedTransientPrefixRe pins the marker to a full exhausted-budget
+// wrapper: the digits and the " retries: " tail are what distinguish it from
+// the partial-response verdict ("transient error after partial response (not
+// retrying): …"), which is not an exhausted budget and must not match.
+var exhaustedTransientPrefixRe = regexp.MustCompile(
+	regexp.QuoteMeta(exhaustedTransientMarker) + `[0-9]+ retries: `)
+
+// IsExhaustedTransient reports whether err is an exhausted retry budget over a
+// transient provider failure — WithRetryContext's "transient error after N
+// retries: <cause>" wrapper, possibly buried in a spawner's exit-error text
+// ("pi process failed: exit status 1: error: agent run: transient error after
+// 5 retries: …"). The underlying cause decides: a windowed rate limit (the
+// server named when its window reopens) is not reported, so a caller keeps
+// waiting that out instead of declaring the model dead. The cause is the
+// wrapper line's remainder only — text below the first newline is other
+// content's, not the cause's, and is ignored.
+func IsExhaustedTransient(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	i := strings.Index(msg, exhaustedTransientMarker)
+	if i < 0 {
+		return false
+	}
+	// The digits must follow — that is what "after partial response" lacks.
+	if !exhaustedTransientPrefixRe.MatchString(msg[i:]) {
+		return false
+	}
+	// Only the marker's own line decides: the digits end at the first newline,
+	// so a multi-line stderr carrying an unrelated transient token below the
+	// wrapper line cannot classify through its second line (issue #39 review).
+	rest := msg[i+len(exhaustedTransientMarker):]
+	if j := strings.IndexByte(rest, '\n'); j >= 0 {
+		rest = rest[:j]
+	}
+	cause := errors.New(rest)
+	// A windowed failure clears on its own; everything IsTransient calls
+	// transient was worth retrying, so a different model is worth trying.
+	return IsTransient(cause) && !HasServerWindow(cause)
+}
+
+// HasServerWindow reports whether err names a provider retry window — the
+// server said when its failure clears, so a caller can wait it out instead of
+// switching models.
+func HasServerWindow(err error) bool {
+	_, ok := ServerDelay(err)
+	return ok
+}
 
 // IsTerminal reports whether err describes a failure that will recur
 // identically however long the caller waits.
