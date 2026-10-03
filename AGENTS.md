@@ -1,7 +1,36 @@
-# AGENTS.md — pi-go
+# AGENTS.md — pi-rate
 
 Guidance for coding agents working in this repo. Applies to Claude Code and to
-pi-go's own agent; where the two differ, both are described.
+pi-rate's own agent (`pirate`); where the two differ, both are described.
+
+pi-rate is a fork of `dimetron/pi-go`. History older than the fork point
+belongs to upstream; this file describes *this* repository.
+
+## Repo and release layout
+
+**Remotes.** `gitlab` (`git.home.fwz.ru/spa/pi-rate`) is the primary: branches
+and merge requests live there. `origin` (`github.com/spa-skyson/pi-rate`) is a
+mirror that carries CI and releases: GitHub Actions (`.github/workflows/`)
+runs against it, and GitHub Releases are where binaries, the SBOM, the kagent
+manifest and the VSIX are published. `upstream` (`dimetron/pi-go`) exists only
+to track the fork point — never push to it.
+
+**Merges.** Work lands through a GitLab MR merged with a **merge commit**
+(`Merge branch 'x' into 'main'`). There is no squash and no rebase-merge; the
+GitLab-created merge commit itself is unsigned — expected, see "Commits: all
+commits must be signed".
+
+**Releases.** A release is a **signed annotated tag** `vX.Y.Z` (semver) on
+`main`, pushed to GitHub. The tag triggers the `Release` workflow
+(`.github/workflows/release.yml`): Lint → Test → Docker image → GoReleaser →
+kagent manifest → VS Code → Publish. The release is created as a **draft** and
+published only by the last job, after every asset is attached — published
+releases are immutable and accept no new assets. Consequence: the tag can be
+**moved before publication** (delete and re-push it, re-run the workflow; the
+draft-exists checks read drafts). Once published, the release is sealed —
+never retag a published version. This is not theoretical: v0.5.7's first tag
+push failed the Lint job, the tag was re-pushed after the fix, and the release
+shipped from the moved tag. Latest release: `v0.5.7`.
 
 ## Before starting work
 
@@ -64,33 +93,32 @@ git worktree list          # verify; prune stale metadata with `git worktree pru
 
 ### Where worktrees live
 
-Three conventions coexist. Match the one that fits who is doing the work.
+Two conventions coexist. Match the one that fits who is doing the work.
 
 | Creator | Path | Branch | Notes |
 |---|---|---|---|
 | Human / Claude Code | `<repo>/.worktrees/<branch-with-dashes>` | `fix/…`, `feat/…` | Inside the repo; `.worktrees/` is gitignored |
-| pi-go agent (`/run`, subagents) | `<repo>/.pi-go/tasks/<pathID>` | `pi-agent-<shortID>`, or the sanitized requested name | Created by `internal/subagent/worktree.go`; `.pi-go/` is gitignored |
-| `arbor` tool | `~/.arbor/worktrees/pi-go/<name>` | matches dir name | External tool, listed here only so `git worktree list` output is not surprising |
+| pi-rate agent (`/run`, subagents) | `<repo>/.pirate/tasks/<pathID>` | `pi-agent-<shortID>`, or the sanitized requested name | Created by `internal/subagent/worktree.go:339`; `.pirate/` is gitignored |
 
-`.pi-go/` and `.worktrees/` are both gitignored, so agent worktrees never show
-up as untracked noise in `git status`.
+`.pirate/` (and the legacy `.pi-go/` spelling) are both gitignored, so agent
+worktrees never show up as untracked noise in `git status`.
 
-### What pi-go's agent already does, and why it matters
+### What pi-rate's agent already does, and why it matters
 
-`WorktreeManager.Create` (`internal/subagent/worktree.go:117`) **stashes
+`WorktreeManager.Create` (`internal/subagent/worktree.go:277`) **stashes
 uncommitted changes before `git worktree add` and pops them afterwards**, with
 a unique stash message so the pop is deterministic
-(`stashMessage`, `popStashByMessage`). It does this because `worktree add` from
-HEAD fails on a dirty tree.
+(`stashMessage`, `popStashByMessage` at `internal/subagent/worktree.go:85,129`).
+It does this because `worktree add` from HEAD fails on a dirty tree.
 
-The consequence worth knowing: if a pi-go subagent runs while you have
+The consequence worth knowing: if a pi-rate subagent runs while you have
 uncommitted work in the primary checkout, your changes take a round trip
 through the stash. That is safe, but it is one more reason not to keep
 long-lived uncommitted work in the primary checkout.
 
 Agents marked `[worktree]` edit an isolated tree. Their edits do **not** land in
 the caller's tree — ask for an explicit patch or file list to apply, or use a
-non-worktree editing agent (`internal/tools/subagent.go:127-128`).
+non-worktree editing agent (`internal/tools/subagent.go:249`).
 
 ## Commits: all commits must be signed
 
@@ -105,24 +133,20 @@ The signing command:
 git commit -s -S -m "..."     # -s = Signed-off-by trailer, -S = sign
 ```
 
-`-S` is redundant when config is honoured (`commit.gpgsign` and `tag.gpgsign`
-are already `true`), but pass it explicitly so a commit fails loudly rather than
-landing unsigned when config is missing or overridden. The `pre-push` hook
-hard-fails any push containing an unsigned commit or one missing a matching
-`Signed-off-by` trailer, so an unsigned commit cannot reach the remote.
+`-S` is redundant when `commit.gpgsign` is enabled, but **signing here is
+explicit — nothing signs for you**: the `commit-msg` hook adds a missing
+`Signed-off-by` trailer but does not sign. A bare `git commit` lands unsigned.
+Pass `-S` every time. The other hooks back the rule up: `post-commit` warns on
+unsigned commits, and `pre-push` hard-fails any push containing an unsigned
+commit or one missing a matching `Signed-off-by` trailer — so an unsigned
+commit cannot reach a remote.
 
-A signed commit is only half the guarantee: **the merge method can replace it
-with an unsigned one after review.** "Rebase and merge" rewrites the commit
-server-side and drops the signature; see "Never merge with 'Rebase and merge'"
-under *Creating a pull request*.
+Branch commits stay signed through the merge: GitLab merges MRs with a merge
+commit, and the first-parent merge commit it creates is itself unsigned
+(see below). The commits that carry the change must be signed.
 
-Signing here is SSH-format, not GPG, through 1Password:
-
-```
-gpg.format       = ssh
-user.signingkey  = ssh-ed25519 AAAAC3Nza...
-gpg.ssh.program  = /Applications/1Password.app/Contents/MacOS/op-ssh-sign
-```
+Signing here is SSH-format, not GPG (`gpg.format = ssh`, key from
+`user.signingkey`).
 
 ### Verify signatures with `git verify-commit`, never with the `gpgsig` header
 
@@ -146,11 +170,11 @@ One-time setup, without which verification cannot run at all
 reports `N` for signed and unsigned commits alike):
 
 ```bash
-echo "dimetron@me.com $(git config user.signingkey)" > ~/.config/git/allowed_signers
+echo "$(git config user.email) $(git config user.signingkey)" > ~/.config/git/allowed_signers
 git config --global gpg.ssh.allowedSignersFile ~/.config/git/allowed_signers
 ```
 
-Then check a range — every commit a PR would publish:
+Then check a range — every commit an MR would publish:
 
 ```bash
 git log --format='%h' origin/main..HEAD | while read c; do
@@ -158,6 +182,13 @@ git log --format='%h' origin/main..HEAD | while read c; do
   git verify-commit "$c" >/dev/null 2>&1 && echo VALID || echo ">>> INVALID <<<"
 done
 git log --format='%h %(trailers:key=Signed-off-by,valueonly,separator=;) %s' -5
+```
+
+GitHub's verdict on the mirror agrees with `git verify-commit`:
+
+```bash
+gh api repos/spa-skyson/pi-rate/commits/<sha> \
+  --jq '.commit.verification | "\(.verified) \(.reason)"'
 ```
 
 **To fix commits that carry an invalid signature**, re-sign them — do not
@@ -173,39 +204,19 @@ rewriting the message with `git hash-object` is what breaks the signature in the
 first place. Prefer letting the `commit-msg` hook add the trailer, or run
 `git commit -S` alone.
 
-GitHub's own verdict is the ground truth for what reviewers see, and it agrees
-with `git verify-commit`:
-
-```bash
-gh api repos/dimetron/pi-go/commits/<sha> \
-  --jq '.commit.verification | "\(.verified) \(.reason)"'
-```
-
 ### Two kinds of commit that fail a local check and are not your problem
 
-111 merge commits on `main` fail `git verify-commit` locally. They are
-**GitHub-created merge commits**, signed by GitHub's own key — GitHub reports
-them `verified=true`, but your personal `allowed_signers` has no public key for
-that signature, so a local check cannot confirm it and fails closed. They are
-never in a push range (`rev-list <sha> --not --remotes=origin` is empty for
+**GitLab-created merge commits on `main` are unsigned** (`%G?` = `N`) and fail
+`git verify-commit` locally. GitLab builds the merge commit server-side and
+does not sign it with a key your `allowed_signers` knows. They are never in a
+feature-branch push range (`rev-list <sha> --not --remotes=gitlab` is empty for
 them), so `pre-push` does not reject them. Do not "fix" them.
 
-The non-merge ones are real, and five exist in `main` as of 2026-09-17:
-
-```
-60cbdfa  feat(hack/agentgateway): track update-prices.sh
-6ce61d9  feat(hack/agentgateway): add update.sh to push repo changes ...
-4aa99b8  feat(ollama): cloud pricing and context windows in model metadata
-369cfbd  feat: add Nix flake and NixOS module
-de6481b  pimodels: add NewFromInfo
-```
-
-The first two were produced by hand-rewriting commit objects with
-`git hash-object -t commit -w` after signing, which keeps the `gpgsig` header
-and invalidates the signature. The rest predate this guidance. All five are
-already merged, so removing them means rewriting published history — it needs an
-admin force-push and invalidates every clone, so it is a deliberate decision, not
-a cleanup. Record them rather than quietly re-pushing.
+**History inherited from upstream pi-go contains commits that do not verify**
+— unsigned ones, GitHub-rewritten ones (`E`: signature present but the key is
+unknown locally), even a couple with `B` status. All predate the fork and are
+shared published history; rewriting them would invalidate every clone and
+desync from upstream. Record, don't repair.
 
 ### Never use `--no-verify`
 
@@ -214,31 +225,24 @@ hook, not "just this once", not with a note in the commit message. There is no
 case in this repo where it is the right answer.
 
 `--no-verify` skips *all* hooks, including the signing path — so a bypassed
-commit lands unsigned. That is how `0714568`, `a8b243b` and `bcb6d26` ended up
-with no signature. Set up `gpg.ssh.allowedSignersFile` (above) so that
-`git verify-commit` catches it immediately rather than leaving it for a reviewer
-to notice.
+commit lands unsigned. Set up `gpg.ssh.allowedSignersFile` (above) so that
+`git verify-commit` catches problems immediately rather than leaving it for a
+reviewer to notice.
 
-The hook that usually tempts this is `golangci-lint`, which runs against the
-**primary checkout** and so can fail on pre-existing issues in files a worktree
-branch never touched (currently 10 `SA1019` deprecation errors in
-`hack/test/mcp/`). When that happens, stop and report it — the fix is to clear
-the unrelated lint failure or to have the user decide, not to bypass the hook.
+The hook that usually tempts this is `golangci-lint` in `pre-commit`, which
+runs repo-wide and so can fail on issues outside the files you touched. When
+that happens, stop and report it — the fix is to clear the lint failure or to
+have the user decide, not to bypass the hook. See "Lint is repo-wide" below.
 
 ## Never commit a GIF or a screen recording
 
-**Recordings go on a GitHub release, never into git history.** A GIF of a test
+**Recordings go on a release, never into git history.** A GIF of a test
 run or a TUI session is large, write-once, and stale within a week — but every
 revision of one is downloaded by every clone forever, and a blob cannot be
 un-pushed without rewriting history for everyone. GitHub itself warns above
 50 MiB and rejects a push above 100 MiB.
 
-Attach one to a PR instead — the `vhs-e2e-gif` skill wraps this:
-
-```bash
-CAPTIONS='e2e: tool calls after the fix' \
-  .claude/skills/vhs-e2e-gif/scripts/attach-gif-to-pr.sh 246 /tmp/e2e.gif
-```
+Attach one to a GitHub release as an asset instead of committing it.
 
 `.githooks/check-large-files` enforces it from both `pre-commit` (staged blobs)
 and `pre-push` (blobs the push would upload), with two limits:
@@ -265,173 +269,100 @@ PI_ALLOW_LARGE_FILES=1 git commit -sS -m "..."
 **Do not reach for `--no-verify`** — it skips the signing hooks too, and lands
 an unsigned commit (see above).
 
-## Review with Codex: open the PR first, review on GitHub
+## Merge requests and review
 
-**The PR is the review track.** Open it first, then have Codex post its review
-directly to the PR as a formal GitHub review, then resolve findings in-thread.
-This keeps every finding, fix, and resolution permanently linked in one place —
-a local terminal dump of findings is lost context; PR comments are not.
+**Work lands through a GitLab MR, and the MR is the review track.** Push the
+branch to the `gitlab` remote, open the MR, and have it reviewed — by a human
+reviewer or a review agent — before merging. Keep every finding, fix, and
+resolution in MR threads so the record stays in one place; a local terminal
+dump of findings is lost context, MR threads are not.
 
 The flow:
 
-1. **Finish the branch and open the PR** (rules below). All gates — build,
-   tests, lint, vet — still run *before* pushing; opening early does not skip
-   them.
-2. **Have Codex review and post to the PR itself.** In the environment tested on
-   PR #237, the `codex-review` subagent and restricted sandbox modes could not
-   reach `api.github.com` ("credential rejected", browser fallback denied).
-   Run this from a clean, dedicated PR worktree because the required
-   `danger-full-access` mode removes the filesystem boundary as well as the
-   network restriction:
+1. **Finish the branch and open the MR.** All gates — build, tests, lint, vet —
+   run *before* pushing; opening early does not skip them.
+2. **Have it reviewed** (a reviewer, or a review agent run against the MR
+   diff). Findings arrive as comments; fix accepted ones in normal signed
+   commits pushed to the branch and resolve the thread after verification.
+   For a dismissed finding, reply in the thread with the reason before
+   resolving it — never silently ignore a finding.
+3. **Merge with a merge commit** via GitLab. No squash, no fast-forward:
+   history keeps the branch shape (`Merge branch 'x' into 'main'`).
 
-   ```bash
-   cd <pr-worktree>
-   codex exec --sandbox danger-full-access "Read-only code review of GitHub PR <N> \
-   (repo dimetron/pi-go; current dir is the PR worktree, branch <branch>). Scope: \
-   'git diff main...HEAD'. Then POST one formal GitHub review yourself using gh: \
-   build inline comments for actionable findings, anchored to file+line, as a \
-   JSON payload file in /tmp, \
-   submit with 'gh api --input' against /repos/dimetron/pi-go/pulls/<N>/reviews \
-   with event=COMMENT. Sign the body '— Codex review'. Do not modify tracked files. \
-   Do not commit or push." > /tmp/codex-pr-review.log 2>&1
-   ```
+```bash
+git add -A
+git commit -s -S -m "feat(scope): ..."   # Conventional Commits; sign off and sign
+git push -u gitlab <branch>
+glab mr create --fill --web              # --web opens the MR page in the browser
+```
 
-   Contract: read-only over tracked files (the `/tmp` payload file is fine),
-   diff scoped to `main...HEAD`, one formal review signed "— Codex review", with
-   inline file:line comments for every actionable finding. A no-findings review
-   has no inline comments. Budget ~5 minutes; run the foreground command with a
-   generous timeout, then verify `git status --short` is still empty.
-
-   The `gh` credential inside Codex's process may still be rejected even with
-   network open. If Codex cannot post, have it emit findings as text (`FILE:` /
-   `VERDICT:` / explanation per finding). The caller must convert those findings
-   into the same formal review payload and submit it to
-   `/repos/dimetron/pi-go/pulls/<N>/reviews`; a top-level `gh pr comment` is not
-   a substitute for the review.
-
-3. **Resolve findings in their review threads**: fix accepted ones in normal
-   signed commits pushed to the branch, reply to each inline thread with its
-   resolving commit, and resolve the thread after verification. For a dismissed
-   finding, reply in that thread with the reason before resolving it — never use
-   an unrelated top-level comment or silently ignore a finding.
+- **All pending changes**: stage and commit everything outstanding on the
+  branch before opening the MR — do not leave uncommitted work behind.
+- **Open the browser link**: after the MR is created, open its URL —
+  `glab mr create --web` does this automatically; otherwise open the returned
+  URL yourself.
+- **CI runs on the GitHub mirror** (`.github/workflows/ci.yml`): Lint,
+  Vulncheck, Test, Test (Windows), Coverage, Build. A mergeable MR needs those
+  jobs green.
 
 A finding is a claim, not a verdict: verify each against the code before
 accepting or dismissing it. The review is an independent gate from tests, lint,
 vet, and build; it does not replace any of them.
 
-### Local vs GitHub review — when to use which
+### Vulncheck is a CI job, not a review step
 
-- **GitHub review (default)** for anything that becomes a PR: permanent track,
-  inline line comments, resolvable threads, visible to humans later.
-- **Local `codex exec` output (no posting)** for pre-PR sanity checks on
-  uncommitted work-in-progress, or quick second opinions on a spec/design doc
-  where there is nothing to anchor comments to yet. Do not let local-only
-  reviews substitute for the on-PR review before merge.
+**Dependency vulnerabilities are scanned by the `vulncheck` CI job** on every
+push and MR — `govulncheck -format json ./... | go run ./hack/vulngate` — not
+posted by hand into review threads. `make vulncheck` reproduces the same gate
+locally, with the same exit rule: it fails only on findings that name a fixed
+version, the ones someone can act on. Findings with no released fix are printed
+and do not fail — there is nothing to upgrade to, and a permanently red check
+is one nobody reads.
 
-### After the review: run govulncheck and post the result
-
-**Once the review is resolved and before the PR merges, run `govulncheck`
-against the branch and post the result as a PR comment.** It belongs after the
-review rather than before because it is about what the branch *depends on*
-rather than what it says, and a dependency added mid-review would otherwise go
-unscanned.
-
-```bash
-make vulncheck        # govulncheck -format json ./... | go run ./hack/vulngate
-```
-
-The gate fails only on findings that name a fixed version — those are the ones
-someone can act on. Findings with no released fix are printed and do not fail:
-there is nothing to upgrade to, so failing on them would leave every build red
-until an upstream maintainer cuts a release, and a permanently red check is one
-nobody reads.
-
-Post the scanner and DB versions along with the findings, because the answer is
-only true for the database on the day it ran. If a finding does have a fix,
-upgrade rather than explain it away — the gate is deliberately narrow so that a
-failure always means "there is something to do".
-
-Do not run `make check-cve` for this: it opens with `go mod tidy -v`, which
+Do not run `make check-cve` for scanning: it opens with `go mod tidy -v`, which
 rewrites tracked files, and a check should not mutate the tree it is checking.
 
-## Creating a pull request
-
-When the user asks to create a PR, open the browser link to the PR after it is
-created, and include **all pending changes** in the PR.
-
-```bash
-# Push the branch and create the PR with all pending (uncommitted) changes.
-# Stage everything, commit, push, then open the PR in the browser.
-git add -A
-git commit -s -S -m "..."        # sign off and sign, per the rules above
-git push -u origin <branch>
-gh pr create --fill --web        # --web opens the PR page in the browser
-```
-
-- **All pending changes**: stage and commit everything outstanding on the branch
-  before creating the PR — do not leave uncommitted work behind.
-- **Open the browser link**: after the PR is created, open the PR URL in the
-  browser so the user can review it immediately. `gh pr create --web` does this
-  automatically; if you create the PR without `--web`, open the returned URL
-  yourself.
-
-### Never merge with "Rebase and merge"
-
-**Use "Create a merge commit" or "Squash and merge". Never "Rebase and merge".**
-Rebase-and-merge is the one merge method that silently produces unsigned
-commits on `main`, and it is how 7 consecutive commits landed unsigned on
-2026-09-23 (`1134feb`, `63661c5`, `efd5073`, `8f2272f`, `0aa87ae`, `ae30efd`,
-`ccce1de`) even though every PR branch head *was* signed.
-
-GitHub's own documentation is explicit:
-
-> When using the Rebase and Merge option on a pull request, the commits in the
-> head branch are added to the base branch **without commit signature
-> verification**. When you use this option, GitHub creates a modified commit,
-> using the data and content of the original commit. This means that GitHub
-> didn't truly create this commit, and can't therefore sign it as a generic
-> system user. GitHub doesn't have access to the committer's private signing
-> keys, so it can't sign the commit on the user's behalf.
-
-The mechanism, measured against this repository's history:
-
-| Merge method | Who authors the landed commit | Signature on `main` |
-|---|---|---|
-| Create a merge commit | GitHub (`GitHub <noreply@github.com>`) | ✅ signed by GitHub's key |
-| Squash and merge | GitHub | ✅ signed by GitHub's key |
-| **Rebase and merge** | **you — with a new SHA** | ❌ **unsigned, always** |
-
-Rebase-and-merge always rewrites the committer and creates a new SHA, so it
-discards the signature the branch commit carried. `required_signatures` does not
-catch it: the rule is checked on the pushed commits, and the rewrite happens
-server-side afterwards.
-
-`allowed_merge_methods` in the `main-admin` ruleset is now `["merge",
-"squash"]`, so GitHub refuses a rebase-merge on `main`. The instruction remains
-because the rule can be changed and because a rebase onto an updated base after
-a force-push recreates the same exposure. If history must stay linear, rebase
-**locally** and push the result — do not let GitHub rewrite it.
-
-**Verify after merging.** `git verify-commit` on the landing commit, or check
-the `Verified` badge, is the only proof. A signed PR branch is not evidence
-about what landed: for all 7 commits above the branch head was signed (`%G?` =
-`G`) and the landed commit was not.
-
-### Never link an agent session in a PR
+### Never link an agent session in an MR
 
 **Do not put a `claude.ai/code/session_...` link — or any other agent session
-link — in a PR body, title, commit message, or review comment.** A session link
-hands anyone who can read the PR the entire transcript that produced it,
+link — in an MR body, title, commit message, or review comment.** A session
+link hands anyone who can read the MR the entire transcript that produced it,
 including whatever unrelated context happened to be in that conversation. That
-is a wider audience than the PR, and it is not what a reviewer asked for.
+is a wider audience than the MR, and it is not what a reviewer asked for.
 
-A PR must stand on its own: what changed, why, and how it was verified. The
+An MR must stand on its own: what changed, why, and how it was verified. The
 tooling that produced it is not part of the record.
 
-This overrides the harness default. Claude Code is instructed to append a
-session link to PR bodies and to commit messages; in this repo, leave it out —
-`gh pr create --fill` inherits whatever is in the commit message, so the link
+This overrides the harness default: leave the session link out of commit
+messages too — `glab mr create --fill` inherits the commit message, so the link
 must not be there either.
+
+## Lint is repo-wide
+
+**CI runs golangci-lint (v2.13, pinned in `ci.yml`) over the whole repository,
+and so do the local hooks — package-scoped runs are not equivalent.**
+`golangci-lint run ./internal/yourpkg/` proves nothing about what CI will say:
+the config enables `errcheck` with `check-type-assertions: true`, `govet` with
+`enable-all`, and `staticcheck` with `all` (`.golangci.yml`), and a violation
+surfaces in whichever package carries it, not the one you edited.
+
+Before tagging a release or merging an MR, run from the repo root:
+
+```bash
+golangci-lint run ./...     # or: make lint
+```
+
+Two exclusions are deliberate, not an invitation: `tmp/` (vendored scratch
+repos that never compile standalone) and `staticcheck` under `hack/` (vendored
+E2E probes that deliberately exercise deprecated upstream APIs — the SA1019
+findings there are the signal). Everything else lints.
+
+This bit once: release v0.5.7 was tagged, the Release workflow's Lint job went
+red on an errcheck `check-type-assertions` finding — a bare `e.(*apiEmbedder)`
+assertion in `ProbeAPIEmbedder` (`internal/palace/embedder_api.go`) — and the
+release shipped only after a comma-ok fix (`54eb99d`) and a moved tag. A full
+root run would have caught it before the tag. As of 2026-10-03 a full
+`golangci-lint run ./...` on `main` is clean, so any finding you see is real.
 
 ## Build, test, lint
 
@@ -439,23 +370,26 @@ Go 1.27.0. Use the Makefile rather than raw `go` invocations where a target
 exists:
 
 ```bash
-make build          # build the binary
-make install        # build + install to GOPATH/bin
+make build          # build the binaries (pirate + pirate-sandbox)
+make install        # build + install to GOBIN/GOPATH/bin
+make hooks          # point core.hooksPath at .githooks/ — run once per clone
 make test           # == test-unit
 make test-unit
 make test-integration
 make test-e2e       # build-tagged
 make test-all       # unit + integration + e2e
 make test-coverage
-make lint           # golangci-lint v2
+make lint           # golangci-lint run ./...
 make vet
-make check-cve
+make vulncheck      # same gate the CI vulncheck job runs
+make check-cve      # note: runs `go mod tidy -v`, mutates the tree
 ```
 
 ### Two failures macOS cannot catch, but Windows CI will
 
-CI runs `Test (Windows)` and `Build (windows, amd64)`. Both classes below pass on
-macOS and fail only there, so a green local run is not evidence they are fixed.
+CI runs a `Test (Windows)` job and a `Build` matrix that cross-compiles
+`(windows, amd64)`. Both classes below pass on macOS and fail only there, so a
+green local run is not evidence they are fixed.
 
 - **An open directory handle breaks `t.TempDir()` cleanup.** Windows refuses to
   remove a directory whose entries are still open: `TempDir RemoveAll cleanup:
@@ -477,7 +411,8 @@ macOS and fail only there, so a green local run is not evidence they are fixed.
 
 - **`rg` is not installed on the Windows runner.** `newGrepTool` self-names by
   capability — `"ripgrep"` when `rg` is present, `"grep"` when it is not
-  (`grep.go:128-133`) — so a test that requires `"ripgrep"` by name fails on any
+  (`rgAvailable` at `internal/tools/grep.go:96`, naming at `:128-133`) — so a
+  test that requires `"ripgrep"` by name fails on any
   host without `rg`. Assert *exactly one* of the two is registered and that both
   spellings route, and cover both branches by toggling the `rgAvailable` package
   variable (`TestCompactorRouting_WithRipgrep` / `_WithoutRipgrep` show the
@@ -487,10 +422,10 @@ When CI reports a Windows failure, read the job log directly rather than guessin
 
 ```bash
 gh run list --branch <branch> --limit 5 \
-  --json databaseId,conclusion,headSha --jq '.[].databaseId'
-gh api repos/dimetron/pi-go/actions/runs/<run>/jobs \
+  --json databaseId,conclusion,headSha --jq '.[].databaseId' -R spa-skyson/pi-rate
+gh api repos/spa-skyson/pi-rate/actions/runs/<run>/jobs \
   --jq '.jobs[] | select(.name|test("Windows")) | .id'
-gh api --allow-escape-sequences repos/dimetron/pi-go/actions/jobs/<job>/logs \
+gh api --allow-escape-sequences repos/spa-skyson/pi-rate/actions/jobs/<job>/logs \
   | tr -d '\r' | grep -E 'FAIL|panic'
 ```
 
@@ -504,14 +439,13 @@ The extension is built and installed from `vscode/` with its own Makefile:
 cd vscode && make install   # bun compile → vsce package → install
 ```
 
-Local build output goes to `$HOME/.vscode-ext/` (`pi-go-vscode.vsix`), never
+Local build output goes to `$HOME/.vscode-ext/` (`pirate-vscode.vsix`), never
 into the repo — worktree branches must not accumulate VSIX artifacts, and
 `.vscode-ext` output is kept out of `git status`. The `install` target
 auto-detects the VS Code CLI: `code` on PATH first, then the binary inside the
-Insiders app bundle (`/Applications/Visual Studio Code -
-Insiders.app/.../bin/code`, this machine's editor), then stable VS Code. CI
-(`release.yml`) uses `make release` only, which keeps the versioned VSIX at the
-repo root for the release upload glob — do not move that output.
+Insiders app bundle, then stable VS Code. CI (`release.yml`) uses `make release`
+only, which keeps the versioned `pirate-vscode-<version>.vsix` at the repo root
+for the release upload glob — do not move that output.
 
 ## TUI output safety: never write to stdout/stderr
 
@@ -558,7 +492,8 @@ that cannot recur.
   target field: the previous `stdout → content → output → diff → result → data`
   order wrote to the wrong key, and no tool emits `output` at all.
 - **Keep the value's type.** ADK round-trips every result through
-  `json.Marshal`/`json.Unmarshal` (`internal/typeutil/convert.go`), so a
+  `json.Marshal`/`json.Unmarshal` (the ADK module's
+  `internal/typeutil/convert.go`, adk v2.4.0), so a
   `[]GrepMatch` arrives as `[]any` of `map[string]any` — never a typed slice.
   Cap the array; do not re-render it to a string. The TUI result summaries read
   the same keys (`internal/tui/tool_display.go`) as `[]any`.
@@ -590,7 +525,7 @@ for _, callback := range f.AfterToolCallbacks {
 }
 ```
 
-Every pi-go after-tool callback returns the result map, and the OTEL tracing
+Every pi-rate after-tool callback returns the result map, and the OTEL tracing
 callback is registered first and always returns it — so handing ADK a slice ran
 *tracing only*. Dedup, the compactor, the LSP after-hook and memory recording
 were all silently dead for months, and it is why the compactor's revival changed
@@ -626,27 +561,28 @@ against each tool's real output struct, only `read`, `read_image` and
 `tree`, which the probe does not look at. `git-hunk` and `git-overview` were
 removed from the list for the same reason.
 
-`TestDedup_ReachableFieldsAreHonest` pins which tools are reachable. Extending
+`TestDedup_ReachableFieldsAreHonest` (`dedup_compaction_test.go:183`) pins which
+tools are reachable. Extending
 `primaryOutputField` to serialize array payloads would make the remaining five
 reachable, but that is a feature change: do it deliberately, and move each tool
 into the reachable table as it starts working rather than listing it in advance.
 
 ### rtk is a CLI proxy, not a library — do not delegate to it
 
-`rtk` (third-party, `rtk-ai/rtk`, installed at `/opt/homebrew/bin/rtk`) is an
-independent Rust CLI. It is a **reference for design**, not a dependency: pi-go's
-compactor is native Go. Measured against pi-go's real shapes, delegating to it
-does not work:
+`rtk` (third-party, `rtk-ai/rtk`, installed on PATH) is an
+independent Rust CLI. It is a **reference for design**, not a dependency: the
+compactor is native Go. Measured against this repo's real shapes, delegating to
+it does not work:
 
 - `rtk pipe -f grep` was **byte-identical** on a 400-match list — the same class
   of no-op bug described above. `rtk grep` (command mode) does compact (93.8% on
   the same payload), but that is a different interface: it *runs* the search
-  rather than filtering a result pi-go already has.
+  rather than filtering a result this repo already has.
 - `rtk pipe -f go-test` on real `go test` failure output emitted
   `Go test: No tests found` and **exit code 0**, losing both the failure and its
   signal.
 - Shelling out per tool result adds a process spawn on the hot path, and rtk's
-  filter set is not pi-go's tool set.
+  filter set is not this repo's tool set.
 
 Use rtk's *decisions* (caps that preserve totals, the never-worse guard,
 head-capping logs while keeping status lists whole); do not wire it in.
@@ -664,7 +600,7 @@ and three separate defects hid behind those numbers:
 
 - **The shape was impossible.** A pipeline was credited with a 49–76% saving on
   payloads of 200 commits. The tool runs `git log --oneline -10`
-  (`git_overview.go:72`), so that input can never occur and the pipeline never
+  (`git_overview.go:70`), so that input can never occur and the pipeline never
   fires. The number was real and meaningless.
 - **The input was synthetic.** Pipelines looked healthy against hand-written maps
   carrying an `output` key no tool emits. The tests passed; production did
@@ -714,56 +650,124 @@ harness produced, not the before/after you expected.
 
 ## Profiling
 
-`pi --pprof true` serves `net/http/pprof` on `http://localhost:6060/debug/pprof`.
-Scripts live in `.claude/skills/go-pprof/scripts/` (`pprof-snap.sh`,
-`pprof-watch.sh`, `pprof-diff.sh`); all read `PPROF_URL` and take no required
-arguments.
+`pirate --pprof true` serves `net/http/pprof` on
+`http://localhost:6060/debug/pprof` — the flag is persistent, so subcommands get
+it too, and the port comes from `--pprof-port` (default `6060`;
+`internal/cli/cli.go:268-269`). `pirate --cpuprofile <path>` writes a CPU
+profile for the process lifetime, and `make record-pgo` merges eval-suite and
+TUI-render profiles into `cmd/pirate/default.pgo`, which `go build` picks up
+automatically.
 
-A single sample cannot distinguish churn from a leak. Establish drift with
-`pprof-watch.sh` before diagnosing, and profile the app in the state being
-complained about — an empty session and an aged one are effectively different
-programs here.
-
-Findings are tracked in `TODO.md` under `## PPROF`; the live-measurement
-write-up is in `MEM_PPROF.md`. Both are gitignored, so they are local notes, not
-shared state — do not assume a teammate can see them.
+A single sample cannot distinguish churn from a leak — establish drift before
+diagnosing, and profile the app in the state being complained about: an empty
+session and an aged one are effectively different programs here.
 
 ## Session history lookup
 
-When the user asks to check a specific session (e.g. `260809-0249-c53d2-7561f`)
-or review session history, search under **`$HOME/.pi-go/`** — that is the
-session root, not the repo.
+When the user asks to check a specific session (e.g.
+`sess_c3bfd0398e8e6693176f24ce`) or review session history, search under
+**`$HOME/.pirate/`** — that is the session root, not the repo.
 
-Sessions live in `$HOME/.pi-go/sessions/<session-id>/`, one directory per
-session (`sessionsDir()` in `internal/cli/cli.go:766`). Each contains:
+Sessions live in `$HOME/.pirate/sessions/<session-id>/`, one directory per
+session (`sessionsDir()` in `internal/cli/cli.go:1241`). Each contains:
 
 - `meta.json` — id, title, model, provider, workDir, timestamps, host info.
 - `events.jsonl` — the full turn/event stream (user + assistant messages).
 - `trajectory.atif.json` — the ATIF trajectory (agent tool-call trace).
 - `branches.json` — session branch state.
 
-Other useful files under `$HOME/.pi-go/`:
+Session ids look like `sess_<hex>`; directories with the older
+`DDMMYY-HHMM-…` shape are migrated sessions from before the rename and read
+the same way.
+
+Other useful files under `$HOME/.pirate/`:
 
 - `last-session.json` — metadata of the most recent session start.
-- `history.jsonl` / `history` — command history.
-- `log/` — runtime logs (check here when init or a run fails).
+- `history.jsonl` — command history.
+- `log/` — runtime logs; see the next section.
 - `config.json` — default model and settings.
-- `memory/` — semantic memory store.
+- `memory/` — memory databases (see the memory map below).
 
 Useful commands:
 
 ```bash
-ls $HOME/.pi-go/sessions/ | grep <session-id>   # confirm a session exists
-cat $HOME/.pi-go/sessions/<session-id>/meta.json
-tail -n 50 $HOME/.pi-go/sessions/<session-id>/events.jsonl
+ls $HOME/.pirate/sessions/ | grep <session-id>   # confirm a session exists
+cat $HOME/.pirate/sessions/<session-id>/meta.json
+tail -n 50 $HOME/.pirate/sessions/<session-id>/events.jsonl
 ```
 
 The `session-stats` tool (`internal/tools/session_stats.go`) scans these
-directories for anomalies; it defaults to `$HOME/.pi-go/sessions` and accepts a
+directories for anomalies; it defaults to `$HOME/.pirate/sessions` and accepts a
 `session_dir` override.
 
-## Repo notes
+## Session and runtime logging
 
-- `TODO.md` and `MEM_PPROF.md` are gitignored (`~/.gitignore` has `**/TODO.md`).
-- `TODO.md` numbering restarts per section, so duplicate item numbers across
-  sections are expected and are not a bug to fix.
+Two logs record every session, and they are different records:
+
+- **Session events** — `~/.pirate/sessions/<id>/events.jsonl`: the persisted
+  conversation (user + assistant messages, tool calls), plus
+  `trajectory.atif.json` next to it.
+- **Runtime logs** — `~/.pirate/log/YYYY-MM-DD/session-HH-MM-SS.log`: JSON
+  lines with full nanosecond timestamps and typed entries — `user`,
+  `llm_text`, `thinking`, `tool_call`, `tool_result`, `error`, `info`,
+  `http_request`, `http_response` (`internal/logger/logger.go:32`).
+
+**For timings, trust the runtime log.** Events that a batch persists together
+carry the timestamp of the batch's first part in `events.jsonl`, so an apparent
+"model gap" (a long silence before a burst of events) can be a batching
+artifact rather than a real pause. The runtime log's per-entry `time` field is
+the source of exact durations; correlate by session id and entry type.
+
+```bash
+grep '"type":"tool_call"' $HOME/.pirate/log/2026-10-03/session-12-25-33.log
+```
+
+## Memory subsystem map
+
+Four things carry the name "memory" here; they are different systems.
+
+| Subsystem | Where | Notes |
+|---|---|---|
+| Observation mining | `internal/memory` → `~/.pirate/memory/claude-mem.db` | Session observations and semantic search. The compressor is `"none"` by default (`CompressorNone`, `internal/config/config.go:87`): raw events, no model call. |
+| MemPalace | `internal/palace` → `<project>/.pirate/palace.db` | Embeddings — Ollama, an OpenAI-compatible `/v1/embeddings` endpoint (`ProbeAPIEmbedder`), or a local ONNX backend — indexed into an SQLite FTS5 store. `RankBySimilarity` (`internal/palace/embedder.go:213`) scores only vectors of the query's dimension and drops the rest; never assume a candidate was scored. Known bug: agent and CLI resolve the DB path differently (`memory_init`/`memory_mine` anchor at the project dir, `memory_status`/`memory_search` default to cwd-relative `.pirate/palace.db`) — finding F3 in `specs/memory-fixes/research/findings.md`. |
+| agentmemory MCP | External MCP server (`agentmemory` in `~/.pirate/config.json`) | Not part of this repo. It needs `AGENTMEMORY_URL` in its environment; without it the shim silently falls back to a per-process local KV (`~/.agentmemory/standalone.json`) and "memories" stop being shared. The configured wrapper script injects the env for exactly this reason. |
+| Session + autocompact | `internal/session` | The conversation itself and its compaction (`autocompact.go`); distinct from the three stores above. |
+
+## Turn-loop invariants
+
+These behaviors are load-bearing and pinned by tests. They look like
+implementation details; breaking any of them shipped real bugs. If a change
+needs one to bend, change the invariant deliberately — code and tests together —
+never silently.
+
+- **The step budget resets when the ADK invocation id changes.** Each user turn
+  restarts from the full budget; a resumed human-in-the-loop run reuses the
+  paused invocation id on purpose (`internal/agent/step_limit.go:46-50`).
+  Tests: `TestStepLimitCallback` (`step_limit_test.go`),
+  `TestStepBudgetResetsOnEachUserTurn` (`step_limit_e2e_test.go`).
+- **Mid-turn retry has one budget and a tool-traffic guard.** When a transient
+  failure hits mid-turn, the turn may run at most `MidTurnAttempts` times in
+  total (default `DefaultMidTurnAttempts = 3`, env `PI_MIDTURN_ATTEMPTS`;
+  `internal/config/config.go:35`), provider-internal retries count against the
+  same budget, and **an attempt that already emitted FunctionCall or
+  FunctionResponse parts is never replayed** — a replay would execute tools a
+  second time (`internal/tui/agent_loop.go:1220-1257`). Tests:
+  `TestRunAgentLoop_Midturn*` in `internal/tui/agent_loop_midturn_retry_test.go`
+  (`_NoRetryAfterToolTraffic`, `_MidturnBudgetCoversInnerRetries`, …).
+- **The stream idle timeout watches streams only.** Non-streaming calls pass
+  through untouched at any timeout — without a chunk cadence a budget would
+  degenerate into a whole-call cap and would silently degrade unmanaged callers
+  like autocompact and summarize (`internal/provider/stream_idle.go:73-79`).
+  Tests: `TestStreamIdle*` in `internal/provider/stream_idle_test.go`.
+- **`${VAR}` placeholders in keys survive `Config.Save()`.** A literal
+  `${VAR}` stored in config must still be there after a save — expanding or
+  stripping it leaks credentials into the file. Test:
+  `TestPalace_EmbeddingsAPIKeyStaysPlaceholderThroughSave`
+  (`internal/config/palace_config_test.go:68`).
+- **`RankBySimilarity` drops foreign-dimension vectors** rather than erroring
+  or padding (`internal/palace/embedder.go:208-213`). A dimension change is a
+  re-index event, not a scoring concern.
+- **A dead turn closes its dialogs.** When the agent run ends while a question
+  or approval dialog is open, `handleAgentDone` dismisses it and notices the
+  user — a tool waiting for an answer that will never come must not wedge the
+  TUI (`internal/tui/agent_loop.go:2264-2285`).
