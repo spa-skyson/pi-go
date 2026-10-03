@@ -90,8 +90,8 @@ func TestHandlePromptTextStream(t *testing.T) {
 
 	cogAssertStream(t, cogPrompt(t, s, `{"text":"hello"}`), []string{
 		`{"jsonrpc":"2.0","result":{"session_id":"SESSION"},"id":1}`,
-		`{"type":"message_start","agent":"pi","role":"model"}`,
-		`{"type":"text_delta","agent":"pi","delta":"Hello from RPC!"}`,
+		`{"type":"message_start","agent":"pirate","role":"model"}`,
+		`{"type":"text_delta","agent":"pirate","delta":"Hello from RPC!"}`,
 		`{"type":"message_end"}`,
 	})
 }
@@ -117,25 +117,25 @@ func TestHandlePromptToolCallStream(t *testing.T) {
 	if lines[0] != `{"jsonrpc":"2.0","result":{"session_id":"SESSION"},"id":1}` {
 		t.Errorf("ack = %s", lines[0])
 	}
-	if lines[1] != `{"type":"message_start","agent":"pi","role":"model"}` {
+	if lines[1] != `{"type":"message_start","agent":"pirate","role":"model"}` {
 		t.Errorf("message_start = %s", lines[1])
 	}
-	if lines[2] != `{"type":"text_delta","agent":"pi","delta":"calling"}` {
+	if lines[2] != `{"type":"text_delta","agent":"pirate","delta":"calling"}` {
 		t.Errorf("text_delta = %s", lines[2])
 	}
-	if lines[3] != `{"type":"tool_call","agent":"pi","tool_name":"search","tool_input":{"n":2,"q":"x"}}` {
+	if lines[3] != `{"type":"tool_call","agent":"pirate","tool_name":"search","tool_input":{"n":2,"q":"x"}}` {
 		t.Errorf("tool_call = %s", lines[3])
 	}
 	// The tool does not exist, so the agent's own not-found report comes back
 	// as the result payload. Only its envelope is pinned; the prose is the
 	// agent's, not this handler's.
-	if !strings.HasPrefix(lines[4], `{"type":"tool_result","agent":"pi","content":"{\"error\":\"tool 'search' not found.`) {
+	if !strings.HasPrefix(lines[4], `{"type":"tool_result","agent":"pirate","content":"{\"error\":\"tool 'search' not found.`) {
 		t.Errorf("tool_result = %s", lines[4])
 	}
 	if !strings.HasSuffix(lines[4], `","tool_name":"search"}`) {
 		t.Errorf("tool_result envelope = %s", lines[4])
 	}
-	if lines[5] != `{"type":"text_delta","agent":"pi","delta":"done"}` {
+	if lines[5] != `{"type":"text_delta","agent":"pirate","delta":"done"}` {
 		t.Errorf("trailing text_delta = %s", lines[5])
 	}
 	if lines[6] != `{"type":"message_end"}` {
@@ -154,8 +154,8 @@ func TestHandlePromptEmptyPartProducesNothing(t *testing.T) {
 
 	cogAssertStream(t, cogPrompt(t, s, `{"text":"hello"}`), []string{
 		`{"jsonrpc":"2.0","result":{"session_id":"SESSION"},"id":1}`,
-		`{"type":"message_start","agent":"pi","role":"model"}`,
-		`{"type":"text_delta","agent":"pi","delta":"after"}`,
+		`{"type":"message_start","agent":"pirate","role":"model"}`,
+		`{"type":"text_delta","agent":"pirate","delta":"after"}`,
 		`{"type":"message_end"}`,
 	})
 }
@@ -338,8 +338,8 @@ func TestHandlePromptStreamsAreNotInterleaved(t *testing.T) {
 		}
 		want := []string{
 			`{"jsonrpc":"2.0","result":{"session_id":"SESSION"},"id":1}`,
-			`{"type":"message_start","agent":"pi","role":"model"}`,
-			`{"type":"text_delta","agent":"pi","delta":"one"}`,
+			`{"type":"message_start","agent":"pirate","role":"model"}`,
+			`{"type":"text_delta","agent":"pirate","delta":"one"}`,
 			`{"type":"message_end"}`,
 		}
 		for j, w := range want {
@@ -362,7 +362,7 @@ func TestEncodePart(t *testing.T) {
 		{
 			name: "text becomes one delta",
 			part: &genai.Part{Text: "hello"},
-			want: []string{`{"type":"text_delta","agent":"pi","delta":"hello"}`},
+			want: []string{`{"type":"text_delta","agent":"pirate","delta":"hello"}`},
 		},
 		{
 			name: "an empty part produces nothing",
@@ -372,24 +372,24 @@ func TestEncodePart(t *testing.T) {
 		{
 			name: "a call carries its name and arguments",
 			part: &genai.Part{FunctionCall: &genai.FunctionCall{Name: "search", Args: map[string]any{"q": "x", "n": 2}}},
-			want: []string{`{"type":"tool_call","agent":"pi","tool_name":"search","tool_input":{"n":2,"q":"x"}}`},
+			want: []string{`{"type":"tool_call","agent":"pirate","tool_name":"search","tool_input":{"n":2,"q":"x"}}`},
 		},
 		{
 			// Args is a nil map inside an any field, which omitempty does not
 			// drop, so the null reaches the client.
 			name: "a call with no arguments still sends a null tool_input",
 			part: &genai.Part{FunctionCall: &genai.FunctionCall{Name: "ping"}},
-			want: []string{`{"type":"tool_call","agent":"pi","tool_name":"ping","tool_input":null}`},
+			want: []string{`{"type":"tool_call","agent":"pirate","tool_name":"ping","tool_input":null}`},
 		},
 		{
 			name: "a response is marshaled into content",
 			part: &genai.Part{FunctionResponse: &genai.FunctionResponse{Name: "search", Response: map[string]any{"n": 1}}},
-			want: []string{`{"type":"tool_result","agent":"pi","content":"{\"n\":1}","tool_name":"search"}`},
+			want: []string{`{"type":"tool_result","agent":"pirate","content":"{\"n\":1}","tool_name":"search"}`},
 		},
 		{
 			name: "a nil response marshals to null",
 			part: &genai.Part{FunctionResponse: &genai.FunctionResponse{Name: "search"}},
-			want: []string{`{"type":"tool_result","agent":"pi","content":"null","tool_name":"search"}`},
+			want: []string{`{"type":"tool_result","agent":"pirate","content":"null","tool_name":"search"}`},
 		},
 		{
 			name: "all three shapes emit in order",
@@ -399,9 +399,9 @@ func TestEncodePart(t *testing.T) {
 				FunctionResponse: &genai.FunctionResponse{Name: "r", Response: map[string]any{"ok": true}},
 			},
 			want: []string{
-				`{"type":"text_delta","agent":"pi","delta":"t"}`,
-				`{"type":"tool_call","agent":"pi","tool_name":"c","tool_input":null}`,
-				`{"type":"tool_result","agent":"pi","content":"{\"ok\":true}","tool_name":"r"}`,
+				`{"type":"text_delta","agent":"pirate","delta":"t"}`,
+				`{"type":"tool_call","agent":"pirate","tool_name":"c","tool_input":null}`,
+				`{"type":"tool_result","agent":"pirate","content":"{\"ok\":true}","tool_name":"r"}`,
 			},
 		},
 	}
@@ -409,7 +409,7 @@ func TestEncodePart(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			encodePart(json.NewEncoder(&buf), "pi", tt.part)
+			encodePart(json.NewEncoder(&buf), "pirate", tt.part)
 
 			got := buf.String()
 			wantStr := ""
@@ -432,7 +432,7 @@ func TestEncodePartUnmarshalableResponse(t *testing.T) {
 	}}
 
 	var buf bytes.Buffer
-	encodePart(json.NewEncoder(&buf), "pi", part)
+	encodePart(json.NewEncoder(&buf), "pirate", part)
 
 	var ev Event
 	if err := json.Unmarshal(buf.Bytes(), &ev); err != nil {
