@@ -102,8 +102,8 @@ func TestAgentOutputWindowKeepsNewestToolsWithPinnedThought(t *testing.T) {
 }
 
 // A running card's header carries the live clock; it grows as the seconds
-// pass and sits between the label and the title. Unknown agent types collapse
-// through agentBracketLabel, so the label here is "pi".
+// pass and sits between the label and the title. The label is the spawn name
+// passed through agentBracketLabel verbatim.
 func TestAgentCardHeaderShowsRunningClock(t *testing.T) {
 	td := ToolDisplayModel{Width: 120}
 	msg := message{
@@ -113,7 +113,7 @@ func TestAgentCardHeaderShowsRunningClock(t *testing.T) {
 	}
 
 	got := ansi.Strip(td.agentCardHeader(msg, paletteOrDark(td.Palette)))
-	if !strings.Contains(got, "agent[pi] · running 1m26s") {
+	if !strings.Contains(got, "agent[golang-pro] · running 1m26s") {
 		t.Errorf("header = %q, want the live clock", got)
 	}
 
@@ -171,7 +171,7 @@ func TestAgentCardHeaderShowsModelBetweenLabelAndClock(t *testing.T) {
 
 	raw := td.agentCardHeader(msg, pal)
 	got := ansi.Strip(raw)
-	if !strings.Contains(got, "agent[pi] · glm-5.3-flash · running 1m26s") {
+	if !strings.Contains(got, "agent[golang-pro] · glm-5.3-flash · running 1m26s") {
 		t.Errorf("header = %q, want the model between label and clock", got)
 	}
 	wantDim := lipgloss.NewStyle().Foreground(pal.Faint).Render("· glm-5.3-flash")
@@ -192,7 +192,7 @@ func TestAgentCardHeaderShowsModelBetweenLabelAndClock(t *testing.T) {
 	if strings.Contains(got, "glm-5.3-flash") {
 		t.Errorf("header = %q, model must be omitted when unknown", got)
 	}
-	if !strings.Contains(got, "agent[pi] · 1m0s") {
+	if !strings.Contains(got, "agent[golang-pro] · 1m0s") {
 		t.Errorf("header without model = %q, want the plain pre-model form", got)
 	}
 }

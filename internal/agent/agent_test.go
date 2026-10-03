@@ -1408,8 +1408,11 @@ func TestRebuildWithSession(t *testing.T) {
 	}
 
 	// Full switch: prompt, LLM and callback chains all move at once.
-	if err := a.RebuildWithSession("Agent instruction.", agentLLM, newBefore, newAfter); err != nil {
+	if err := a.RebuildWithSession("pm", "Agent instruction.", agentLLM, newBefore, newAfter); err != nil {
 		t.Fatalf("RebuildWithSession() error: %v", err)
+	}
+	if a.config.Name != "pm" {
+		t.Errorf("config.Name = %q, want %q", a.config.Name, "pm")
 	}
 	if a.config.Instruction != "Agent instruction." {
 		t.Errorf("config.Instruction = %q, want %q", a.config.Instruction, "Agent instruction.")
@@ -1435,8 +1438,12 @@ func TestRebuildWithSession(t *testing.T) {
 	}
 
 	// A nil LLM keeps the current model (agent with no model: frontmatter).
-	if err := a.RebuildWithSession("Second instruction.", nil, nil, nil); err != nil {
+	// An empty name restores the built-in identity.
+	if err := a.RebuildWithSession("", "Second instruction.", nil, nil, nil); err != nil {
 		t.Fatalf("RebuildWithSession(nil LLM) error: %v", err)
+	}
+	if a.config.Name != "" {
+		t.Errorf("config.Name = %q, want %q (built-in)", a.config.Name, "")
 	}
 	if a.config.Model != agentLLM {
 		t.Error("nil LLM should keep the current model")
@@ -1446,7 +1453,7 @@ func TestRebuildWithSession(t *testing.T) {
 	}
 
 	// An empty prompt is a programming error, not a silent no-op.
-	if err := a.RebuildWithSession("", nil, nil, nil); err == nil {
+	if err := a.RebuildWithSession("pm", "", nil, nil, nil); err == nil {
 		t.Error("RebuildWithSession() should reject an empty instruction")
 	}
 }
@@ -1461,7 +1468,7 @@ func TestRebuildWithSessionRunnerUsesInstruction(t *testing.T) {
 	}
 
 	capturing := &capturingLLM{name: "agent-model", response: "ok"}
-	if err := a.RebuildWithSession("Primary agent prompt.", capturing, nil, nil); err != nil {
+	if err := a.RebuildWithSession("pm", "Primary agent prompt.", capturing, nil, nil); err != nil {
 		t.Fatalf("RebuildWithSession() error: %v", err)
 	}
 
@@ -1478,6 +1485,68 @@ func TestRebuildWithSessionRunnerUsesInstruction(t *testing.T) {
 	if got := capturing.capturedSystemInstruction(); !strings.Contains(got, "Primary agent prompt.") {
 		t.Errorf("runner did not receive the agent prompt; got %q", got)
 	}
+}
+
+// TestEventAuthorIsAgentIdentity verifies the ADK runner stamps the agent's
+// identity — not the pi-go-inherited "pi" — onto event authors: the transcript
+// and monitors read the executor's name from there. The built-in agent runs
+// as AgentName; a named primary (frontmatter mode: primary, e.g. pm) runs
+// under its own name after a RebuildWithSession switch.
+func TestEventAuthorIsAgentIdentity(t *testing.T) {
+	runAuthors := func(t *testing.T, a *Agent) []string {
+		t.Helper()
+		ctx := context.Background()
+		sessionID, _, err := a.CreateSession(ctx)
+		if err != nil {
+			t.Fatalf("CreateSession() error: %v", err)
+		}
+		var authors []string
+		for ev, err := range a.Run(ctx, sessionID, "hello") {
+			if err != nil {
+				t.Fatalf("Run() yielded error: %v", err)
+			}
+			// The stream opens with the stored user message; only the
+			// agent's own events carry the identity under test.
+			if ev.Author == "user" {
+				continue
+			}
+			authors = append(authors, ev.Author)
+		}
+		return authors
+	}
+
+	t.Run("builtin primary runs as AgentName", func(t *testing.T) {
+		a, err := New(Config{Model: &mockLLM{name: "m", response: "ok"}})
+		if err != nil {
+			t.Fatalf("New() error: %v", err)
+		}
+		// Pin the literal, not the constant: comparing against AgentName
+		// would pass whatever the runner is told to stamp. The cross-check
+		// keeps a constant rename from silently stranding this guard.
+		if AgentName != "pirate" {
+			t.Fatalf("AgentName = %q, want pirate; update this guard with the rename", AgentName)
+		}
+		for _, author := range runAuthors(t, a) {
+			if author != "pirate" {
+				t.Errorf("event author = %q, want %q", author, "pirate")
+			}
+		}
+	})
+
+	t.Run("named primary runs under its own name", func(t *testing.T) {
+		a, err := New(Config{Model: &mockLLM{name: "m", response: "ok"}})
+		if err != nil {
+			t.Fatalf("New() error: %v", err)
+		}
+		if err := a.RebuildWithSession("pm", "Primary agent prompt.", &mockLLM{name: "agent-model", response: "ok"}, nil, nil); err != nil {
+			t.Fatalf("RebuildWithSession() error: %v", err)
+		}
+		for _, author := range runAuthors(t, a) {
+			if author != "pm" {
+				t.Errorf("event author = %q, want %q", author, "pm")
+			}
+		}
+	})
 }
 
 func TestDefaultRetryConfig(t *testing.T) {

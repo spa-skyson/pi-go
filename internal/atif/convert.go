@@ -88,7 +88,7 @@ func mapSource(event *session.Event) string {
 	switch event.Author {
 	case "user":
 		return "user"
-	case "model", "pi", "assistant", "agent":
+	case "model", "pi", "pirate", "assistant", "agent":
 		return "agent"
 	}
 
