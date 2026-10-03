@@ -106,11 +106,11 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 // only type-asserts its own Transport field for this method, so a wrapper
 // without the forwarder makes its pool unreachable — which would leave the
 // stream-idle watch unable to drop zombie keep-alive sockets on an idle
-// abort (issue #45). A nil Base means the shared http.DefaultTransport, and
-// closing its pool is deliberately not done: those connections belong to
-// every other http.Client in the process.
+// abort (issue #45). A Base that is nil or the shared http.DefaultTransport
+// is deliberately not closed: those connections belong to every other
+// http.Client in the process, not to this one.
 func (t *Transport) CloseIdleConnections() {
-	if t.Base == nil {
+	if t.Base == nil || t.Base == http.DefaultTransport {
 		return
 	}
 	if ci, ok := t.Base.(interface{ CloseIdleConnections() }); ok {

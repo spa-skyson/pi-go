@@ -1193,6 +1193,26 @@ func TestTransportCloseIdleForwarding(t *testing.T) {
 			}
 			ci.CloseIdleConnections()
 		})
+		t.Run(tt.name+"/skips the shared DefaultTransport", func(t *testing.T) {
+			// http.DefaultTransport implements the method, so a bare
+			// type-assert would pass and close the process-global pool.
+			// The var is swapped for a counting stub (restored on exit)
+			// because the real pool cannot be observed; this package runs
+			// no parallel tests, so nothing else sees the swap.
+			orig := http.DefaultTransport
+			stub := &closingTransport{}
+			http.DefaultTransport = stub
+			defer func() { http.DefaultTransport = orig }()
+			wrapped := tt.build(stub)
+			ci, ok := wrapped.(interface{ CloseIdleConnections() })
+			if !ok {
+				t.Fatalf("%T does not implement CloseIdleConnections", wrapped)
+			}
+			ci.CloseIdleConnections()
+			if stub.calls != 0 {
+				t.Errorf("http.DefaultTransport closed %d times, want 0 — its pool belongs to every client in the process", stub.calls)
+			}
+		})
 	}
 }
 

@@ -1,12 +1,16 @@
 package provider
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -32,15 +36,84 @@ data: {"type":"message_stop"}
 `
 
 // hijacker takes the fixture server over at the socket level: each hijacked
-// connection is served by exactly one handler invocation, so a handler count
-// doubles as a connection count — keep-alive reuse never re-enters ServeHTTP.
-func hijacker(w http.ResponseWriter) (net.Conn, error) {
+// connection leaves http.Server's control entirely, so keep-alive reuse never
+// re-enters ServeHTTP — the caller owns the socket for its whole life and
+// must read subsequent requests off it itself. The returned bufio.ReadWriter
+// is the server's own buffered view of the socket and may already hold bytes
+// of the request that triggered the hijack, so it (not a fresh bufio.Reader
+// over the conn) is what further reads must go through.
+func hijacker(w http.ResponseWriter) (net.Conn, *bufio.ReadWriter, error) {
 	hj, ok := w.(http.Hijacker)
 	if !ok {
-		return nil, fmt.Errorf("server does not support hijacking")
+		return nil, nil, fmt.Errorf("server does not support hijacking")
 	}
-	conn, _, err := hj.Hijack()
-	return conn, err
+	return hj.Hijack()
+}
+
+// readHTTPRequest consumes one request from a hijacked connection: the head
+// plus whatever body its Content-Length announces. The SDK sends a JSON body
+// with every messages call, and the response for the next exchange must not
+// overtake unread request bytes on the socket.
+func readHTTPRequest(br *bufio.Reader) error {
+	clen := 0
+	for {
+		line, err := br.ReadString('\n')
+		if err != nil {
+			return err
+		}
+		if line == "\r\n" {
+			break
+		}
+		if v, ok := strings.CutPrefix(line, "Content-Length:"); ok {
+			clen, _ = strconv.Atoi(strings.TrimSpace(v))
+		}
+	}
+	if clen > 0 {
+		if _, err := io.CopyN(io.Discard, br, int64(clen)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// serveKeepAliveConn owns one hijacked connection for its whole life and
+// serves every request the client sends on it, in order — including the
+// keep-alive reuse that never re-enters ServeHTTP. The first request arrived
+// through http.Server: its head is already parsed (and only its body bytes,
+// if any were over-read, sit in br), so the body is drained by the
+// Content-Length the server reports and the turn is answered before anything
+// else is read — the client will not send another request on this socket
+// until the response arrives. Every later request is read raw off the
+// socket, head and body. The behavior per request models the gateway of
+// issue #45: fresh connections get a complete SSE turn with chunked framing,
+// whose terminating chunk hands the socket back to the client's pool as
+// idle; every later request on the same socket is the incident — a gateway
+// that has stopped serving its established connections accepts and goes
+// silent. So a retry that draws a parked socket sits out another idle
+// budget, and only a retry on a fresh dial completes.
+func serveKeepAliveConn(conn net.Conn, br *bufio.Reader, firstContentLength int64) {
+	defer conn.Close()
+	if firstContentLength > 0 {
+		if _, err := io.CopyN(io.Discard, br, firstContentLength); err != nil {
+			return
+		}
+	}
+	serveCompleteKeepAlive(conn, zombieSSERequest)
+	// The socket is parked in the client's pool now. The next thing that
+	// can arrive on it is a reused request — the zombie stage.
+	if err := readHTTPRequest(br); err != nil {
+		return // the peer (or the test cleanup) went away
+	}
+	holdSilent(conn, antSSEPrelude)
+}
+
+// serveCompleteKeepAlive writes a full SSE turn as one chunk plus the
+// terminating zero chunk. The framing — not a connection close — delivers the
+// body's EOF, so the client finishes the stream and returns the socket to its
+// pool with the connection still open: exactly the parking that puts an idle
+// keep-alive socket in play for the zombie stage.
+func serveCompleteKeepAlive(conn net.Conn, body string) {
+	fmt.Fprintf(conn, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n%x\r\n%s\r\n0\r\n\r\n", len(body), body)
 }
 
 // holdSilent writes a streaming response head plus prelude and then goes
@@ -49,8 +122,7 @@ func hijacker(w http.ResponseWriter) (net.Conn, error) {
 // (the idle abort cancels the request context, and closing the in-flight
 // socket is what the side read reports) or on a safety timer, so a broken
 // abort fails the test instead of hanging it.
-func holdSilent(t *testing.T, conn net.Conn, prelude string) {
-	t.Helper()
+func holdSilent(conn net.Conn, prelude string) {
 	fmt.Fprintf(conn, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n%s", prelude)
 	gone := make(chan struct{})
 	go func() {
@@ -69,36 +141,36 @@ func holdSilent(t *testing.T, conn net.Conn, prelude string) {
 	conn.Close()
 }
 
-// serveComplete writes a full SSE turn and half-closes: the client sees EOF
-// after the last event and finishes the stream successfully.
-func serveComplete(conn net.Conn, body string) {
-	fmt.Fprintf(conn, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n%s", body)
-	if tcp, ok := conn.(*net.TCPConn); ok {
-		_ = tcp.CloseWrite()
-	}
-	conn.Close()
-}
-
 // TestStreamIdleAbortDropsZombieConnectionBeforeRetry is the incident from
-// issue #45, end to end on a real HTTP client: the gateway (here: httptest)
-// goes silent mid-stream, the idleStreamModel watch aborts with "llm stream
-// idle" (classified transient — this is what a retry budget consumes), and
-// closeIdle drops the pooled socket the dead stream was parked on, so the
-// retry dials a fresh connection.
+// issue #45, end to end on a real HTTP client: the gateway has served this
+// client before, so the pool holds parked keep-alive sockets; the gateway
+// then starts discarding its established connections — a request on a reused
+// socket is accepted and answered with silence, while fresh dials still get
+// a full turn. The idle watch aborts the silent stream with "llm stream idle"
+// (classified transient — this is what a retry budget consumes), and only
+// closeIdle draining the pool makes the retry dial fresh: without it the
+// retry draws the next parked socket and sits out a second idle budget.
 func TestStreamIdleAbortDropsZombieConnectionBeforeRetry(t *testing.T) {
-	var conns atomic.Int64
+	var dials atomic.Int64
+	var mu sync.Mutex
+	var live []net.Conn
+	t.Cleanup(func() {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, c := range live {
+			c.Close()
+		}
+	})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := hijacker(w)
+		conn, br, err := hijacker(w)
 		if err != nil {
 			return
 		}
-		defer conn.Close()
-		switch n := conns.Add(1); n {
-		case 1:
-			holdSilent(t, conn, antSSEPrelude) // the zombie
-		default:
-			serveComplete(conn, zombieSSERequest) // the retry, answered
-		}
+		mu.Lock()
+		live = append(live, conn)
+		mu.Unlock()
+		dials.Add(1)
+		serveKeepAliveConn(conn, br.Reader, r.ContentLength)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -107,7 +179,7 @@ func TestStreamIdleAbortDropsZombieConnectionBeforeRetry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAnthropic: %v", err)
 	}
-	// The clone branch ran for InsecureSkipTLS, so NewAnthropic must have
+	// The clone branch ran for the idle watch, so NewAnthropic must have
 	// captured the pool closer on opts and NewLLM must have threaded it to
 	// the watch — this assert is what makes the test fail if the plumbing
 	// between BuildTransport and idleStreamModel is ever dropped.
@@ -118,27 +190,64 @@ func TestStreamIdleAbortDropsZombieConnectionBeforeRetry(t *testing.T) {
 
 	req := &model.LLMRequest{Contents: []*genai.Content{{Role: "user", Parts: []*genai.Part{{Text: "Hi"}}}}}
 
-	// Attempt 1: the zombie. Must yield exactly the idle failure, and the
-	// failure must close the pool before the retry runs.
+	// Parking stage: two concurrent streaming turns complete and leave two
+	// idle keep-alive sockets in this client's pool. Two, not one — the
+	// zombie attempt below consumes the socket it draws, and the retry must
+	// still find one parked behind it to be able to draw a dead socket.
+	turn := func() {
+		_, errs := drainWatch(watched.GenerateContent(context.Background(), req, true))
+		if len(errs) != 0 {
+			t.Errorf("parking turn failed: %v", errs)
+		}
+	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	for range 2 {
+		go func() {
+			defer wg.Done()
+			turn()
+		}()
+	}
+	wg.Wait()
+	if got := dials.Load(); got != 2 {
+		t.Fatalf("parking stage saw %d dials, want 2 — the pool did not end up with two idle sockets", got)
+	}
+
+	// Attempt 1: the zombie. The request reuses a parked socket, and the
+	// gateway answers reused sockets with silence. Must yield exactly the
+	// idle failure, and must not dial — a fresh dial here would mean the
+	// pool was empty and the scenario stopped covering reuse.
 	_, errs := drainWatch(watched.GenerateContent(context.Background(), req, true))
 	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "llm stream idle") {
 		t.Fatalf("attempt 1: want exactly the idle failure, got %v", errs)
 	}
+	if got := dials.Load(); got != 2 {
+		t.Errorf("the zombie attempt dialed a new connection (%d total, want 2): it did not draw a parked socket, so the retry below no longer exercises pool reuse", got)
+	}
 
-	// Attempt 2: the retry. With the zombie socket dropped from the pool,
-	// this must dial a new connection — and complete normally.
+	// Attempt 2: the retry. With the pool drained by the idle abort, this
+	// must dial a fresh connection — which the gateway still serves — and
+	// complete normally. With the closeIdle call dropped, the retry draws
+	// the remaining parked socket instead, is answered with the same
+	// silence, and fails here with a second idle error.
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		drainWatch(watched.GenerateContent(context.Background(), req, true))
+		resps, errs := drainWatch(watched.GenerateContent(context.Background(), req, true))
+		if len(errs) != 0 {
+			t.Errorf("retry after the idle abort failed: %v", errs)
+		}
+		if len(resps) == 0 {
+			t.Error("retry completed without a response")
+		}
 	}()
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("retry after the idle abort did not complete: the pool handed the dead connection back")
 	}
-	if got := conns.Load(); got != 2 {
-		t.Errorf("server saw %d connections, want exactly 2 (original + retry on a fresh socket)", got)
+	if got := dials.Load(); got != 3 {
+		t.Errorf("server saw %d connections, want 3 (two parked + the retry on a fresh socket)", got)
 	}
 }
 
@@ -246,8 +355,8 @@ func TestCloseIdleConnectionsClearsClientPool(t *testing.T) {
 
 // rateLimitShim is a minimal RoundTripper wrapper standing in for
 // ratelimit.Transport (which lives in another package): it exercises the same
-// type-assert-and-forward CloseIdleConnections pattern the real transport
-// implements, so the client-level test covers a three-layer stack.
+// guarded type-assert-and-forward CloseIdleConnections pattern the real
+// transport implements, so the client-level test covers a three-layer stack.
 type rateLimitShim struct{ Base http.RoundTripper }
 
 func (t *rateLimitShim) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -255,6 +364,9 @@ func (t *rateLimitShim) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func (t *rateLimitShim) CloseIdleConnections() {
+	if t.Base == nil || t.Base == http.DefaultTransport {
+		return
+	}
 	if ci, ok := t.Base.(interface{ CloseIdleConnections() }); ok {
 		ci.CloseIdleConnections()
 	}

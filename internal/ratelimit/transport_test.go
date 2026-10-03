@@ -475,6 +475,14 @@ func (s *closingStub) RoundTrip(req *http.Request) (*http.Response, error) {
 
 func (s *closingStub) CloseIdleConnections() { s.closed.Add(1) }
 
+// bareRoundTripper offers only RoundTrip — no CloseIdleConnections — and
+// stands for a base with no pool to reach.
+type bareRoundTripper struct{}
+
+func (bareRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, http.ErrUseLastResponse
+}
+
 // The pacing wrapper must forward CloseIdleConnections to Base: http.Client
 // only type-asserts its own Transport field for this method, so without the
 // forwarder the innermost transport's pool becomes unreachable and the
@@ -493,7 +501,23 @@ func TestTransportForwardsCloseIdleConnections(t *testing.T) {
 		tr.CloseIdleConnections() // must not panic and must not touch http.DefaultTransport
 	})
 	t.Run("base without the method is ignored", func(t *testing.T) {
+		tr := &Transport{Base: bareRoundTripper{}}
+		tr.CloseIdleConnections() // must not panic
+	})
+	// The shared http.DefaultTransport implements the method, so a bare
+	// type-assert would pass and close the process-global pool — the guard
+	// must compare against it before forwarding. The var is swapped for a
+	// counting stub (restored on exit) because the real pool cannot be
+	// observed; non-parallel test, so no other test sees the swap.
+	t.Run("default transport is not closed", func(t *testing.T) {
+		orig := http.DefaultTransport
+		stub := &closingStub{}
+		http.DefaultTransport = stub
+		defer func() { http.DefaultTransport = orig }()
 		tr := &Transport{Base: http.DefaultTransport}
-		tr.CloseIdleConnections() // must not panic; deliberately closes nothing shared
+		tr.CloseIdleConnections()
+		if got := stub.closed.Load(); got != 0 {
+			t.Errorf("http.DefaultTransport closed %d times, want 0 — its pool belongs to every client in the process", got)
+		}
 	})
 }

@@ -51,12 +51,10 @@ type idleStreamModel struct {
 	// tick is the heartbeat interval; zero disables ticking.
 	tick time.Duration
 	// closeIdle, when non-nil, closes the HTTP transport's pooled idle
-	// connections at the moment the idle abort fires (issue #45). A gateway
-	// that silently killed its keep-alive sockets leaves the pool holding
-	// zombie connections; without this, the retry that picks up the idle
-	// failure could draw the same dead socket and sit out another full idle
-	// budget. Closing before the idle error is yielded — rather than in the
-	// retry budget — is what guarantees the next request dials fresh.
+	// connections at the moment the idle abort fires (issue #45); the
+	// pool-ownership invariant is stated once in BuildTransport's clone
+	// branch. nil-safe: callers without a captured transport get the
+	// behavior of before.
 	closeIdle closeIdleConnections
 }
 
@@ -179,8 +177,6 @@ func (m idleStreamModel) GenerateContent(ctx context.Context, req *model.LLMRequ
 				// be a zombie the gateway already discarded (issue #45), and
 				// handing the idle error to the retry budget with the pool
 				// intact lets the retry draw that same dead connection.
-				// nil-safe: callers without a captured transport get the
-				// behavior of before.
 				if m.closeIdle != nil {
 					m.closeIdle()
 				}

@@ -23,9 +23,9 @@ import (
 // BuildTransport creates an http.RoundTripper carrying the TLS trust, connect
 // timeout and extra headers from opts. It returns (nil, nil) when opts asks for
 // no customization, so callers can leave the SDK's own client in place. An
-// active stream-idle watch (StreamIdleTimeout > 0) counts as customization:
-// the watch needs a pool this client owns to drop zombie sockets into, and the
-// shared http.DefaultTransport is nobody's pool.
+// active stream-idle watch (StreamIdleTimeout > 0) counts as customization —
+// the ownership invariant behind that is stated once in the clone branch
+// below.
 //
 // Every variant starts from a clone of http.DefaultTransport rather than a
 // fresh &http.Transport{}: the default carries ProxyFromEnvironment,
@@ -53,11 +53,6 @@ func BuildTransport(opts *LLMOptions) (http.RoundTripper, error) {
 	needsTLS := opts.InsecureSkipTLS || opts.CACertPath != ""
 	needsPacing := opts.RateLimit.Enabled()
 	needsIdleWatch := opts.StreamIdleTimeout > 0
-	// The clone branch decides on transport ownership, and the idle watch
-	// needs a pool the client owns: with the watch active on the shared
-	// http.DefaultTransport there is nothing to close, and its zombies are
-	// exactly what issue #45 is about. So an active watch forces the clone
-	// even when nothing else would.
 	if !needsTLS && !hasHeaders && !needsPacing && opts.ConnectTimeout <= 0 && !needsIdleWatch {
 		return maybeTrace(nil, opts), nil
 	}
@@ -65,13 +60,23 @@ func BuildTransport(opts *LLMOptions) (http.RoundTripper, error) {
 	base := http.DefaultTransport
 	if def, ok := http.DefaultTransport.(*http.Transport); ok && (needsTLS || opts.ConnectTimeout > 0 || needsIdleWatch) {
 		cloned := def.Clone()
-		// This transport is the client's own pool: capture the closer so the
-		// stream-idle watch can drop zombie keep-alive sockets on an idle
-		// abort (issue #45). The wrapper stack below forwards
-		// CloseIdleConnections down to this clone. On the headers-only path
-		// no capture happens, because that base stays the shared
-		// process-global http.DefaultTransport — closing its pool would evict
-		// connections other clients in this process are using.
+		// Transport ownership and the closeIdle capture — the one full
+		// statement of the invariant; every other mention in the package
+		// refers here. The stream-idle watch (stream_idle.go) needs a pool
+		// this client owns: on an idle abort it must drop the pooled
+		// keep-alive sockets the gateway may already have discarded (issue
+		// #45), or the retry that picks up the "llm stream idle" failure
+		// draws the same dead socket and sits out another idle budget. A
+		// clone is owned by this client, so its closer is captured on opts
+		// (chained — see the comment above) and the wrapper stack below
+		// forwards CloseIdleConnections down to it. An active watch
+		// therefore forces the clone even when nothing else would — on the
+		// shared default there is nothing to close, and its zombies are
+		// exactly what issue #45 is about. The fallback path below keeps
+		// the shared process-global http.DefaultTransport instead: closing
+		// *its* pool would evict connections belonging to every other
+		// http.Client in the process, so nothing is captured there and
+		// opts.closeIdle stays nil when no build ever cloned.
 		opts.closeIdle = chainCloseIdle(opts.closeIdle, cloned.CloseIdleConnections)
 		// The Go default MaxIdleConnsPerHost=2 is tuned for fan-out across
 		// many hosts, not for an LLM process whose traffic concentrates on a
@@ -98,17 +103,14 @@ func BuildTransport(opts *LLMOptions) (http.RoundTripper, error) {
 		}
 		base = cloned
 	}
-	// Fallback above: headers alone keep the shared
-	// http.DefaultTransport uncloned, and its MaxIdleConnsPerHost stays at the
-	// default 2 there on purpose — that base is the process-global transport,
-	// and writing a pool setting on it would mutate connection behavior for
-	// every other user of the default in the process, not just this client.
-	// Raising it safely would mean cloning, which that path deliberately
-	// avoids; see the clone branch above for where 8 is set. Since the idle
-	// watch joined the clone condition the fallback is reachable only with
-	// the watch off (StreamIdleTimeout == 0) and no TLS/connect-timeout —
-	// with the watch on, "nothing to close" is not a trade-off this package
-	// accepts.
+	// Fallback above: headers alone keep the shared http.DefaultTransport
+	// uncloned, and its MaxIdleConnsPerHost stays at the default 2 there on
+	// purpose — that base is the process-global transport, and writing a pool
+	// setting on it would mutate connection behavior for every other user of
+	// the default in the process, not just this client. Raising it safely
+	// would mean cloning, which that path deliberately avoids; see the clone
+	// branch above for where 8 is set and why no closeIdle capture happens
+	// here either.
 	//
 	// Innermost, beneath headerTransport: the trace has to record the request
 	// as it actually goes on the wire. Wrapping the other way round would run
@@ -250,7 +252,13 @@ func (t *headerTransport) CloseIdleConnections() { forwardCloseIdle(t.base) }
 // forwardCloseIdle closes base's pooled idle connections when base is a
 // *http.Transport or another wrapper that forwards the call itself; a base
 // that offers neither is silently ignored, since there is no pool to reach.
+// The shared http.DefaultTransport is skipped even though it implements the
+// method: its pool belongs to every other http.Client in the process, and
+// one client's idle abort must not evict connections it does not own.
 func forwardCloseIdle(base http.RoundTripper) {
+	if base == nil || base == http.DefaultTransport {
+		return
+	}
 	if ci, ok := base.(interface{ CloseIdleConnections() }); ok {
 		ci.CloseIdleConnections()
 	}
@@ -840,31 +848,12 @@ type LLMOptions struct {
 	// zombie keep-alive sockets before the retry budget hands the "llm
 	// stream idle" failure to its next attempt (issue #45). Unexported: it
 	// is plumbing between the two halves of this package, not caller-facing
-	// configuration — every provider constructor already threads the same
-	// *LLMOptions pointer down from NewLLM, so the capture survives the
-	// round trip with no exported surface.
-	//
-	// Set only when BuildTransport built a transport whose pool this client
-	// owns — a clone branch result or a wrapper around one. Since an active
-	// stream-idle watch (StreamIdleTimeout > 0) joined the clone condition,
-	// that is the default production shape: the CLI funnels
-	// cfg.ResolveStreamIdleTimeout into every opts, so the ordinary session —
-	// no TLS flags, no connect timeout — clones anyway and owns its pool,
-	// which is the configuration issue #45's incident ran under.
-	//
-	// Repeated builds over one opts chain instead of overwrite: the closure
-	// closes every pool any build captured, so a shared pointer backing
-	// several clients (ping's health-check plus its LLM, composite
-	// providers) leaves no client's zombies behind. The field is written
-	// only during that sequential client-building phase; concurrent
-	// BuildTransport calls on one *LLMOptions are not supported (data
-	// race). The headers-only
-	// fallback (idle watch off, no TLS/connect-timeout) deliberately keeps
-	// the uncloned, process-global http.DefaultTransport: closing *its* idle
-	// connections would evict sockets belonging to every other http.Client
-	// in the process, so there no capture is added and closeIdle stays nil
-	// when nothing was captured before. nil is the no-op everywhere else
-	// (SDK-owned default clients too).
+	// configuration. Set only when a build cloned a transport this client
+	// owns (chained across repeated builds); nil — the no-op — when none
+	// did. The full ownership invariant, including why the headers-only
+	// fallback must not capture, is stated once in BuildTransport's clone
+	// branch. Written only during sequential client building: concurrent
+	// BuildTransport calls on one *LLMOptions are not supported (data race).
 	closeIdle closeIdleConnections
 }
 
@@ -881,15 +870,10 @@ func NewLLM(ctx context.Context, info Info, apiKey, baseURL, thinkingLevel strin
 	if opts == nil {
 		opts = &LLMOptions{}
 	}
-	// The provider constructor above captured the transport closer on the
-	// same opts pointer (BuildTransport), so the watch can close the client's
-	// own pool when it aborts a silent stream (issue #45): the retry that
-	// picks the "llm stream idle" failure up must not draw the dead socket
-	// back out of the pool. The capture is a chain when the opts backed more
-	// than one client, so an abort drains every pool the pointer ever held.
-	// Nil when no custom transport was built — including the headers-only
-	// path, which keeps the shared global transport and must not touch its
-	// pool, and which is reachable only with the idle watch off.
+	// opts.closeIdle was captured by the provider constructor's BuildTransport
+	// call, so the watch can drain the client's own pool before the retry
+	// sees the idle failure (see BuildTransport's clone branch); nil when no
+	// build cloned.
 	return idleStreamModel{
 		inner:     inner,
 		timeout:   opts.StreamIdleTimeout,
