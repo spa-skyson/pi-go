@@ -49,7 +49,7 @@ func (m *model) applyAgent(name string) (tea.Model, tea.Cmd) {
 		m.chatModel.AppendNotice(fmt.Sprintf("Agent switch failed: %v", err))
 		return m, nil
 	}
-	if err := m.cfg.Agent.RebuildWithSession(sw.Instruction, sw.LLM, sw.BeforeTool, sw.AfterTool); err != nil {
+	if err := m.cfg.Agent.RebuildWithSession(sw.Name, sw.Instruction, sw.LLM, sw.BeforeTool, sw.AfterTool); err != nil {
 		m.chatModel.AppendNotice(fmt.Sprintf("Failed to rebuild agent: %v", err))
 		return m, nil
 	}

@@ -20,21 +20,33 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// acpBundledAgents lists bundled agent names that are NOT regular pi-based
-// subagents and so keep their own label in the "agent[...]" header instead of
-// collapsing to "pi". It mirrors the union of internal/subagent.acpAgentNames
-// (claude, gemini, cursor, copilot, agy) and codexAgentNames (codex,
-// codex-review): every name that has its own subprocess adapter renders under
-// its real name; built-in pi subagents (task, explore, worker, …) fall through
-// to "pi".
-var acpBundledAgents = map[string]struct{}{
-	"claude":       {},
-	"gemini":       {},
-	"cursor":       {},
-	"copilot":      {},
-	"agy":          {},
-	"codex":        {},
-	"codex-review": {},
+// agentBracketLabel returns the string rendered inside "agent[...]" for a
+// given subagent type. Every agent keeps its own spawn name (explore,
+// golang-pro, claude, …) — the label is the executor's identity, taken from
+// the spawn config on the parent side, never from the child's event author.
+// Parallel/chain calls encode multiple agents as "claude+gemini" — each
+// component is mapped individually and duplicates are deduped. An empty
+// agentType yields an empty string so the caller can omit the bracket
+// entirely.
+func agentBracketLabel(agentType string) string {
+	if agentType == "" {
+		return ""
+	}
+	parts := strings.Split(agentType, "+")
+	seen := make(map[string]struct{}, len(parts))
+	var out []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if _, dup := seen[p]; dup {
+			continue
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	return strings.Join(out, "+")
 }
 
 // agentToolColor returns the foreground color used for tool/command lines
@@ -60,41 +72,6 @@ func agentToolColor(agentType string, pal Palette) color.Color {
 		}
 	}
 	return pal.Tool
-}
-
-// agentBracketLabel returns the string rendered inside "agent[...]" for a
-// given subagent type. Bundled agents with their own subprocess adapter
-// (claude, gemini, cursor, copilot, agy, codex, codex-review) keep their name;
-// all other pi-based subagents collapse to "pi". Parallel/chain calls encode
-// multiple agents as "claude+gemini" — each component is mapped individually
-// and duplicates are deduped, so [claude+explore+task] becomes [claude+pi].
-// An empty agentType yields an empty string so the caller can omit the
-// bracket entirely.
-func agentBracketLabel(agentType string) string {
-	if agentType == "" {
-		return ""
-	}
-	parts := strings.Split(agentType, "+")
-	seen := make(map[string]struct{}, len(parts))
-	var out []string
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		var label string
-		if _, ok := acpBundledAgents[p]; ok {
-			label = p
-		} else {
-			label = "pi"
-		}
-		if _, dup := seen[label]; dup {
-			continue
-		}
-		seen[label] = struct{}{}
-		out = append(out, label)
-	}
-	return strings.Join(out, "+")
 }
 
 // ToolDisplayModel manages the formatting and rendering of tool call/result
@@ -312,8 +289,9 @@ func agentCardTimer(msg message) string {
 
 // titleWidth returns the max runes for the agent card title given the terminal
 // width and the bracketed label that precedes it. The label is counted so a
-// compound "[claude+pi+gemini]" leaves less room for the title than a bare
-// "[pi]", as is reserve — the header clock's width, when the card has one. A
+// compound "[claude+explore+gemini]" leaves less room for the title than a
+// bare "[explore]", as is reserve — the header clock's width, when the card
+// has one. A
 // floor of 60 keeps narrow terminals readable, and the storage cap
 // (maxStoredAgentTitle) bounds what a wide terminal can ever show.
 func (t ToolDisplayModel) titleWidth(label string, reserve int) int {

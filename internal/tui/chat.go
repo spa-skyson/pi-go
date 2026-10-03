@@ -149,7 +149,7 @@ type message struct {
 	// agentLabel is the verbatim string rendered inside "agent[...]" for a
 	// card whose label is not derived from agentType. A2A calls set it to the
 	// configured agent name (e.g. "istio-agent") so the card reads
-	// "agent[istio-agent]" instead of collapsing to "agent[pi]". Empty for
+	// "agent[istio-agent]" rather than the tool-call's type field. Empty for
 	// subagent cards, which derive the label from agentType.
 	agentLabel string
 	// agentModel is the model the subagent runs on, resolved from the

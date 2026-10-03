@@ -154,16 +154,23 @@ func TestAgentBracketLabel(t *testing.T) {
 		{"claude", "claude"},
 		{"gemini", "gemini"},
 		{"cursor", "cursor"},
-		{"explore", "pi"},
-		{"task", "pi"},
-		{"plan", "pi"},
-		{"code-reviewer", "pi"},
+		// Every agent keeps its own spawn name — the label is the
+		// executor's identity, never a collapsed placeholder.
+		{"explore", "explore"},
+		{"task", "task"},
+		{"plan", "plan"},
+		{"code-reviewer", "code-reviewer"},
+		{"golang-pro", "golang-pro"},
 		{"claude+gemini", "claude+gemini"},
 		{"claude+cursor+gemini", "claude+cursor+gemini"},
-		{"cursor+task", "cursor+pi"},
-		{"claude+explore", "claude+pi"},
-		{"explore+task", "pi"},
-		{"claude+gemini+task", "claude+gemini+pi"},
+		{"cursor+task", "cursor+task"},
+		{"claude+explore", "claude+explore"},
+		{"explore+task", "explore+task"},
+		{"claude+gemini+task", "claude+gemini+task"},
+		// Duplicates collapse, whitespace trims, empty parts drop.
+		{"explore+explore", "explore"},
+		{" claude + task ", "claude+task"},
+		{"claude++gemini", "claude+gemini"},
 	}
 	for _, tc := range tests {
 		if got := agentBracketLabel(tc.in); got != tc.want {
@@ -999,16 +1006,51 @@ func TestRenderMessages_AgentWithTitle(t *testing.T) {
 	}
 	m.chatModel.UpdateRenderer(m.width)
 
-	output := m.chatModel.RenderMessages(m.running)
+	output := ansi.Strip(m.chatModel.RenderMessages(m.running))
 	if !strings.Contains(output, "agent") {
 		t.Error("expected 'agent' label in rendered output")
 	}
-	// Regular pi-based subagents (task, explore, …) collapse to "agent[pi]".
-	if !strings.Contains(output, "[pi]") {
-		t.Error("expected '[pi]' bracketed label for pi-based subagent in rendered output")
+	// Subagent cards render under the spawn name (task), not a placeholder.
+	if !strings.Contains(output, "agent[task]") {
+		t.Error("expected 'agent[task]' bracketed label for the spawned subagent in rendered output")
 	}
 	if !strings.Contains(output, "Fix linter issues") {
 		t.Error("expected agent title in rendered output")
+	}
+}
+
+// TestSubagentChildEventRendersUnderSpawnName pins the parent-side labeling
+// contract: the child process authors its events "pi" (it is the same
+// binary), but the parent never sees that author — AgentSubEvent drops it —
+// and the card renders under the name the spawn config carried, not under
+// the child's self-reported identity.
+func TestSubagentChildEventRendersUnderSpawnName(t *testing.T) {
+	ch := make(chan AgentSubEvent, 1)
+	m := &model{
+		width: 120,
+		cfg:   Config{AgentEventCh: ch},
+		chatModel: ChatModel{Messages: []message{
+			{role: "tool", tool: "agent", agentType: "golang-pro", agentTitle: "fix the race"},
+		}},
+	}
+	m.chatModel.UpdateRenderer(m.width)
+
+	// The spawn binds the card to the orchestrator's agent ID.
+	newM, _ := m.Update(agentSubEventMsg{agentID: "golang-pro-1", kind: "spawn", content: "golang-pro"})
+	m = newM.(*model)
+
+	// A child event arrives. On the child side it was authored "pi"; the
+	// wrapper (AgentSubEvent → agentSubEventMsg) carries only kind+content,
+	// so there is no author to fall back to — by design.
+	newM, _ = m.Update(agentSubEventMsg{agentID: "golang-pro-1", kind: "text", content: "Investigating the race in agent_loop.go"})
+	m = newM.(*model)
+
+	output := ansi.Strip(m.chatModel.RenderMessages(m.running))
+	if !strings.Contains(output, "agent[golang-pro]") {
+		t.Errorf("rendered output = %q, want the card labeled with the spawn name agent[golang-pro]", output)
+	}
+	if strings.Contains(output, "agent[pi]") {
+		t.Errorf("rendered output = %q, must not label the card with the child's self-reported author pi", output)
 	}
 }
 

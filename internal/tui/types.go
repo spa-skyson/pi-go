@@ -181,6 +181,10 @@ type Config struct {
 
 // AgentSwitch is the payload AgentSwitcher returns for one switch target.
 type AgentSwitch struct {
+	// Name is the target's agent identity, stamped onto the rebuilt runner
+	// so its events render under the agent's own name. Empty for the
+	// built-in default agent (restores AgentName).
+	Name string
 	// LLM is the model to run the session on. Nil keeps the current one:
 	// the target named no `model:`/`role:` model.
 	LLM       llmmodel.LLM

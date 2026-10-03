@@ -65,6 +65,30 @@ func TestAgentSwitchRejectsUnusableTargets(t *testing.T) {
 	}
 }
 
+// TestAgentSwitchCarriesName pins the identity wiring: the switch payload
+// carries the target's name so the rebuilt runner stamps events with it (the
+// transcript's agent[...] label), and the default target carries "" to
+// restore the built-in identity.
+func TestAgentSwitchCarriesName(t *testing.T) {
+	in := &callbackInputs{}
+
+	sw, err := agentSwitch(context.Background(), config.Config{}, nil, "", in, switchTestConfigs(), "pm", "")
+	if err != nil {
+		t.Fatalf("agentSwitch(pm): %v", err)
+	}
+	if sw.Name != "pm" {
+		t.Errorf("agentSwitch(pm).Name = %q, want %q", sw.Name, "pm")
+	}
+
+	sw, err = agentSwitch(context.Background(), config.Config{}, nil, "", in, switchTestConfigs(), "", "")
+	if err != nil {
+		t.Fatalf("agentSwitch(default): %v", err)
+	}
+	if sw.Name != "" {
+		t.Errorf("agentSwitch(default).Name = %q, want %q (built-in identity)", sw.Name, "")
+	}
+}
+
 // TestAgentSwitchUpdatesContextWindow pins the fix for the stale context
 // gauge: a switch that changes the model must also move the tracker's
 // window. A declared-provider model (zai-coding-plan/glm-5.3, declared 1M)

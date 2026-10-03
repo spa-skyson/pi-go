@@ -42,6 +42,12 @@ const (
 	// AppName is the ADK application name used for session management.
 	AppName = "pi-go"
 
+	// AgentName is the identity of the built-in coding agent. The ADK runner
+	// stamps it on this process's events (llmagent.Config.Name), so the
+	// transcript, monitors and trajectories show who produced the output.
+	// Distinct from AppName, which keys session storage and must not drift.
+	AgentName = "pirate"
+
 	// DefaultUserID is the default user ID for local single-user sessions.
 	DefaultUserID = "local"
 )
@@ -325,6 +331,13 @@ Example shape (tree chars shown literally):
 
 // Config holds configuration for creating a new Agent.
 type Config struct {
+	// Name is the agent identity stamped on this process's events — what
+	// transcripts and monitors show as the executor. Empty means the
+	// built-in agent (AgentName); a primary agent switched in from a
+	// frontmatter config carries its own name so its output renders under
+	// it.
+	Name string
+
 	// Model is the LLM provider to use (implements model.LLM).
 	Model model.LLM
 
@@ -487,8 +500,12 @@ func injectWithFailOpen(ctx adkagent.ReadonlyContext, template string, log *logg
 }
 
 func buildRunner(cfg Config, instruction string, sessionSvc session.Service) (*runner.Runner, error) {
+	name := cfg.Name
+	if name == "" {
+		name = AgentName
+	}
 	llmAgent, err := llmagent.New(llmagent.Config{
-		Name:                 "pi",
+		Name:                 name,
 		Description:          "A coding agent that helps with software engineering tasks.",
 		Model:                cfg.Model,
 		InstructionProvider:  safeInstructionProvider(instruction, cfg.Logger),
@@ -593,16 +610,18 @@ func (a *Agent) RebuildWithModel(llm model.LLM) error {
 }
 
 // RebuildWithSession swaps the pieces that change when the main session moves
-// to a primary agent — the system instruction, optionally the LLM, and the
+// to a primary agent — the agent's identity ("" restores the built-in
+// AgentName), the system instruction, optionally the LLM, and the
 // tool-callback chains (permission rules, step budget) — while reusing the
 // session service so the conversation survives the switch. A nil llm keeps
 // the current model. instruction must not be empty; beforeTool/afterTool are
 // assigned as given (nil clears them).
-func (a *Agent) RebuildWithSession(instruction string, llm model.LLM, beforeTool []BeforeToolCallback, afterTool []AfterToolCallback) error {
+func (a *Agent) RebuildWithSession(agentName, instruction string, llm model.LLM, beforeTool []BeforeToolCallback, afterTool []AfterToolCallback) error {
 	if instruction == "" {
 		return fmt.Errorf("instruction must not be empty")
 	}
 	cfg := a.config
+	cfg.Name = agentName
 	cfg.Instruction = instruction
 	if llm != nil {
 		cfg.Model = llm
