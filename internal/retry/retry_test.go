@@ -25,6 +25,14 @@ func TestIsTransient(t *testing.T) {
 		{"nil", nil, false},
 		{"unrecognized", errors.New("something broke"), false},
 
+		// The subagent step budget is a local control-flow failure, not a
+		// provider one: no wait or re-send clears it, so it must never read
+		// as transient — neither to the child's retry loop nor to the
+		// parent's fallback chain, which would re-run the whole task the
+		// budget just stopped (issue #51).
+		{"steps limit reached", errors.New("steps limit 150 reached"), false},
+		{"orchestrator stop wrap", errors.New("subagent ag-1 stopped: steps limit 150 reached"), false},
+
 		// Retryable: rate limiting with a reopening window.
 		{"tpm rate limit", errors.New(`received error while streaming: {"type":"tokens","code":"rate_limit_exceeded","message":"Rate limit reached for gpt-5.6-luna on tokens per min (TPM): Limit 200000, Used 105953, Requested 125455. Please try again in 9.422s."}`), true},
 		{"bare 429", errors.New("429 Too Many Requests"), true},
