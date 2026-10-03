@@ -88,8 +88,10 @@ func retryLoop(ctx context.Context, cfg RetryConfig, runFn func() iter.Seq2[*ses
 			continue
 		}
 
-		// Exhausted retries.
-		_ = yield(nil, fmt.Errorf("transient error after %d retries: %w", cfg.MaxRetries, transientErr))
+		// Exhausted retries. The wrapper text is built by
+		// retry.ExhaustedTransientError — the same symbol
+		// retry.IsExhaustedTransient matches on the consumer side.
+		_ = yield(nil, retry.ExhaustedTransientError(cfg.MaxRetries, transientErr))
 	}
 }
 
