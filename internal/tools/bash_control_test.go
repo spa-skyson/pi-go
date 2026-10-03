@@ -419,6 +419,171 @@ func TestSinkWriter_FlushesLinelessOutput(t *testing.T) {
 	}
 }
 
+// TestBashHandler_ShortTimeoutHandsOffInTime pins the caller-supplied timeout:
+// a foreground command that crosses it is handed to the background promptly,
+// with the note naming the follow-up tools. This is the path that used to read
+// as "the timeout killed my run" — the result carries exit_code -1 while the
+// command is, in fact, still running — so the note has to say what actually
+// happened and what to do about it.
+func TestBashHandler_ShortTimeoutHandsOffInTime(t *testing.T) {
+	sb := testSandbox(t, t.TempDir())
+	sup := testSupervisor(t)
+
+	start := time.Now()
+	out, err := bashHandler(sb, sup, nil, BashInput{
+		Command: "sleep 30",
+		Timeout: 1, // seconds — the caller asked for a one-second budget
+	})
+	if err != nil {
+		t.Fatalf("bashHandler: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("handoff took %s; the caller-supplied timeout was not honored", elapsed)
+	}
+	if !out.Running || out.Handle == "" {
+		t.Fatalf("expected a backgrounded command, got %+v", out)
+	}
+	if out.ExitCode != -1 {
+		t.Errorf("exit_code = %d; a running command must report -1, not a fake status", out.ExitCode)
+	}
+	for _, want := range []string{"bash_wait", "bash_kill", "wait_sec", "600"} {
+		if !strings.Contains(out.Note, want) {
+			t.Errorf("handoff note is missing %q — the model cannot act without it: %q", want, out.Note)
+		}
+	}
+}
+
+// TestBashWait_FollowsALongRunToEnd drives the long-run pattern the tool
+// description teaches: a command is handed off at its (short) timeout, and one
+// bash_wait — not a poll loop — blocks until the mock's output lands.
+func TestBashWait_FollowsALongRunToEnd(t *testing.T) {
+	sup := testSupervisor(t)
+	sb := testSandbox(t, t.TempDir())
+	ts, err := BashControlTools(sup)
+	if err != nil {
+		t.Fatalf("BashControlTools: %v", err)
+	}
+
+	start := time.Now()
+	out, err := bashHandler(sb, sup, nil, BashInput{
+		Command: "sleep 1; echo long-run-done; sleep 30",
+		Timeout: 1, // handoff at 1s, output arrives ~1s later
+	})
+	if err != nil {
+		t.Fatalf("bashHandler: %v", err)
+	}
+	if !out.Running || out.Handle == "" {
+		t.Fatalf("expected an immediate handle, got %+v", out)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("the handle took %s to come back; the run did not background", elapsed)
+	}
+
+	res, err := runNamedTool(t, ts, "bash_wait", map[string]any{
+		"handle":   out.Handle,
+		"wait_sec": 10,
+	})
+	if err != nil {
+		t.Fatalf("bash_wait: %v", err)
+	}
+	if !strings.Contains(fmtAny(res["stdout"]), "long-run-done") {
+		t.Fatalf("bash_wait did not deliver the line: %v", res)
+	}
+	if running, _ := res["running"].(bool); !running {
+		t.Errorf("command should still be running (the sleep tail), got %v", res)
+	}
+
+	if _, err := runNamedTool(t, ts, "bash_kill", map[string]any{"handle": out.Handle}); err != nil {
+		t.Fatalf("bash_kill: %v", err)
+	}
+}
+
+// TestBashWait_WaitSecCap pins the advertised limits: an omitted wait_sec
+// keeps the 60s default, 600 is accepted as written, and anything larger lands
+// on the cap. The cap boundary is what the description promises ("capped at
+// 600"), so an inclusive clamp is load-bearing.
+func TestBashWait_WaitSecCap(t *testing.T) {
+	if got := bashWaitDur(0); got != defaultBashWait {
+		t.Errorf("omitted wait_sec = %v, want the default %v", got, defaultBashWait)
+	}
+	if got := bashWaitDur(600); got != maxBashWait {
+		t.Errorf("wait_sec 600 = %v, want the advertised cap %v", got, maxBashWait)
+	}
+	if got := bashWaitDur(601); got != maxBashWait {
+		t.Errorf("wait_sec 601 = %v, want it clamped to %v", got, maxBashWait)
+	}
+	if got := bashWaitDur(300); got != 5*time.Minute {
+		t.Errorf("wait_sec 300 = %v, want 5m", got)
+	}
+
+	// The description is where the model learns the ceiling; it must state it
+	// on both tools that carry the wait.
+	if !strings.Contains(executeDescription(), "600") {
+		t.Error("bash description should state the 600s ceiling")
+	}
+	waitDesc := ""
+	for _, tool := range mustControlTools(t) {
+		if tool.Name() == "bash_wait" {
+			waitDesc = tool.Description()
+		}
+	}
+	for _, want := range []string{"600", "wait_sec"} {
+		if !strings.Contains(waitDesc, want) {
+			t.Errorf("bash_wait description is missing %q", want)
+		}
+	}
+}
+
+// TestBashWait_SixHundredAcceptedEndToEnd drives wait_sec=600 through the real
+// schema decoder on a command that finishes fast: the wait must return early
+// on output rather than burning the budget, which is what makes a 600s cap
+// safe to advertise — it is a ceiling, not a sleep.
+func TestBashWait_SixHundredAcceptedEndToEnd(t *testing.T) {
+	sup := fastSupervisor(t)
+	sb := testSandbox(t, t.TempDir())
+	ts, err := BashControlTools(sup)
+	if err != nil {
+		t.Fatalf("BashControlTools: %v", err)
+	}
+
+	out, err := bashHandler(sb, sup, nil, BashInput{Command: "sleep 0.3; echo quick; sleep 30"})
+	if err != nil {
+		t.Fatalf("bashHandler: %v", err)
+	}
+	if !out.Running || out.Handle == "" {
+		t.Fatalf("expected a backgrounded command, got %+v", out)
+	}
+
+	start := time.Now()
+	res, err := runNamedTool(t, ts, "bash_wait", map[string]any{
+		"handle":   out.Handle,
+		"wait_sec": 600,
+	})
+	if err != nil {
+		t.Fatalf("bash_wait rejected wait_sec 600: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Fatalf("wait burned %s; it must return on output, not on the cap", elapsed)
+	}
+	if !strings.Contains(fmtAny(res["stdout"]), "quick") {
+		t.Fatalf("bash_wait did not deliver the line: %v", res)
+	}
+
+	if _, err := runNamedTool(t, ts, "bash_kill", map[string]any{"handle": out.Handle}); err != nil {
+		t.Fatalf("bash_kill: %v", err)
+	}
+}
+
+// mustControlTools builds the control tools or fails the test.
+func mustControlTools(t *testing.T) []tool.Tool {
+	t.Helper()
+	ts, err := BashControlTools(testSupervisor(t))
+	if err != nil {
+		t.Fatalf("BashControlTools: %v", err)
+	}
+	return ts
+}
+
 func TestExitCodeOf(t *testing.T) {
 	if got := exitCodeOf(nil); got != 0 {
 		t.Errorf("exitCodeOf(nil) = %d, want 0", got)

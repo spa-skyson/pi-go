@@ -15,6 +15,7 @@ import (
 
 	shared "github.com/spa-skyson/pi-rate/internal/acp"
 	"github.com/spa-skyson/pi-rate/internal/acp/client"
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 var piBinary string
@@ -51,6 +52,10 @@ func buildAndRun(m *testing.M) (int, error) {
 		return 0, fmt.Errorf("build pi: %w\n%s", err, out)
 	}
 	piBinary = bin
+	// A machine running a configured pirate leaks PI_*/provider variables into
+	// the spawned pi processes, which changes what they resolve. Keep the
+	// integration runs as deterministic as the unit ones.
+	testenv.UnsetEnv()
 	return m.Run(), nil
 }
 

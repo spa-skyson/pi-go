@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/spa-skyson/pi-rate/internal/testenv"
 )
 
 // TestMain redirects HOME to a throwaway directory for every test in this
@@ -58,6 +60,12 @@ func TestMain(m *testing.M) {
 	// and loadDotEnv exports its contents with os.Setenv — process-wide, past
 	// the end of the test that triggered it. Four unrelated tests in this
 	// package then fail on that machine alone.
+	//
+	// The process environment itself leaks too: provider keys and base URLs
+	// exported by a running pirate session flow into resolvePingModelInfo and
+	// friends. Strip every dirty variable once, package-wide.
+	testenv.UnsetEnv()
+
 	if err := os.Chdir(dir); err != nil {
 		fmt.Fprintf(os.Stderr, "isolating the working directory: %v\n", err)
 		os.Exit(1)
