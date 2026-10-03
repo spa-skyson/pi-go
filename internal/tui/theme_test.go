@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"charm.land/lipgloss/v2"
 )
 
 func TestThemeManagerLoad(t *testing.T) {
@@ -496,15 +498,15 @@ func TestOpenCodeThemePinsThePalette(t *testing.T) {
 	}
 	want := map[string]string{
 		"Text":              "#eeeeee",
-		"Base":              "#0a0a0a",
+		"Base":              "none",
 		"Primary":           "#fab283",
 		"Secondary":         "#5c9cf5",
 		"Error":             "#e06c75",
 		"Warning":           "#f5a742",
 		"Success":           "#7fd88f",
 		"Info":              "#56b6c2",
-		"BackgroundPanel":   "#141414",
-		"BackgroundElement": "#1e1e1e",
+		"BackgroundPanel":   "none",
+		"BackgroundElement": "none",
 		"BorderSubtle":      "#323232",
 		"BorderBase":        "#484848",
 		"BorderActive":      "#606060",
@@ -546,16 +548,42 @@ func TestOpenCodeThemePinsThePalette(t *testing.T) {
 	}{
 		"BorderSubtle":    {p.BorderSubtle, "#323232"},
 		"BorderActive":    {p.BorderActive, "#606060"},
-		"BackgroundPanel": {p.BackgroundPanel, "#141414"},
+		"BackgroundPanel": {p.BackgroundPanel, "none"},
 		"TextMuted":       {p.TextMuted, "#808080"},
 		"Primary":         {p.Primary, "#fab283"},
 		"Text":            {p.Text, "#eeeeee"},
 		"DiffContext":     {p.DiffContext, "#828bb8"},
 		"EditorCursor":    {p.EditorCursor, "#fab283"},
 	} {
+		// "none" resolves to lipgloss.NoColor — the terminal default shows
+		// through instead of a painted fill.
+		if wantExpr.want == "none" {
+			if _, ok := wantExpr.got.(lipgloss.NoColor); !ok {
+				t.Errorf("palette %s = %T, want lipgloss.NoColor", role, wantExpr.got)
+			}
+			continue
+		}
 		if gotHex := colorString(wantExpr.got); gotHex != wantExpr.want {
 			t.Errorf("palette %s = %q, want %q", role, gotHex, wantExpr.want)
 		}
+	}
+	// The background roles must all be none so the sidebar, chat frames,
+	// editor and status line sit on the user's own terminal background
+	// (#38 follow-up: the hard #0a0a0a/#141414 fills drew black slabs on any
+	// terminal whose background differed).
+	for role, got := range map[string]color.Color{
+		"Background":        p.Background,
+		"BackgroundPanel":   p.BackgroundPanel,
+		"BackgroundElement": p.BackgroundElement,
+	} {
+		if _, ok := got.(lipgloss.NoColor); !ok {
+			t.Errorf("palette %s = %T, want lipgloss.NoColor", role, got)
+		}
+	}
+	// And the no-fill must survive into an actual style: a styled span must
+	// carry no background SGR sequence at all.
+	if line := lipgloss.NewStyle().Background(p.BackgroundPanel).Render("x"); strings.Contains(line, "\x1b[48;") {
+		t.Errorf("opencode backgroundPanel still paints a fill: %q", line)
 	}
 	// A different palette key is what invalidates the render caches on the
 	// /theme switch.
