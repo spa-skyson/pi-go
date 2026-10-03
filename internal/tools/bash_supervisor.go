@@ -387,6 +387,9 @@ func (s *BashSupervisor) background(p *bashProc, reason string) BashOutput {
 		note += " It has produced no output at all — if that is unexpected, the command is probably too broad (a filesystem-wide scan, or a prompt waiting for input) and should be killed and narrowed."
 	}
 	note += " " + limitsHint(p.timeout, p.idleTimeout)
+	note += " For a long run — a full test suite, a large build — this handoff is the intended path:" +
+		" leave the command in the background and follow it with one generous bash_wait" +
+		" (wait_sec up to 600) instead of re-running it."
 
 	outStr, errStr := budgetStreams(stdout, stderr)
 	if d := droppedNote(p.stdout.droppedBytes() + p.stderr.droppedBytes()); d != "" {

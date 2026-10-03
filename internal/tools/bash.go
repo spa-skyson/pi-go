@@ -104,8 +104,9 @@ type BashWaitInput struct {
 	// Handle returned by a previous bash call.
 	Handle string `json:"handle"`
 	// WaitSec blocks up to this long, in SECONDS, for new output or for the
-	// command to exit. Defaults to 60. Prefer one long wait over polling in a
-	// loop.
+	// command to exit. Defaults to 60, capped at 600 — one generous wait is
+	// the way to follow a long run without a polling loop. Prefer one long
+	// wait over polling in a loop.
 	WaitSec int `json:"wait_sec,omitempty"`
 }
 
@@ -115,7 +116,20 @@ type BashKillInput struct {
 	Handle string `json:"handle"`
 }
 
-const maxBashWait = 60 * time.Second
+const (
+	// defaultBashWait is how long bash_wait blocks when wait_sec is omitted.
+	// It stays at one minute: a caller that says nothing about how long to wait
+	// used to get exactly this, and a quiet command silently stretching a
+	// single call to ten minutes would hold the turn far longer than the
+	// caller asked for.
+	defaultBashWait = 60 * time.Second
+
+	// maxBashWait caps a caller-supplied wait. Raised from 60s so one call can
+	// follow a multi-minute test suite or build — the polling loop it replaces
+	// burns a round trip per minute, which is what cost issue #45's acceptance
+	// agent whole minutes of sleeps.
+	maxBashWait = 600 * time.Second
+)
 
 // The bash tool's description is a lead plus a shared tail. Only the lead
 // differs by platform: on Windows without bash the command runs through
@@ -129,6 +143,8 @@ const powershellLead = `Execute a shell command and return its output. Commands 
 const bashLimits = `
 
 A command that outlives its timeout (60s), or goes 90s with no output, is backgrounded rather than killed: the result carries running=true and a handle. Raise timeout for work you already know is long — a full test suite, an image build. Use bash_wait to read more output and bash_kill to stop it; a handle with no output at all means the command is too broad.
+
+For a run longer than any timeout, the background is the intended place, not a workaround: let the handoff happen, then follow it with one generous bash_wait (wait_sec up to 600) instead of re-running the command or polling in a loop. Each bash_wait returns as soon as there is new output or the command exits.
 
 timeout, idle_timeout and wait_sec are in SECONDS, capped at 600. Write 300 for five minutes, not 300000.`
 
@@ -216,6 +232,14 @@ func clampDuration(sec int, fallback, minDur, maxDur time.Duration) time.Duratio
 	return d
 }
 
+// bashWaitDur resolves a bash_wait wait_sec input: an omitted value takes the
+// default wait, and anything above the cap lands on the cap. It is its own
+// function rather than an inline clampDuration call so the advertised limits
+// — default 60, cap 600 — have one testable seam.
+func bashWaitDur(sec int) time.Duration {
+	return clampDuration(sec, defaultBashWait, 0, maxBashWait)
+}
+
 // controlToolName reports which bash control tool (bash_wait, bash_kill) a
 // command string is trying to invoke, or "" when the command does not look
 // like one. It exists because backgrounding results embed the control tools'
@@ -249,12 +273,12 @@ func controlToolName(command string) string {
 // builds its own supervisor and never streams need not carry the extra schema.
 func BashControlTools(sup *BashSupervisor) ([]tool.Tool, error) {
 	waitTool, err := newTool("bash_wait",
-		"Wait on a backgrounded shell command and return whatever it produced since the last wait. Blocks up to 60 seconds for new output or for the command to exit; use wait_sec for a shorter wait. Returns running=false and the exit code once it finishes, after which the handle is spent. Wait once with a generous wait_sec rather than calling this in a loop — each call is a round trip, and an empty result means nothing new since the last one, not that the command is stuck.",
+		"Wait on a backgrounded shell command and return whatever it produced since the last wait. Blocks up to 60 seconds (wait_sec, capped at 600) for new output or for the command to exit, returning early the moment either happens; a generous wait_sec — 300 to 600 — is how you follow a long test suite or build with a single call. Returns running=false and the exit code once it finishes, after which the handle is spent. Wait once with a generous wait_sec rather than calling this in a loop — each call is a round trip, and an empty result means nothing new since the last one, not that the command is stuck.",
 		func(_ agent.Context, input BashWaitInput) (BashStatus, error) {
 			if input.Handle == "" {
 				return BashStatus{}, fmt.Errorf("handle is required (running: %v)", sup.Handles())
 			}
-			return sup.readOutput(input.Handle, clampDuration(input.WaitSec, maxBashWait, 0, maxBashWait))
+			return sup.readOutput(input.Handle, bashWaitDur(input.WaitSec))
 		})
 	if err != nil {
 		return nil, err
