@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httptrace"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -976,6 +980,349 @@ func TestBuildTransport(t *testing.T) {
 			t.Error("expected InsecureSkipVerify to win")
 		}
 	})
+
+	t.Run("clone branch captures closeIdle, global fallback does not", func(t *testing.T) {
+		// The clone branch: the built transport owns its pool, so the idle
+		// watch may close idle sockets on an abort.
+		opts := &LLMOptions{InsecureSkipTLS: true}
+		mustBuild(t, opts)
+		if opts.closeIdle == nil {
+			t.Fatal("clone branch did not capture closeIdle; the idle watch could not drop zombie sockets")
+		}
+		// The headers-only fallback keeps the shared, process-global
+		// http.DefaultTransport: closing its pool would evict sockets other
+		// clients in this process hold, so no capture may happen there. The
+		// idle watch is off here (StreamIdleTimeout zero), which is the only
+		// way this fallback stays reachable — with the watch on, the clone
+		// branch runs and owns a pool instead.
+		global := &LLMOptions{ExtraHeaders: map[string]string{"X-Test": "1"}}
+		mustBuild(t, global)
+		if global.closeIdle != nil {
+			t.Error("headers-only path captured closeIdle on the shared DefaultTransport pool; closing it would kill other clients' connections")
+		}
+		// A fresh pointer stays clean: captures follow opts, not package
+		// state — the fallback build above must not have left anything
+		// anywhere.
+		opts2 := &LLMOptions{ConnectTimeout: time.Second}
+		mustBuild(t, opts2)
+		if opts2.closeIdle == nil {
+			t.Fatal("connect-timeout clone did not capture closeIdle")
+		}
+	})
+
+	t.Run("stream idle watch alone forces the clone branch (default config)", func(t *testing.T) {
+		// The default production shape: no TLS flags, no connect timeout, no
+		// headers — only the stream-idle watch the CLI resolves for every
+		// session. Issue #45's incident ran under exactly this
+		// configuration, and before the watch joined the clone condition the
+		// build fell through to the shared DefaultTransport, leaving the
+		// watch with nothing it may close.
+		opts := &LLMOptions{StreamIdleTimeout: 90 * time.Second}
+		tr := mustBuild(t, opts)
+		if tr == nil {
+			t.Fatal("idle-watch-only opts returned nil transport; the watch would guard a pool it cannot close")
+		}
+		if _, ok := tr.(*http.Transport); !ok {
+			t.Fatalf("expected the cloned *http.Transport, got %T", tr)
+		}
+		if opts.closeIdle == nil {
+			t.Fatal("idle-watch-only opts captured no closeIdle; zombie sockets would survive the abort")
+		}
+		// The clone also keeps the default's proxy wiring — the reason every
+		// branch starts from DefaultTransport.Clone rather than a fresh
+		// transport.
+		if ht := tr.(*http.Transport); ht.Proxy == nil {
+			t.Error("cloned transport lost Proxy (HTTPS_PROXY would stop working)")
+		}
+		// And the same shape with the watch explicitly disabled must fall
+		// back to the shared transport with no capture: the contract for
+		// "caller turned the idle protection off" is the pre-#45 behavior.
+		off := &LLMOptions{}
+		if tr := mustBuild(t, off); tr != nil {
+			t.Fatalf("no-customization opts returned %T, want nil", tr)
+		}
+		if off.closeIdle != nil {
+			t.Error("no-customization opts captured closeIdle on the shared DefaultTransport pool")
+		}
+	})
+
+}
+
+// TestBuildTransportChainsCloseIdleCaptures covers the production shape the
+// chaining exists for: one *LLMOptions backing more than one client — a
+// front-end building both a health-check and an LLM client (the CLI ping
+// does). Two builds each capture their own clone's pool, and the final
+// chained closeIdle must evict BOTH: zeroing between builds would leave the
+// first client's zombies parked in its pool.
+//
+// Observed at the socket level, like the zombie test: each build GETs its
+// own server once (parking one keep-alive socket in that build's clone), the
+// chained capture fires, and each server must then see a second, fresh
+// connection on the next request.
+func TestBuildTransportChainsCloseIdleCaptures(t *testing.T) {
+	newConnCounter := func(srv *httptest.Server) *atomic.Int64 {
+		var n atomic.Int64
+		// Read per new connection, so setting it before the first
+		// request is enough.
+		srv.Config.ConnState = func(_ net.Conn, cs http.ConnState) {
+			if cs == http.StateNew {
+				n.Add(1)
+			}
+		}
+		return &n
+	}
+	srv1 := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	srv2 := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	conns1, conns2 := newConnCounter(srv1), newConnCounter(srv2)
+	srv1.Start()
+	srv2.Start()
+	t.Cleanup(srv1.Close)
+	t.Cleanup(srv2.Close)
+
+	opts := &LLMOptions{StreamIdleTimeout: time.Second}
+	tr1, err := BuildTransport(opts)
+	if err != nil {
+		t.Fatalf("first BuildTransport: %v", err)
+	}
+	tr2, err := BuildTransport(opts) // same pointer, second build
+	if err != nil {
+		t.Fatalf("second BuildTransport: %v", err)
+	}
+	if opts.closeIdle == nil {
+		t.Fatal("second build captured nothing; the chain was lost")
+	}
+	client1 := &http.Client{Transport: tr1}
+	client2 := &http.Client{Transport: tr2}
+
+	get := func(client *http.Client, url string) {
+		t.Helper()
+		resp, err := client.Get(url)
+		if err != nil {
+			t.Fatalf("GET %s: %v", url, err)
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}
+	// One completed GET per client parks a keep-alive socket in that
+	// build's own clone.
+	get(client1, srv1.URL)
+	get(client2, srv2.URL)
+	if got := conns1.Load(); got != 1 {
+		t.Fatalf("server 1 saw %d connections before the close, want 1", got)
+	}
+	if got := conns2.Load(); got != 1 {
+		t.Fatalf("server 2 saw %d connections before the close, want 1", got)
+	}
+
+	// The chained capture drains both pools. The close itself is
+	// asynchronous, so poll until a request has to dial — a pool the
+	// chain missed never empties and spins out to the deadline.
+	mustDialFresh := func(name string, client *http.Client, srv *httptest.Server, conns *atomic.Int64) {
+		t.Helper()
+		deadline := time.Now().Add(2 * time.Second)
+		for {
+			get(client, srv.URL)
+			if conns.Load() >= 2 {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("%s pool was not emptied by the chained close: %d connections after closeIdle, want 2", name, conns.Load())
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	opts.closeIdle()
+	mustDialFresh("first build's", client1, srv1, conns1)
+	mustDialFresh("second build's", client2, srv2, conns2)
+}
+
+// closingTransport counts CloseIdleConnections calls, standing in for the
+// innermost pooled transport in forwarding tests.
+type closingTransport struct {
+	http.RoundTripper // nil RoundTrip: never called in these tests
+	calls             int
+}
+
+func (c *closingTransport) CloseIdleConnections() { c.calls++ }
+
+// TestTransportCloseIdleForwarding drives every wrapper in the provider
+// stack: the method must reach the base when the base offers it, and be a
+// harmless no-op when it does not.
+func TestTransportCloseIdleForwarding(t *testing.T) {
+	tests := []struct {
+		name  string
+		build func(base http.RoundTripper) http.RoundTripper
+	}{
+		{"headerTransport", func(base http.RoundTripper) http.RoundTripper {
+			return &headerTransport{base: base, headers: map[string]string{"X-Test": "1"}}
+		}},
+		{"traceTransport", func(base http.RoundTripper) http.RoundTripper {
+			return &traceTransport{base: base}
+		}},
+		{"errorBodyLoggingTransport", func(base http.RoundTripper) http.RoundTripper {
+			return &errorBodyLoggingTransport{base: base}
+		}},
+		{"bearerTransport", func(base http.RoundTripper) http.RoundTripper {
+			return &bearerTransport{base: base, token: "t"}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name+"/forwards to base", func(t *testing.T) {
+			base := &closingTransport{}
+			wrapped := tt.build(base)
+			ci, ok := wrapped.(interface{ CloseIdleConnections() })
+			if !ok {
+				t.Fatalf("%T does not implement CloseIdleConnections", wrapped)
+			}
+			ci.CloseIdleConnections()
+			if base.calls != 1 {
+				t.Errorf("base closed %d times, want 1", base.calls)
+			}
+		})
+		t.Run(tt.name+"/no-op on a bare base", func(t *testing.T) {
+			// A base with no CloseIdleConnections must be skipped silently,
+			// not panic — the method exists so callers never have to check.
+			wrapped := tt.build(nil)
+			ci, ok := wrapped.(interface{ CloseIdleConnections() })
+			if !ok {
+				t.Fatalf("%T does not implement CloseIdleConnections", wrapped)
+			}
+			ci.CloseIdleConnections()
+		})
+	}
+}
+
+// TestChainCloseIdle covers the combination contract the repeated-build
+// chaining in BuildTransport rests on: nil-safe on both sides, both closers
+// run when both are present, and the result stays callable repeatedly — the
+// idle watch fires the chain once per abort, and every abort must drain every
+// captured pool.
+func TestChainCloseIdle(t *testing.T) {
+	// counter returns a fresh closer and its per-test counter, so subtests
+	// never share state.
+	counter := func() (closeIdleConnections, *atomic.Int64) {
+		var n atomic.Int64
+		return closeIdleConnections(func() { n.Add(1) }), &n
+	}
+
+	t.Run("both nil is nil", func(t *testing.T) {
+		if got := chainCloseIdle(nil, nil); got != nil {
+			t.Fatalf("chainCloseIdle(nil, nil) = %v, want nil", got)
+		}
+	})
+
+	t.Run("nil sides pass the other through", func(t *testing.T) {
+		a, aCount := counter()
+		if got := chainCloseIdle(nil, a); got == nil {
+			t.Fatal("chainCloseIdle(nil, a) returned nil")
+		}
+		if got := chainCloseIdle(a, nil); got == nil {
+			t.Fatal("chainCloseIdle(a, nil) returned nil")
+		}
+		// Through-pass, not re-wrap: the caller's own closure comes back, so
+		// a fallback build adds nothing to the chain.
+		chainCloseIdle(nil, a)()
+		if got := aCount.Load(); got != 1 {
+			t.Fatalf("nil-prev chain ran a %d times, want exactly 1", got)
+		}
+	})
+
+	t.Run("both run, in order, repeatedly", func(t *testing.T) {
+		a, aCount := counter()
+		b, bCount := counter()
+		chained := chainCloseIdle(a, b)
+		if chained == nil {
+			t.Fatal("chainCloseIdle(a, b) returned nil")
+		}
+		chained()
+		chained()
+		if got := aCount.Load(); got != 2 {
+			t.Errorf("a ran %d times, want 2 (one per chained call)", got)
+		}
+		if got := bCount.Load(); got != 2 {
+			t.Errorf("b ran %d times, want 2 (one per chained call)", got)
+		}
+	})
+
+	t.Run("chains nest to three pools", func(t *testing.T) {
+		a, aCount := counter()
+		b, bCount := counter()
+		c, cCount := counter()
+		three := chainCloseIdle(chainCloseIdle(a, b), c)
+		three()
+		for name, got := range map[string]*atomic.Int64{"a": aCount, "b": bCount, "c": cCount} {
+			if n := got.Load(); n != 1 {
+				t.Errorf("%s ran %d times, want 1 — the nested chain dropped it", name, n)
+			}
+		}
+	})
+}
+
+// TestCloseIdleReachesInnermostTransport proves the forwarding chain end to
+// end: the wrapper stack BuildTransport assembles — headerTransport over
+// traceTransport over the cloned transport — asked to close idle connections
+// through http.Client, empties the clone's pool. Observable via
+// httptrace.ConnectStart, which fires only on real connection establishment:
+// with a pooled socket the second GET reuses it silently; after
+// CloseIdleConnections the same GET must connect again. The trace rides the
+// request context, so every wrapper forwards it down untouched.
+func TestCloseIdleReachesInnermostTransport(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	tr, err := BuildTransport(&LLMOptions{
+		InsecureSkipTLS: true,
+		ExtraHeaders:    map[string]string{"X-Test": "1"},
+		ConnectTimeout:  5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("BuildTransport: %v", err)
+	}
+	client := &http.Client{Transport: tr}
+
+	var connects int32
+	newReq := func() *http.Request {
+		t.Helper()
+		ctx := httptrace.WithClientTrace(context.Background(), &httptrace.ClientTrace{
+			ConnectStart: func(network, addr string) { atomic.AddInt32(&connects, 1) },
+		})
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL, nil)
+		if err != nil {
+			t.Fatalf("building request: %v", err)
+		}
+		return req
+	}
+
+	resp, err := client.Do(newReq())
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	_ = resp.Body.Close()
+	if got := atomic.LoadInt32(&connects); got != 1 {
+		t.Fatalf("got %d connects before the close, want 1", got)
+	}
+
+	ci, ok := tr.(interface{ CloseIdleConnections() })
+	if !ok {
+		t.Fatalf("built transport %T does not implement CloseIdleConnections", tr)
+	}
+	ci.CloseIdleConnections()
+
+	// The pool is empty now: the next request must connect afresh.
+	resp, err = client.Do(newReq())
+	if err != nil {
+		t.Fatalf("GET after close: %v", err)
+	}
+	_ = resp.Body.Close()
+	if got := atomic.LoadInt32(&connects); got != 2 {
+		t.Errorf("got %d connects after CloseIdleConnections, want 2 — the pool still handed back a socket", got)
+	}
 }
 
 // TestBuildTransportCustomCA drives a real TLS handshake against a server whose

@@ -1275,7 +1275,8 @@ func (m *model) runAgentLoop(ctx context.Context, prompt string, ch chan agentMs
 
 // rootCause unwraps err down to its innermost cause, for display. A
 // partial-response failure reaches the mid-turn warning wrapped as
-// "transient error after partial response (not retrying): …", where the
+// "transient error after partial response (not replayed automatically: this
+// turn already ran tool calls — use /retry to resend): …", where the
 // parenthetical is WithRetry's verdict on its own replay loop; quoted inside
 // a warning that says the turn IS being retried, the two contradict. The
 // cause underneath is the failure the user needs to see.
@@ -2272,17 +2273,26 @@ func (m *model) handleAgentDone(msg agentDoneMsg) (tea.Model, tea.Cmd) {
 		// The turn ended with a dialog still up — the blocked tool call died
 		// with the loop (cancelation reaches the bridge, which answers deny
 		// on ctx). Drop the dialog: an answer typed now would land in the
-		// buffered Reply of a call nobody is waiting on.
+		// buffered Reply of a call nobody is waiting on. Keep the denied
+		// call's identity in the notice — the transcript is the only place
+		// the question survives. Read the fields before popOverlay: its
+		// onClose nils m.approval.
+		tool, command := m.approval.Tool, m.approval.Command
 		m.popOverlay(overlayApproval)
-		m.chatModel.AppendNotice("approval canceled: turn ended before an answer")
+		what := tool
+		if command != "" {
+			what += ": " + truncateLabel(command, 60)
+		}
+		m.chatModel.AppendNotice("approval canceled: turn ended before an answer — " + what)
 	}
 	if m.question != nil {
 		// Same contract as the approval dismissal: the question tool's wait
 		// died with the loop (its ctx select returns canceled). Drop the
 		// dialog and say so — an answer typed now would land in a buffered
-		// Reply nobody reads.
+		// Reply nobody reads. Same ordering as above: capture before pop.
+		question := m.question.req.Question
 		m.popOverlay(overlayQuestion)
-		m.chatModel.AppendNotice("question canceled: turn ended before an answer")
+		m.chatModel.AppendNotice("question canceled: turn ended before an answer — «" + truncateLabel(question, 60) + "»")
 	}
 	if msg.err == nil && m.mode == "plan" && m.planWorktree != nil {
 		if err := m.finishPlanWorktree(); err != nil {

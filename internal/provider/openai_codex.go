@@ -102,6 +102,12 @@ func (t *errorBodyLoggingTransport) RoundTrip(req *http.Request) (*http.Response
 	return resp, err
 }
 
+// CloseIdleConnections forwards to the wrapped transport so the *http.Client
+// holding this wrapper reaches the connection pool — the stream-idle watch
+// closes its zombie keep-alive sockets through this chain (issue #45); see
+// headerTransport.CloseIdleConnections.
+func (t *errorBodyLoggingTransport) CloseIdleConnections() { forwardCloseIdle(t.base) }
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s

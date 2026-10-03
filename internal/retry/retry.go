@@ -185,7 +185,9 @@ func ExhaustedTransientError(retries int, cause error) error {
 // exhaustedTransientPrefixRe pins the marker to a full exhausted-budget
 // wrapper: the digits and the " retries: " tail are what distinguish it from
 // the partial-response verdict ("transient error after partial response (not
-// retrying): …"), which is not an exhausted budget and must not match.
+// replayed automatically: this turn already ran tool calls — use /retry to
+// resend): …"), which shares the marker but continues with prose instead of
+// a retry count, and must not match.
 var exhaustedTransientPrefixRe = regexp.MustCompile(
 	regexp.QuoteMeta(exhaustedTransientMarker) + `[0-9]+ retries: `)
 

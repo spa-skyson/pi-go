@@ -164,6 +164,12 @@ func (t *bearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return t.base.RoundTrip(req)
 }
 
+// CloseIdleConnections forwards to the wrapped transport so the ollama
+// client's *http.Client reaches the connection pool — the stream-idle watch
+// closes its zombie keep-alive sockets through this chain (issue #45); see
+// headerTransport.CloseIdleConnections.
+func (t *bearerTransport) CloseIdleConnections() { forwardCloseIdle(t.base) }
+
 func (m *ollamaModel) Name() string { return m.modelName }
 
 func (m *ollamaModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {

@@ -189,6 +189,50 @@ func TestStreamHeartbeatAndIdleTogether(t *testing.T) {
 	}
 }
 
+// The idle abort must close the transport's pooled idle connections before
+// the failure is yielded (issue #45): a gateway that silently killed its
+// keep-alive sockets leaves zombies in the pool, and the retry budget that
+// picks this failure up must dial fresh instead of drawing one back out.
+func TestStreamIdleAbortsClosesIdleConnections(t *testing.T) {
+	var closed atomic.Int64
+	inner := &stallModel{chunks: 3, delay: 120 * time.Millisecond}
+	watched := idleStreamModel{
+		inner:     inner,
+		timeout:   60 * time.Millisecond,
+		tick:      20 * time.Millisecond,
+		closeIdle: func() { closed.Add(1) },
+	}
+
+	_, errs := drainWatch(watched.GenerateContent(context.Background(), nil, true))
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "llm stream idle") {
+		t.Fatalf("want exactly the idle failure, got %v", errs)
+	}
+	if got := closed.Load(); got != 1 {
+		t.Errorf("closeIdle called %d times on the idle abort, want exactly 1", got)
+	}
+}
+
+// A healthy stream never touches the pool: closeIdle is the abort path's
+// cleanup, not a per-chunk or per-stream side effect.
+func TestStreamIdleHealthyStreamSkipsCloseIdle(t *testing.T) {
+	var closed atomic.Int64
+	inner := &stallModel{chunks: 3, delay: 10 * time.Millisecond}
+	watched := idleStreamModel{
+		inner:     inner,
+		timeout:   1 * time.Second,
+		tick:      50 * time.Millisecond,
+		closeIdle: func() { closed.Add(1) },
+	}
+
+	resps, errs := drainWatch(watched.GenerateContent(context.Background(), nil, true))
+	if len(errs) != 0 || len(resps) != 3 {
+		t.Fatalf("healthy stream disturbed: %d responses, %v", len(resps), errs)
+	}
+	if got := closed.Load(); got != 0 {
+		t.Errorf("closeIdle called %d times on a healthy stream, want 0", got)
+	}
+}
+
 func TestHeartbeatIntervalFor(t *testing.T) {
 	tests := []struct {
 		timeout time.Duration

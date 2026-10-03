@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -462,4 +463,37 @@ func TestTransportMetricsConcurrentSafe(t *testing.T) {
 	if want := goroutines * perGoroutine; total != want {
 		t.Fatalf("total RequestsPerMinute across scopes = %d, want %d", total, want)
 	}
+}
+
+// closingStub counts CloseIdleConnections calls: it is the pool's stand-in at
+// the bottom of the wrapper stack.
+type closingStub struct{ closed atomic.Int64 }
+
+func (s *closingStub) RoundTrip(req *http.Request) (*http.Response, error) {
+	return response(http.StatusOK, nil, "ok"), nil
+}
+
+func (s *closingStub) CloseIdleConnections() { s.closed.Add(1) }
+
+// The pacing wrapper must forward CloseIdleConnections to Base: http.Client
+// only type-asserts its own Transport field for this method, so without the
+// forwarder the innermost transport's pool becomes unreachable and the
+// stream-idle watch cannot drop zombie keep-alive sockets (issue #45).
+func TestTransportForwardsCloseIdleConnections(t *testing.T) {
+	t.Run("base with the method is closed", func(t *testing.T) {
+		base := &closingStub{}
+		tr := &Transport{Base: base}
+		tr.CloseIdleConnections()
+		if got := base.closed.Load(); got != 1 {
+			t.Errorf("base closed %d times, want 1", got)
+		}
+	})
+	t.Run("nil base is a no-op, not the global transport", func(t *testing.T) {
+		tr := &Transport{Base: nil}
+		tr.CloseIdleConnections() // must not panic and must not touch http.DefaultTransport
+	})
+	t.Run("base without the method is ignored", func(t *testing.T) {
+		tr := &Transport{Base: http.DefaultTransport}
+		tr.CloseIdleConnections() // must not panic; deliberately closes nothing shared
+	})
 }

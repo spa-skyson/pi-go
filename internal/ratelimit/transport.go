@@ -100,6 +100,24 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
+// CloseIdleConnections forwards to Base so the *http.Client holding this
+// transport reaches the connection pool, which lives in the innermost
+// *http.Transport (or a wrapper that forwards the call itself). http.Client
+// only type-asserts its own Transport field for this method, so a wrapper
+// without the forwarder makes its pool unreachable — which would leave the
+// stream-idle watch unable to drop zombie keep-alive sockets on an idle
+// abort (issue #45). A nil Base means the shared http.DefaultTransport, and
+// closing its pool is deliberately not done: those connections belong to
+// every other http.Client in the process.
+func (t *Transport) CloseIdleConnections() {
+	if t.Base == nil {
+		return
+	}
+	if ci, ok := t.Base.(interface{ CloseIdleConnections() }); ok {
+		ci.CloseIdleConnections()
+	}
+}
+
 // estimateRequestTokens approximates the input tokens a request will be
 // charged for.
 //

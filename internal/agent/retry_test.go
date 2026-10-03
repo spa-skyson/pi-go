@@ -256,8 +256,8 @@ func TestWithRetryPartialResponseNotRetried(t *testing.T) {
 	if calls != 1 {
 		t.Errorf("partial response should not retry, got %d calls", calls)
 	}
-	if lastErr == nil || !strings.Contains(lastErr.Error(), "not retrying") {
-		t.Errorf("expected 'not retrying' error, got: %v", lastErr)
+	if lastErr == nil || !strings.Contains(lastErr.Error(), "not replayed automatically") {
+		t.Errorf("expected 'not replayed automatically' error, got: %v", lastErr)
 	}
 	if len(collected) != 1 {
 		t.Errorf("expected 1 partial event, got %d", len(collected))

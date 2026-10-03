@@ -148,7 +148,7 @@ func TestStreamIdleClassifiesRetryable(t *testing.T) {
 	// The same wording wrapped by the retry budgets (mid-turn pass-through,
 	// exhausted budget) must stay retryable — downstream classifiers see the
 	// wrapped text.
-	wrapped := fmt.Errorf("transient error after partial response (not retrying): %w", err)
+	wrapped := fmt.Errorf("transient error after partial response (not replayed automatically: this turn already ran tool calls — use /retry to resend): %w", err)
 	if IsTerminal(wrapped) {
 		t.Error("IsTerminal(wrapped llm stream idle) = true, want false")
 	}

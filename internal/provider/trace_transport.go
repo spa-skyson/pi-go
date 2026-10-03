@@ -122,6 +122,10 @@ func (t *traceTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return resp, err
 }
 
+// CloseIdleConnections forwards to the wrapped transport. The idle watch
+// reaches its pool only through this chain — see headerTransport.CloseIdleConnections.
+func (t *traceTransport) CloseIdleConnections() { forwardCloseIdle(t.base) }
+
 // readRequestBody returns a copy of the outgoing body without disturbing the
 // request the caller still owns.
 //
