@@ -61,20 +61,47 @@ type finding struct {
 	OSV string `json:"osv"`
 }
 
-// fixedVersion returns the version the advisory is fixed in, or "" when the
-// advisory has no fix. An OSV range is a list of events; a "fixed" event is
-// what marks a released fix.
-func (o *osvEntry) fixedVersion() string {
+// hasFix reports whether any affected range names a released fix — the rule
+// the gate fails on. A "no fix" range alone stays report-only.
+func (o *osvEntry) hasFix() bool {
 	for _, a := range o.Affected {
 		for _, r := range a.Ranges {
 			for _, e := range r.Events {
 				if v, ok := e["fixed"]; ok && v != "" {
-					return v
+					return true
 				}
 			}
 		}
 	}
-	return ""
+	return false
+}
+
+// fixVersions returns the fix of every affected range, in advisory order —
+// one entry per introduced/fixed pair, "no fix" for a range nothing closes.
+// An advisory may name several ranges, each fixed in its own version; reporting
+// only the first misleads — GO-2026-6443's first fix (1.82.2) predates the
+// range a v1.84.0 grpc build actually falls in.
+func (o *osvEntry) fixVersions() []string {
+	var fixes []string
+	for _, a := range o.Affected {
+		for _, r := range a.Ranges {
+			open := false
+			for _, e := range r.Events {
+				if _, ok := e["introduced"]; ok {
+					open = true
+					continue
+				}
+				if v, ok := e["fixed"]; ok && v != "" {
+					fixes = append(fixes, v)
+					open = false
+				}
+			}
+			if open {
+				fixes = append(fixes, "no fix")
+			}
+		}
+	}
+	return fixes
 }
 
 // modules lists the modules the advisory affects, for the report line.
@@ -94,7 +121,7 @@ func (o *osvEntry) modules() string {
 type report struct {
 	id      string
 	modules string
-	fix     string
+	fixes   []string
 }
 
 func run(r io.Reader, out io.Writer) (int, error) {
@@ -134,11 +161,11 @@ func run(r io.Reader, out io.Writer) (int, error) {
 			// A finding whose advisory body never arrived. Treat it as
 			// actionable rather than assume it is harmless: silence here would
 			// be the wrong default for a security gate.
-			actionable = append(actionable, report{id: id, fix: "unknown"})
+			actionable = append(actionable, report{id: id, fixes: []string{"unknown"}})
 			continue
 		}
-		if fix := a.fixedVersion(); fix != "" {
-			actionable = append(actionable, report{id: id, modules: a.modules(), fix: fix})
+		if a.hasFix() {
+			actionable = append(actionable, report{id: id, modules: a.modules(), fixes: a.fixVersions()})
 		} else {
 			unfixed = append(unfixed, report{id: id, modules: a.modules()})
 		}
@@ -155,7 +182,7 @@ func run(r io.Reader, out io.Writer) (int, error) {
 	if len(actionable) > 0 {
 		fmt.Fprintf(out, "%d finding(s) with a fix available:\n", len(actionable))
 		for _, r := range actionable {
-			fmt.Fprintf(out, "  %s  %s  fixed in %s  https://pkg.go.dev/vuln/%s\n", r.id, r.modules, r.fix, r.id)
+			fmt.Fprintf(out, "  %s  %s  fixed in %s  https://pkg.go.dev/vuln/%s\n", r.id, r.modules, strings.Join(r.fixes, ", "), r.id)
 		}
 		fmt.Fprintln(out)
 		fmt.Fprintln(out, "Upgrade the module to the fixed version.")

@@ -12,6 +12,14 @@ const (
 	advisoryNoFix   = `{"osv":{"id":"GO-2025-0002","affected":[{"package":{"name":"example.com/other"},"ranges":[{"events":[{"introduced":"0"}]}]}]}}`
 	findingWithFix  = `{"finding":{"osv":"GO-2024-0001"}}`
 	findingNoFix    = `{"finding":{"osv":"GO-2025-0002"}}`
+
+	// The shape that misled the gate: one range carrying several
+	// introduced/fixed pairs (modeled on grpc's GO-2026-6443), plus one with
+	// a fix and one left open.
+	advisoryMultiRange = `{"osv":{"id":"GO-2026-0003","affected":[{"package":{"name":"example.com/mod"},"ranges":[{"events":[{"introduced":"0"},{"fixed":"1.82.2"},{"introduced":"1.83.0"},{"fixed":"1.83.2"},{"introduced":"1.84.0-dev"},{"fixed":"1.85.0-dev.0.20260825072537-93e31b48545e"}]}]}]}}`
+	advisoryMixed      = `{"osv":{"id":"GO-2026-0004","affected":[{"package":{"name":"example.com/mix"},"ranges":[{"events":[{"introduced":"0"},{"fixed":"2.0.0"},{"introduced":"2.1.0"}]}]}]}}`
+	findingMultiRange  = `{"finding":{"osv":"GO-2026-0003"}}`
+	findingMixed       = `{"finding":{"osv":"GO-2026-0004"}}`
 )
 
 func runGate(t *testing.T, input string) (int, string) {
@@ -92,6 +100,36 @@ func TestFindingWithoutAdvisoryFails(t *testing.T) {
 	}
 	if !strings.Contains(out, "unknown") {
 		t.Errorf("output should mark the fix version as unknown:\n%s", out)
+	}
+}
+
+// An advisory may name several affected ranges, each fixed in its own
+// version. Reporting only the first made GO-2026-6443 read as "upgrade to
+// 1.82.2" — a downgrade that fixes nothing on a 1.84.0 build, which falls in
+// the third range. Every range's fix must appear.
+func TestMultiRangeFindingShowsEveryFix(t *testing.T) {
+	code, out := runGate(t, advisoryMultiRange+findingMultiRange)
+
+	if code != 1 {
+		t.Errorf("exit = %d, want 1 for a finding with fixes", code)
+	}
+	for _, want := range []string{"1.82.2", "1.83.2", "1.85.0-dev.0.20260825072537-93e31b48545e"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output does not name the fix %s:\n%s", want, out)
+		}
+	}
+}
+
+// A range nothing closes is shown as such rather than read as one of the
+// fixes; the advisory is still actionable because another range has a fix.
+func TestPartiallyFixedFindingShowsTheOpenRange(t *testing.T) {
+	code, out := runGate(t, advisoryMixed+findingMixed)
+
+	if code != 1 {
+		t.Errorf("exit = %d, want 1 when any range has a fix", code)
+	}
+	if !strings.Contains(out, "fixed in 2.0.0, no fix") {
+		t.Errorf("output does not pair the fix with the open range:\n%s", out)
 	}
 }
 
