@@ -69,7 +69,7 @@ func retryLoop(ctx context.Context, cfg RetryConfig, runFn func() iter.Seq2[*ses
 
 		if hadEvents {
 			// Already yielded partial results, cannot retry safely.
-			_ = yield(nil, fmt.Errorf("transient error after partial response (not retrying): %w", transientErr))
+			_ = yield(nil, fmt.Errorf("transient error after partial response (not replayed automatically: this turn already ran tool calls — use /retry to resend): %w", transientErr))
 			return
 		}
 

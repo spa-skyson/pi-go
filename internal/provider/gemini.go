@@ -155,8 +155,12 @@ func geminiHTTPOptions(baseURL string, opts *LLMOptions) genai.HTTPOptions {
 }
 
 // geminiNeedsHTTPClient reports whether opts asks for transport settings that
-// only a custom *http.Client can carry.
+// only a custom *http.Client can carry. The stream-idle watch is on the list
+// with the rest of the clone-branch conditions in BuildTransport: when the
+// watch is active the client must own its pool, or the watch has nothing it
+// may close — see BuildTransport's clone comment (issue #45).
 func geminiNeedsHTTPClient(opts *LLMOptions) bool {
 	return opts != nil && (opts.InsecureSkipTLS || opts.CACertPath != "" ||
-		opts.ConnectTimeout > 0 || opts.RateLimit.Enabled())
+		opts.ConnectTimeout > 0 || opts.RateLimit.Enabled() ||
+		opts.StreamIdleTimeout > 0)
 }

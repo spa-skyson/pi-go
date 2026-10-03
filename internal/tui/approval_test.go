@@ -240,6 +240,42 @@ func TestAgentDone_DismissesPendingApproval(t *testing.T) {
 	if !last.isNotice || !strings.Contains(last.content, "approval canceled") {
 		t.Errorf("expected a dismissal notice, got %q", last.content)
 	}
+	want := "approval canceled: turn ended before an answer — bash: git push --force origin main"
+	if last.content != want {
+		t.Errorf("notice = %q, want %q", last.content, want)
+	}
+}
+
+func TestAgentDone_ApprovalNoticeContent(t *testing.T) {
+	t.Run("empty command names the tool only", func(t *testing.T) {
+		m, req := newApprovalModel(t)
+		req.Command = ""
+		m.handleApprovalRequest(approvalRequestMsg{req: *req})
+
+		m.handleAgentDone(agentDoneMsg{})
+
+		want := "approval canceled: turn ended before an answer — bash"
+		last := m.chatModel.Messages[len(m.chatModel.Messages)-1]
+		if last.content != want {
+			t.Errorf("notice = %q, want %q", last.content, want)
+		}
+	})
+
+	t.Run("long command is truncated", func(t *testing.T) {
+		m, req := newApprovalModel(t)
+		req.Command = strings.Repeat("x", 100)
+		m.handleApprovalRequest(approvalRequestMsg{req: *req})
+
+		m.handleAgentDone(agentDoneMsg{})
+
+		last := m.chatModel.Messages[len(m.chatModel.Messages)-1]
+		// 60 display cells for the value: 59 runes of the command plus the
+		// ellipsis; the full 100-x command must not survive.
+		want := "approval canceled: turn ended before an answer — bash: " + strings.Repeat("x", 59) + "…"
+		if last.content != want {
+			t.Errorf("notice = %q, want %q", last.content, want)
+		}
+	})
 }
 
 func TestApprovalListener_NilChannel(t *testing.T) {

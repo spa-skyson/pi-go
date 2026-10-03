@@ -252,7 +252,7 @@ func TestWithRetryRealEventBlocksReplay(t *testing.T) {
 	if len(events) != 1 {
 		t.Errorf("consumer kept %d events, want 1", len(events))
 	}
-	if lastErr == nil || !strings.Contains(lastErr.Error(), "transient error after partial response (not retrying)") {
+	if lastErr == nil || !strings.Contains(lastErr.Error(), "transient error after partial response (not replayed automatically") {
 		t.Errorf("got %v, want the partial-response error", lastErr)
 	}
 }

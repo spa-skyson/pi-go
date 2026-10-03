@@ -198,7 +198,13 @@ func TestRunAgentLoop_MidturnRetriesExhaustAndOfferRetry(t *testing.T) {
 
 // TestRunAgentLoop_NoRetryAfterToolTraffic pins the replay guard: once an
 // attempt has shown a FunctionCall card, a transient failure must end the
-// turn — replaying would execute the tool a second time.
+// turn — replaying would execute the tool a second time. The failure is a
+// Go-level error from the iterator (errs), landing on the request that
+// follows the executed tool — the shape WithRetryContext wraps when
+// hadEvents is true. The user must see the wrapper's verdict — "transient
+// error after partial response (not replayed automatically: this turn
+// already ran tool calls — use /retry to resend)" — not a silent death and
+// not a mid-turn replay (issue #45).
 func TestRunAgentLoop_NoRetryAfterToolTraffic(t *testing.T) {
 	restore := stubMidturnRetryPause(time.Millisecond)
 	defer restore()
@@ -206,20 +212,28 @@ func TestRunAgentLoop_NoRetryAfterToolTraffic(t *testing.T) {
 	llm := &seqLLM{name: "stall-after-call", gen: func(call int) []*llmmodel.LLMResponse {
 		if call == 0 {
 			// The model calls a tool and the stream dies right behind
-			// the call card.
+			// the call card: the call goes out, and the request that
+			// carries the conversation forward dies with the Go-level
+			// transient in errs.
 			return []*llmmodel.LLMResponse{
 				callResp("bash", map[string]any{"command": "echo hi"}),
-				streamErrResp(stallReason),
 			}
 		}
-		return []*llmmodel.LLMResponse{streamErrResp(stallReason)}
-	}}
+		return nil
+	}, errs: map[int]error{1: errors.New(stallReason)}}
 	a, sid := newRunTestAgent(t, llm)
 
 	res, warnings := driveRunLoopWithWarnings(t, a, sid, "run a command")
 
 	if res.doneErr == nil || !strings.Contains(res.doneErr.Error(), stallReason) {
 		t.Fatalf("error = %v, want the stall surfaced without a replay", res.doneErr)
+	}
+	// The WithRetry wrapper reached the user: the turn died after tool
+	// traffic, and the error names that verdict and points at /retry.
+	for _, want := range []string{"not replayed automatically", "use /retry to resend"} {
+		if !strings.Contains(res.doneErr.Error(), want) {
+			t.Fatalf("error = %v, want it to carry %q", res.doneErr, want)
+		}
 	}
 	if got := stallWarnings(warnings); len(got) != 0 {
 		t.Fatalf("replayed after tool traffic: %q", got)
@@ -312,7 +326,8 @@ func TestRunAgentLoop_CancelDuringRetryPause(t *testing.T) {
 // TestRunAgentLoop_MidturnWarningCarriesCause pins what the stall warning
 // quotes. Here the failure is a Go-level transient that lands after partial
 // text, so WithRetry hands it up wrapped as "transient error after partial
-// response (not retrying): …" — the parenthetical is its verdict on its own
+// response (not replayed automatically: this turn already ran tool calls —
+// use /retry to resend): …" — the parenthetical is its verdict on its own
 // replay loop. The mid-turn warning says the turn IS being retried, so it
 // must carry the cause underneath, not a verdict that contradicts it.
 func TestRunAgentLoop_MidturnWarningCarriesCause(t *testing.T) {

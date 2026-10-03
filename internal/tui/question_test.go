@@ -328,6 +328,26 @@ func TestAgentDone_DismissesPendingQuestion(t *testing.T) {
 	if !strings.Contains(last.content, "question canceled") {
 		t.Errorf("expected a dismissal notice, got %q", last.content)
 	}
+	want := "question canceled: turn ended before an answer — «Which approach should we take?»"
+	if last.content != want {
+		t.Errorf("notice = %q, want %q", last.content, want)
+	}
+}
+
+func TestAgentDone_QuestionNoticeTruncatesLongText(t *testing.T) {
+	m, req := newQuestionModel(t)
+	req.Question = strings.Repeat("в", 80)
+	m.handleQuestionRequest(questionRequestMsg{req: *req})
+
+	m.handleAgentDone(agentDoneMsg{})
+
+	last := m.chatModel.Messages[len(m.chatModel.Messages)-1]
+	// 60 display cells for the question: 59 runes plus the ellipsis, all
+	// narrow glyphs; the full 80-rune question must not survive.
+	want := "question canceled: turn ended before an answer — «" + strings.Repeat("в", 59) + "…»"
+	if last.content != want {
+		t.Errorf("notice = %q, want %q", last.content, want)
+	}
 }
 
 func TestQuestionListener_NilChannel(t *testing.T) {
