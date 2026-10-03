@@ -1675,8 +1675,8 @@ func (m *model) handleAgentToolCall(msg agentToolCallMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.name == "agent" || msg.name == "subagent" || msg.name == "a2a" {
 		// A single subagent tool call in parallel/chain mode spawns N children.
-		// Render one card per child so the user sees agent[pi], agent[claude],
-		// ... instead of a collapsed agent[pi+claude+...] card. Each card
+		// Render one card per child so the user sees agent[explore], agent[claude],
+		// ... instead of a collapsed agent[explore+claude+...] card. Each card
 		// carries its own type + title and will later be matched to its spawn
 		// event by agent-ID prefix. A2A calls render the same card shape, with
 		// the configured agent name (agent_name) as the bracketed label.
@@ -1708,8 +1708,8 @@ func splitSubagentCards(base message, args map[string]any) []message {
 	}
 	single.agentTitle = truncatePrompt(prompt)
 	// A2A calls carry the configured agent name in agent_name; render it
-	// verbatim in the bracket so the card reads agent[istio-agent] rather than
-	// collapsing to agent[pi].
+	// verbatim in the bracket so the card reads agent[istio-agent] rather
+	// than the tool-call's type field.
 	if base.tool == "a2a" {
 		if name, _ := args["agent_name"].(string); name != "" {
 			single.agentLabel = name
@@ -1858,6 +1858,22 @@ func (m *model) handleAgentToolResult(msg agentToolResultMsg) (tea.Model, tea.Cm
 		// running to done. No-op with the popup closed or on another mode.
 		m.refreshSubagentsPopup()
 	}
+	// A subagent that died of its step budget used to return a report cut
+	// mid-sentence with no marker at all, so the orchestrator read it as
+	// finished (issue #51). The result now carries status/error; surface it
+	// as a notice so a partial report is never mistaken for a completed one.
+	if msg.name == "subagent" {
+		if names := stepLimitedAgents(msg.content); len(names) > 0 {
+			if len(names) == 1 {
+				m.chatModel.AppendNotice(fmt.Sprintf(
+					"subagent `%s` hit its step budget — report is partial", names[0]))
+			} else {
+				m.chatModel.AppendNotice(fmt.Sprintf(
+					"subagents `%s` hit their step budget — report is partial",
+					strings.Join(names, "`, `")))
+			}
+		}
+	}
 	m.refreshDiffStats()
 	return m, waitForAgent(m.agentCh)
 }
@@ -1892,6 +1908,35 @@ func bashHandleFromResult(content string) string {
 	}
 	h, _ := data["handle"].(string)
 	return h
+}
+
+// stepLimitMarker is the error text the child's step budget produces
+// (internal/agent NewStepLimitCallback: "steps limit N reached"). It reaches
+// the parent inside results[].error; matching it here is what turns that
+// error into a visible notice instead of a silently partial report.
+const stepLimitMarker = "steps limit"
+
+// stepLimitedAgents returns the agent names a subagent tool result reports as
+// having stopped on its step budget, or nil. Only the subagent tool's
+// results[] shape is probed; anything that does not parse as it — every other
+// tool's output, truncated payloads — yields nil.
+func stepLimitedAgents(content string) []string {
+	var probe struct {
+		Results []struct {
+			Agent string `json:"agent"`
+			Error string `json:"error"`
+		} `json:"results"`
+	}
+	if json.Unmarshal([]byte(content), &probe) != nil {
+		return nil
+	}
+	var names []string
+	for _, r := range probe.Results {
+		if strings.Contains(r.Error, stepLimitMarker) {
+			names = append(names, r.Agent)
+		}
+	}
+	return names
 }
 
 // findPollCard returns the index of the card a repeated bash_wait poll should

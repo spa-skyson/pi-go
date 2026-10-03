@@ -514,6 +514,7 @@ func deferredInit(
 
 	// Create agent.
 	ag, err := agent.New(agent.Config{
+		Name:                 activeAgent,
 		Model:                llm,
 		Tools:                coreTools,
 		Toolsets:             mcpToolsets,
@@ -1463,6 +1464,9 @@ func agentSwitch(
 	}
 	cbs := in.build(rules, steps)
 	sw.BeforeTool, sw.AfterTool = cbs.beforeTool, cbs.afterTool
+	// The switch target's identity rides along so the rebuilt runner stamps
+	// its events with the agent's own name (empty restores the built-in one).
+	sw.Name = name
 
 	llm, modelName, providerName, err := agentSwitchLLM(ctx, cfg, tokenTracker, headerSessionID, ac, modelOverride)
 	if err != nil {

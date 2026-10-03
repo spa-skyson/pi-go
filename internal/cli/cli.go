@@ -2269,6 +2269,25 @@ func runJSONTurn(ctx context.Context, ag *agent.Agent, sessionID, msg string, em
 			em.emit(jsonEvent{Type: "error", Agent: ev.Author, Error: evErr.Error()})
 			return fmt.Errorf("agent run: %w", evErr)
 		}
+		// A tool failure can be the thing that ended the turn: the step budget
+		// (agent.NewStepLimitCallback) fails the over-budget call and sets
+		// SkipSummarization, so the function response carrying the error is the
+		// turn's last event and no model text follows. Emit it as an explicit
+		// `error` event too — without this the failure lives only inside a
+		// tool_result payload nobody reads as an error, and the parent takes
+		// the accumulated partial text for a finished report (issue #51).
+		if frErr := turnEndingToolError(ev); frErr != nil {
+			log.Error(frErr.Error())
+			em.flush()
+			em.emit(jsonEvent{Type: "error", Agent: ev.Author, Error: frErr.Error()})
+			// Deliberately not a process error: the turn still ends through
+			// the normal message_end below and runJSON exits 0. A non-zero
+			// exit would read as a crash to the parent's fallback chain
+			// (spawnWithRetry re-spawns crashed children on the same model),
+			// re-running the whole task the budget just stopped; the clean
+			// exit with an error event routes to attemptStopped — final, no
+			// re-spawn. The error event is the verdict.
+		}
 		if ev.Content == nil {
 			continue
 		}
@@ -2294,6 +2313,30 @@ func runJSONTurn(ctx context.Context, ag *agent.Agent, sessionID, msg string, em
 		log.Error(warn)
 	}
 	em.emit(jsonEvent{Type: "message_end"})
+	return nil
+}
+
+// turnEndingToolError extracts a tool error that ended the turn, or nil.
+//
+// ADK turns every tool-callback error into a function response the model can
+// recover from, so a failing tool is normally not a turn event at all. The
+// exception is a response on the turn's final event — the failing callback set
+// SkipSummarization (agent.NewStepLimitCallback does; RequestConfirmation sets
+// the same flag, but its event carries a call awaiting approval, not an error
+// response) — there the turn ends on the error and no model text follows. That
+// is the one case a consumer of the JSON stream must see as an error.
+func turnEndingToolError(ev *session.Event) error {
+	if !ev.Actions.SkipSummarization || ev.Content == nil {
+		return nil
+	}
+	for _, part := range ev.Content.Parts {
+		if part.FunctionResponse == nil {
+			continue
+		}
+		if msg, ok := part.FunctionResponse.Response["error"].(string); ok && msg != "" {
+			return errors.New(msg)
+		}
+	}
 	return nil
 }
 

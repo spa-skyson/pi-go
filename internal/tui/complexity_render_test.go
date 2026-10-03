@@ -961,12 +961,12 @@ func TestRenderToolCardsRender(t *testing.T) {
 		{
 			desc: "subagent types are mapped and deduped",
 			msg:  message{role: "tool", tool: "subagent", agentType: "claude+explore+task+gemini", content: "ok"},
-			want: "◉ agent[claude+pi+gemini]\n  │ → ok\n",
+			want: "◉ agent[claude+explore+task+gemini]\n  │ → ok\n",
 		},
 		{
-			desc: "bundled adapters keep their names, pi subagents collapse",
+			desc: "every agent keeps its own spawn name",
 			msg:  message{role: "tool", tool: "subagent", agentType: "agy+task+copilot+codex", content: "ok"},
-			want: "◉ agent[agy+pi+copilot+codex]\n  │ → ok\n",
+			want: "◉ agent[agy+task+copilot+codex]\n  │ → ok\n",
 		},
 		{
 			desc: "agent result collapses newlines into one gutter line",
@@ -1219,7 +1219,7 @@ func TestAgentCardHeaderRender(t *testing.T) {
 		{"bare", ToolDisplayModel{}, message{}, "  agent\n"},
 		{"bare, blink on", ToolDisplayModel{BlinkOn: true}, message{}, "◉ agent\n"},
 		{"done cards never blink", ToolDisplayModel{}, message{content: "x"}, "◉ agent\n"},
-		{"label only", ToolDisplayModel{}, message{agentType: "task", content: "x"}, "◉ agent[pi]\n"},
+		{"label only", ToolDisplayModel{}, message{agentType: "task", content: "x"}, "◉ agent[task]\n"},
 		{"title only", ToolDisplayModel{}, message{agentTitle: "hi", content: "x"}, "◉ agent hi\n"},
 		{"both", ToolDisplayModel{}, message{agentType: "gemini", agentTitle: "hi", content: "x"}, "◉ agent[gemini] hi\n"},
 		{"agy keeps its name", ToolDisplayModel{}, message{agentType: "agy", content: "x"}, "◉ agent[agy]\n"},

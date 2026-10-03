@@ -239,11 +239,11 @@ func (pb *PtyBridge) childArgs() []string {
 	return args
 }
 
-// startProcess starts the pi-go TUI process with PTY.
+// startProcess starts the pirate TUI process with PTY.
 func (pb *PtyBridge) startProcess() error {
 	piBin, err := os.Executable()
 	if err != nil {
-		piBin = "pi"
+		piBin = "pirate"
 	}
 
 	cmd := exec.Command(piBin, pb.childArgs()...)
@@ -280,11 +280,11 @@ func (pb *PtyBridge) startProcess() error {
 	return nil
 }
 
-// startProcessWithPipes starts the pi-go TUI process with regular pipes (fallback).
+// startProcessWithPipes starts the pirate TUI process with regular pipes (fallback).
 func (pb *PtyBridge) startProcessWithPipes() error {
 	piBin, err := os.Executable()
 	if err != nil {
-		piBin = "pi"
+		piBin = "pirate"
 	}
 
 	cmd := exec.Command(piBin, pb.childArgs()...)
