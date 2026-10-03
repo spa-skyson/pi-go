@@ -1521,6 +1521,32 @@ func TestCplxSearchPopupStyles(t *testing.T) {
 	}
 }
 
+// TestCplxSelectedItemHasContrastingForeground pins the selection pairing: the
+// accent background must carry the theme's own background as its foreground.
+// The item styles are muted (Subtext/Dim/Lavender), and a muted foreground on
+// the accent reads as accent-on-accent — the opencode theme's violet selection
+// was unreadable. Accent and Background come from the same palette, so the
+// pair stays contrasting on every theme. Drop the Foreground and this goes
+// red.
+func TestCplxSelectedItemHasContrastingForeground(t *testing.T) {
+	m := cplxModel(t)
+	// darkPalette.Background #1e1e2e as the truecolor fragment lipgloss emits.
+	const wantFG = "38;2;30;30;46"
+	for _, mode := range []searchMode{
+		searchModeCommands, searchModeHistory, searchModeModels, searchModeAgents,
+		searchModeSubagents, searchModeTodos, searchModeFiles, searchModeHelp,
+	} {
+		st := m.searchPopupStyles(mode, 40)
+		got := st.selectedItemStyle.Render("x")
+		if !strings.Contains(got, wantFG) {
+			t.Errorf("mode %s: selected style carries no theme-background foreground: %q", mode, got)
+		}
+		if !strings.Contains(got, "48;2;") {
+			t.Errorf("mode %s: selected style lost its accent background: %q", mode, got)
+		}
+	}
+}
+
 func TestCplxRenderSearchPopup(t *testing.T) {
 	t.Run("nil popup renders nothing", func(t *testing.T) {
 		m := cplxModel(t)

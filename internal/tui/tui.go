@@ -3439,7 +3439,14 @@ func (m *model) searchPopupStyles(mode searchMode, width int) searchPopupStyleSe
 		Width(width)
 	st.headerStyle = st.headerStyle.Foreground(m.palette.Subtext).Width(width)
 	st.searchStyle = st.searchStyle.Foreground(m.palette.Dim)
-	st.selectedItemStyle = st.selectedItemStyle.Background(accent)
+	// Pair the accent selection background with the theme's own background as
+	// the foreground: the item styles above are muted (Subtext/Dim), and a
+	// muted foreground on the accent reads as accent-on-accent — the opencode
+	// theme's violet selection was unreadable. Accent and Background come from
+	// the same palette, so the pair stays contrasting on every theme.
+	st.selectedItemStyle = st.selectedItemStyle.
+		Background(accent).
+		Foreground(m.palette.Background)
 	return st
 }
 
