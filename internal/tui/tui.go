@@ -3439,7 +3439,15 @@ func (m *model) searchPopupStyles(mode searchMode, width int) searchPopupStyleSe
 		Width(width)
 	st.headerStyle = st.headerStyle.Foreground(m.palette.Subtext).Width(width)
 	st.searchStyle = st.searchStyle.Foreground(m.palette.Dim)
-	st.selectedItemStyle = st.selectedItemStyle.Background(accent)
+	// Pair the accent selection background with a foreground derived from the
+	// accent's own luminance. The theme's Background cannot serve: themes
+	// with "none" fills (opencode) resolve it to NoColor, and the terminal's
+	// default foreground — light on the terminals those themes target — is
+	// unreadable on the violet selection. Luminance keeps every theme's
+	// selection readable without per-theme tables.
+	st.selectedItemStyle = st.selectedItemStyle.
+		Background(accent).
+		Foreground(selectionForeground(accent))
 	return st
 }
 
