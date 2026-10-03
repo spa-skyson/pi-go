@@ -335,3 +335,21 @@ func colorString(c color.Color) string {
 	r, g, b, _ := c.RGBA()
 	return fmt.Sprintf("#%02x%02x%02x", r>>8, g>>8, b>>8)
 }
+
+// selectionForeground picks a readable foreground for a colored selection
+// background: relative luminance (BT.601) at or above the 128 midpoint gets
+// dark text, below it light text. A theme fill of "none" resolves to
+// lipgloss.NoColor, whose RGBA reports opaque black and so carries no
+// luminance signal — it type-switches to the dark foreground, the safe pick
+// for the pastel accents themes actually ship (every embedded theme's popup
+// accents are hex; this is the defensive branch).
+func selectionForeground(accent color.Color) color.Color {
+	if _, ok := accent.(lipgloss.NoColor); ok || accent == nil {
+		return lipgloss.Color("#0a0a0a")
+	}
+	r, g, b, _ := accent.RGBA()
+	if lum := (299*(r>>8) + 587*(g>>8) + 114*(b>>8)) / 1000; lum >= 128 {
+		return lipgloss.Color("#0a0a0a")
+	}
+	return lipgloss.Color("#eeeeee")
+}

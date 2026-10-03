@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/spa-skyson/pi-rate/internal/extension"
 	"github.com/spa-skyson/pi-rate/internal/subagent"
@@ -1521,29 +1522,53 @@ func TestCplxSearchPopupStyles(t *testing.T) {
 	}
 }
 
-// TestCplxSelectedItemHasContrastingForeground pins the selection pairing: the
-// accent background must carry the theme's own background as its foreground.
-// The item styles are muted (Subtext/Dim/Lavender), and a muted foreground on
-// the accent reads as accent-on-accent — the opencode theme's violet selection
-// was unreadable. Accent and Background come from the same palette, so the
-// pair stays contrasting on every theme. Drop the Foreground and this goes
-// red.
+// TestCplxSelectedItemHasContrastingForeground pins the selection pairing on
+// the palette that exposed the bug — the active opencode theme, not the dark
+// default the earlier version of this test validated. opencode's fills are
+// "none" (NoColor), so Foreground(palette.Background) rendered the terminal's
+// default light text on the violet selection and was unreadable; the
+// foreground must instead come from the accent's own luminance (BT.601):
+// light accent → dark text. Drop the derivation and this goes red.
 func TestCplxSelectedItemHasContrastingForeground(t *testing.T) {
+	tm := NewThemeManager()
+	if err := tm.SetTheme("opencode"); err != nil {
+		t.Fatal(err)
+	}
 	m := cplxModel(t)
-	// darkPalette.Background #1e1e2e as the truecolor fragment lipgloss emits.
-	const wantFG = "38;2;30;30;46"
+	m.palette = paletteFor(tm.Current())
+
+	// Truecolor fragments as lipgloss emits them: dark foreground #0a0a0a, and
+	// opencode's own accent #9d7cd8 — the exact violet the owner could not
+	// read — as the models popup's selection background.
+	const (
+		darkFG     = "38;2;10;10;10"
+		opencodeBG = "48;2;157;124;216"
+	)
 	for _, mode := range []searchMode{
 		searchModeCommands, searchModeHistory, searchModeModels, searchModeAgents,
 		searchModeSubagents, searchModeTodos, searchModeFiles, searchModeHelp,
 	} {
-		st := m.searchPopupStyles(mode, 40)
-		got := st.selectedItemStyle.Render("x")
-		if !strings.Contains(got, wantFG) {
-			t.Errorf("mode %s: selected style carries no theme-background foreground: %q", mode, got)
+		got := m.searchPopupStyles(mode, 40).selectedItemStyle.Render("x")
+		if !strings.Contains(got, darkFG) {
+			t.Errorf("mode %s: no dark foreground on the accent background: %q", mode, got)
 		}
 		if !strings.Contains(got, "48;2;") {
 			t.Errorf("mode %s: selected style lost its accent background: %q", mode, got)
 		}
+	}
+	if got := m.searchPopupStyles(searchModeModels, 40).selectedItemStyle.Render("x"); !strings.Contains(got, opencodeBG) {
+		t.Errorf("models popup: opencode accent background missing: %q", got)
+	}
+
+	// A dark accent flips the pairing to the light foreground: #1e3a5f has a
+	// BT.601 luminance of 53 of 255.
+	if got := selectionForeground(lipgloss.Color("#1e3a5f")); colorString(got) != "#eeeeee" {
+		t.Errorf("selectionForeground(#1e3a5f) = %q, want #eeeeee", colorString(got))
+	}
+	// A NoColor accent — a theme fill of "none" — falls to the dark default
+	// rather than the terminal's default foreground.
+	if got := selectionForeground(lipgloss.NoColor{}); colorString(got) != "#0a0a0a" {
+		t.Errorf("selectionForeground(NoColor) = %q, want #0a0a0a", colorString(got))
 	}
 }
 
